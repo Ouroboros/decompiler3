@@ -196,6 +196,37 @@ class MediumLevelILDiv(MediumLevelILInstruction, Arithmetic, BinaryOperation):
 
 
 # ============================================================================
+# Comparison Instructions
+# ============================================================================
+
+
+class MediumLevelILCmpSle(MediumLevelILInstruction, Comparison, BinaryOperation):
+    """Signed less than or equal comparison"""
+
+    def __init__(self, left: 'MediumLevelILInstruction', right: 'MediumLevelILInstruction', size: int = 4):
+        super().__init__(MediumLevelILOperation.CMP_SLE, size)
+        self.operands = [left, right]
+
+    @property
+    def left(self) -> 'MediumLevelILInstruction':
+        return self.operands[0]
+
+    @property
+    def right(self) -> 'MediumLevelILInstruction':
+        return self.operands[1]
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "MediumLevelILInstruction"),
+            ("right", self.right, "MediumLevelILInstruction"),
+        ]
+
+    def __str__(self) -> str:
+        return f"({self.left} <= {self.right})"
+
+
+# ============================================================================
 # Variable Instructions
 # ============================================================================
 

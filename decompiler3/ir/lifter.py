@@ -11,20 +11,20 @@ from .llil import (
     LowLevelILAdd, LowLevelILSub, LowLevelILMul, LowLevelILConst,
     LowLevelILReg, LowLevelILSetReg, LowLevelILLoad, LowLevelILStore,
     LowLevelILJump, LowLevelILGoto, LowLevelILIf, LowLevelILCall, LowLevelILRet,
-    LowLevelILPush, LowLevelILPop, LowLevelILLabel
+    LowLevelILPush, LowLevelILPop, LowLevelILLabel, LowLevelILCmpSle
 )
 from .mlil import (
     MediumLevelILFunction, MediumLevelILInstruction, MediumLevelILBasicBlock,
     MediumLevelILBuilder, MediumLevelILAdd, MediumLevelILSub, MediumLevelILMul,
     MediumLevelILConst, MediumLevelILVar, MediumLevelILSetVar,
     MediumLevelILJump, MediumLevelILGoto, MediumLevelILIf, MediumLevelILCall, MediumLevelILRet,
-    Variable
+    MediumLevelILCmpSle, Variable
 )
 from .hlil import (
     HighLevelILFunction, HighLevelILInstruction, HighLevelILBasicBlock,
     HighLevelILBuilder, HighLevelILAdd, HighLevelILSub, HighLevelILMul,
     HighLevelILConst, HighLevelILVar, HighLevelILAssign,
-    HighLevelILIf, HighLevelILWhile, HighLevelILCall, HighLevelILRet
+    HighLevelILIf, HighLevelILWhile, HighLevelILCall, HighLevelILRet, HighLevelILCmpSle
 )
 from .common import ILRegister, InstructionIndex
 
@@ -79,6 +79,12 @@ class LLILToMLILLifter:
             right = self._convert_llil_to_mlil(llil_instr.right, mlil_function)
             if left and right:
                 return MediumLevelILMul(left, right, llil_instr.size)
+
+        elif isinstance(llil_instr, LowLevelILCmpSle):
+            left = self._convert_llil_to_mlil(llil_instr.left, mlil_function)
+            right = self._convert_llil_to_mlil(llil_instr.right, mlil_function)
+            if left and right:
+                return MediumLevelILCmpSle(left, right, llil_instr.size)
 
         elif isinstance(llil_instr, LowLevelILReg):
             # Convert register to variable
@@ -227,6 +233,12 @@ class MLILToHLILLifter:
             if left and right:
                 return HighLevelILMul(left, right, mlil_instr.size)
 
+        elif isinstance(mlil_instr, MediumLevelILCmpSle):
+            left = self._convert_mlil_to_hlil(mlil_instr.left, hlil_function)
+            right = self._convert_mlil_to_hlil(mlil_instr.right, hlil_function)
+            if left and right:
+                return HighLevelILCmpSle(left, right, mlil_instr.size)
+
         elif isinstance(mlil_instr, MediumLevelILVar):
             var = hlil_function.get_variable(mlil_instr.src.name)
             if var:
@@ -241,9 +253,12 @@ class MLILToHLILLifter:
         elif isinstance(mlil_instr, MediumLevelILIf):
             condition = self._convert_mlil_to_hlil(mlil_instr.condition, hlil_function)
             if condition:
-                # Simplified - just create basic if without structured control flow
-                # In a real implementation, this would do control flow structuring
-                return condition  # Placeholder
+                # Create a simplified if statement
+                # TODO: Implement proper control flow structuring to convert goto targets to bodies
+                # For now, create a placeholder body that represents the branch
+                true_body = HighLevelILConst(mlil_instr.true, 4)  # Placeholder: goto target as constant
+                false_body = HighLevelILConst(mlil_instr.false, 4) if mlil_instr.false is not None else None
+                return HighLevelILIf(condition, true_body, false_body)
 
         elif isinstance(mlil_instr, MediumLevelILCall):
             dest = self._convert_mlil_to_hlil(mlil_instr.dest, hlil_function)

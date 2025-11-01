@@ -192,6 +192,32 @@ class HighLevelILDiv(HighLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} / {self.right})"
 
 
+class HighLevelILCmpSle(HighLevelILInstruction, Comparison, BinaryOperation):
+    """Signed less than or equal comparison"""
+
+    def __init__(self, left: HighLevelILInstruction, right: HighLevelILInstruction, size: int = 4):
+        super().__init__(HighLevelILOperation.CMP_SLE, size)
+        self.operands = [left, right]
+
+    @property
+    def left(self) -> HighLevelILInstruction:
+        return self.get_expr(0)
+
+    @property
+    def right(self) -> HighLevelILInstruction:
+        return self.get_expr(1)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "HighLevelILInstruction"),
+            ("right", self.right, "HighLevelILInstruction"),
+        ]
+
+    def __str__(self) -> str:
+        return f"({self.left} <= {self.right})"
+
+
 # ============================================================================
 # Variable Instructions
 # ============================================================================

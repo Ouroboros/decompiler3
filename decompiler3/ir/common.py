@@ -23,6 +23,37 @@ class ILOperation(IntEnum):
     pass
 
 
+class OperandType(IntEnum):
+    """Types of operands for IL instructions"""
+    INT = 0      # Integer literal
+    STR = 1      # String literal
+    FLOAT = 2    # Float literal
+    FUNC_ID = 3  # Current function ID
+    RET_ADDR = 4 # Return address label
+    EXPR = 5     # Expression/instruction result
+
+
+@dataclass
+class TypedOperand:
+    """Typed operand for IL instructions"""
+    operand_type: OperandType
+    value: Any
+
+    def __str__(self) -> str:
+        if self.operand_type == OperandType.INT:
+            return str(self.value)
+        elif self.operand_type == OperandType.STR:
+            return f"'{self.value}'"
+        elif self.operand_type == OperandType.FLOAT:
+            return f"{self.value}f"
+        elif self.operand_type == OperandType.FUNC_ID:
+            return "current_func_id()"
+        elif self.operand_type == OperandType.RET_ADDR:
+            return f"ret_addr('{self.value}')"
+        else:
+            return str(self.value)
+
+
 class LowLevelILOperation(ILOperation):
     """Low Level IL Operations - based on BinaryNinja LLIL"""
     # Arithmetic operations
@@ -69,6 +100,7 @@ class LowLevelILOperation(ILOperation):
     RET = 63
     IF = 64
     GOTO = 65
+    LABEL = 66
 
     # Constants and variables
     CONST = 70
@@ -90,6 +122,9 @@ class MediumLevelILOperation(ILOperation):
     SUB = 1
     MUL = 2
     DIV = 3
+
+    # Comparison operations
+    CMP_SLE = 20  # Signed less than or equal
 
     # Variable operations
     VAR = 100
@@ -128,6 +163,14 @@ class HighLevelILOperation(ILOperation):
     SUB = 1
     MUL = 2
     DIV = 3
+
+    # Comparison operations
+    CMP_E = 20    # Equal
+    CMP_NE = 21   # Not equal
+    CMP_SLT = 22  # Signed less than
+    CMP_ULT = 23  # Unsigned less than
+    CMP_SLE = 24  # Signed less than or equal
+    CMP_ULE = 25  # Unsigned less than or equal
 
     # Variable operations
     VAR = 200

@@ -12,7 +12,7 @@ from .common import (
     BaseILInstruction, ILBasicBlock, ILFunction, ILRegister, ILFlag,
     LowLevelILOperation, ILOperationAndSize, InstructionIndex, ExpressionIndex,
     Terminal, ControlFlow, Memory, Arithmetic, Comparison, Constant,
-    BinaryOperation, UnaryOperation, Call, Return
+    BinaryOperation, UnaryOperation, Call, Return, OperandType, TypedOperand
 )
 
 
@@ -721,3 +721,50 @@ class LowLevelILBuilder:
 
     def unimpl(self) -> LowLevelILUnimpl:
         return LowLevelILUnimpl()
+
+
+# ===== Stack Instructions (Binary Ninja Style) =====
+
+class LowLevelILPush(LowLevelILInstruction):
+    """Push value onto stack - supports typed operands"""
+
+    def __init__(self, src: Union[LowLevelILInstruction, TypedOperand], size: int = 4):
+        super().__init__(LowLevelILOperation.PUSH, size)
+        self.operands = [src]
+
+    @property
+    def src(self) -> Union[LowLevelILInstruction, TypedOperand]:
+        return self.operands[0]
+
+    def __str__(self) -> str:
+        return f"push({self.src})"
+
+
+class LowLevelILPop(LowLevelILInstruction):
+    """Pop value from stack"""
+
+    def __init__(self, size: int = 4):
+        super().__init__(LowLevelILOperation.POP, size)
+        self.operands = []
+
+    def __str__(self) -> str:
+        return f"pop()"
+
+
+
+
+class LowLevelILLabel(LowLevelILInstruction):
+    """Label for jump targets"""
+
+    def __init__(self, name: str):
+        super().__init__(LowLevelILOperation.LABEL, 0)
+        self.operands = [name]
+
+    @property
+    def name(self) -> str:
+        return self.operands[0]
+
+    def __str__(self) -> str:
+        return f"label('{self.name}')"
+
+

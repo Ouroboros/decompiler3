@@ -12,7 +12,7 @@ from ..ir.hlil import (
     HighLevelILIf, HighLevelILWhile, HighLevelILFor, HighLevelILDoWhile,
     HighLevelILSwitch, HighLevelILJump, HighLevelILGoto, HighLevelILLabel,
     HighLevelILCall, HighLevelILTailcall, HighLevelILRet,
-    HighLevelILBlock, HighLevelILConst
+    HighLevelILBlock, HighLevelILConst, HighLevelILCmpSle
 )
 from ..ir.mlil import Variable
 
@@ -88,10 +88,19 @@ class TypeScriptGenerator:
         """Generate structured control flow"""
         lines = []
 
-        for block in function.basic_blocks:
-            for instruction in block.instructions:
-                instr_lines = self._generate_instruction(instruction)
-                lines.extend(instr_lines)
+        if not function.basic_blocks:
+            return lines
+
+        # Only generate the entry block, let control flow instructions handle branching
+        entry_block = function.basic_blocks[0]
+
+        for instruction in entry_block.instructions:
+            instr_lines = self._generate_instruction(instruction)
+            lines.extend(instr_lines)
+
+            # Stop after control flow instruction - it should handle the rest
+            if isinstance(instruction, (HighLevelILIf, HighLevelILWhile, HighLevelILFor, HighLevelILRet)):
+                break
 
         return lines
 
@@ -195,6 +204,11 @@ class TypeScriptGenerator:
             right = self._generate_expression(expression.right)
             return f"({left} / {right})"
 
+        elif isinstance(expression, HighLevelILCmpSle):
+            left = self._generate_expression(expression.left)
+            right = self._generate_expression(expression.right)
+            return f"({left} <= {right})"
+
         elif isinstance(expression, HighLevelILCall):
             func_name = self._generate_expression(expression.dest)
             if expression.params:
@@ -211,13 +225,22 @@ class TypeScriptGenerator:
         condition = self._generate_expression(if_stmt.condition)
         lines.append(f"if ({condition}) {{")
 
-        true_lines = self._generate_instruction(if_stmt.true)
-        lines.extend(self._indent_lines(true_lines))
+        # Handle goto targets in if bodies - convert to comments for now
+        if hasattr(if_stmt.true, 'constant'):
+            lines.append(f"  // goto block {if_stmt.true.constant}")
+            lines.append(f"  return; // TODO: implement proper control flow")
+        else:
+            true_lines = self._generate_instruction(if_stmt.true)
+            lines.extend(self._indent_lines(true_lines))
 
         if if_stmt.false:
             lines.append("} else {")
-            false_lines = self._generate_instruction(if_stmt.false)
-            lines.extend(self._indent_lines(false_lines))
+            if hasattr(if_stmt.false, 'constant'):
+                lines.append(f"  // goto block {if_stmt.false.constant}")
+                lines.append(f"  return; // TODO: implement proper control flow")
+            else:
+                false_lines = self._generate_instruction(if_stmt.false)
+                lines.extend(self._indent_lines(false_lines))
 
         lines.append("}")
         return lines
