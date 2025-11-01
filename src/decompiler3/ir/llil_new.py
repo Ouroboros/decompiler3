@@ -58,7 +58,6 @@ class LowLevelILInstruction(BaseILInstruction):
 # Arithmetic Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
 class LowLevelILAdd(LowLevelILInstruction, Arithmetic, BinaryOperation):
     """Add two operands"""
 
@@ -85,7 +84,7 @@ class LowLevelILAdd(LowLevelILInstruction, Arithmetic, BinaryOperation):
         return f"{self.left} + {self.right}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILSub(LowLevelILInstruction, Arithmetic, BinaryOperation):
     """Subtract two operands"""
 
@@ -112,7 +111,7 @@ class LowLevelILSub(LowLevelILInstruction, Arithmetic, BinaryOperation):
         return f"{self.left} - {self.right}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILMul(LowLevelILInstruction, Arithmetic, BinaryOperation):
     """Multiply two operands"""
 
@@ -139,7 +138,7 @@ class LowLevelILMul(LowLevelILInstruction, Arithmetic, BinaryOperation):
         return f"{self.left} * {self.right}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILDiv(LowLevelILInstruction, Arithmetic, BinaryOperation):
     """Divide two operands"""
 
@@ -170,7 +169,7 @@ class LowLevelILDiv(LowLevelILInstruction, Arithmetic, BinaryOperation):
 # Comparison Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILCmpE(LowLevelILInstruction, Comparison, BinaryOperation):
     """Compare equal"""
 
@@ -197,7 +196,7 @@ class LowLevelILCmpE(LowLevelILInstruction, Comparison, BinaryOperation):
         return f"{self.left} == {self.right}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILCmpNe(LowLevelILInstruction, Comparison, BinaryOperation):
     """Compare not equal"""
 
@@ -224,7 +223,7 @@ class LowLevelILCmpNe(LowLevelILInstruction, Comparison, BinaryOperation):
         return f"{self.left} != {self.right}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILCmpSlt(LowLevelILInstruction, Comparison, BinaryOperation):
     """Compare signed less than"""
 
@@ -255,7 +254,7 @@ class LowLevelILCmpSlt(LowLevelILInstruction, Comparison, BinaryOperation):
 # Memory Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILLoad(LowLevelILInstruction, Memory):
     """Load from memory"""
 
@@ -277,7 +276,7 @@ class LowLevelILLoad(LowLevelILInstruction, Memory):
         return f"[{self.src}]"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILStore(LowLevelILInstruction, Memory):
     """Store to memory"""
 
@@ -308,7 +307,7 @@ class LowLevelILStore(LowLevelILInstruction, Memory):
 # Register Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILReg(LowLevelILInstruction):
     """Register access"""
 
@@ -330,7 +329,7 @@ class LowLevelILReg(LowLevelILInstruction):
         return str(self.src)
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILSetReg(LowLevelILInstruction):
     """Set register value"""
 
@@ -361,7 +360,7 @@ class LowLevelILSetReg(LowLevelILInstruction):
 # Control Flow Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILJump(LowLevelILInstruction, Terminal):
     """Unconditional jump"""
 
@@ -383,7 +382,7 @@ class LowLevelILJump(LowLevelILInstruction, Terminal):
         return f"jump {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILGoto(LowLevelILInstruction, Terminal):
     """Goto instruction index"""
 
@@ -405,7 +404,7 @@ class LowLevelILGoto(LowLevelILInstruction, Terminal):
         return f"goto {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILIf(LowLevelILInstruction, ControlFlow):
     """Conditional branch"""
 
@@ -437,7 +436,7 @@ class LowLevelILIf(LowLevelILInstruction, ControlFlow):
         return f"if ({self.condition}) goto {self.true} else goto {self.false}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILCall(LowLevelILInstruction, Call):
     """Function call"""
 
@@ -469,7 +468,7 @@ class LowLevelILCall(LowLevelILInstruction, Call):
         return f"call {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILRet(LowLevelILInstruction, Return, Terminal):
     """Return from function"""
 
@@ -502,7 +501,7 @@ class LowLevelILRet(LowLevelILInstruction, Return, Terminal):
 # Constant Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILConst(LowLevelILInstruction, Constant):
     """Constant value"""
 
@@ -524,7 +523,7 @@ class LowLevelILConst(LowLevelILInstruction, Constant):
         return str(self.constant)
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILConstPtr(LowLevelILInstruction, Constant):
     """Constant pointer"""
 
@@ -550,7 +549,7 @@ class LowLevelILConstPtr(LowLevelILInstruction, Constant):
 # Special Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILNop(LowLevelILInstruction):
     """No operation"""
 
@@ -561,7 +560,7 @@ class LowLevelILNop(LowLevelILInstruction):
         return "nop"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILUndef(LowLevelILInstruction, Terminal):
     """Undefined instruction"""
 
@@ -572,7 +571,7 @@ class LowLevelILUndef(LowLevelILInstruction, Terminal):
         return "undef"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class LowLevelILUnimpl(LowLevelILInstruction):
     """Unimplemented instruction"""
 

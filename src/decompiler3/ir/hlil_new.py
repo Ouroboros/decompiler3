@@ -84,7 +84,7 @@ class HighLevelILInstruction(BaseILInstruction):
 # Arithmetic Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILAdd(HighLevelILInstruction, Arithmetic, BinaryOperation):
     """Add two operands"""
 
@@ -111,7 +111,7 @@ class HighLevelILAdd(HighLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} + {self.right})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILSub(HighLevelILInstruction, Arithmetic, BinaryOperation):
     """Subtract two operands"""
 
@@ -138,7 +138,7 @@ class HighLevelILSub(HighLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} - {self.right})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILMul(HighLevelILInstruction, Arithmetic, BinaryOperation):
     """Multiply two operands"""
 
@@ -165,7 +165,7 @@ class HighLevelILMul(HighLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} * {self.right})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILDiv(HighLevelILInstruction, Arithmetic, BinaryOperation):
     """Divide two operands"""
 
@@ -196,7 +196,7 @@ class HighLevelILDiv(HighLevelILInstruction, Arithmetic, BinaryOperation):
 # Variable Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILVar(HighLevelILInstruction):
     """Variable reference"""
 
@@ -218,7 +218,7 @@ class HighLevelILVar(HighLevelILInstruction):
         return str(self.src)
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILAssign(HighLevelILInstruction):
     """Assignment statement"""
 
@@ -245,7 +245,7 @@ class HighLevelILAssign(HighLevelILInstruction):
         return f"{self.dest} = {self.src}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILVarInit(HighLevelILInstruction):
     """Variable initialization"""
 
@@ -276,7 +276,7 @@ class HighLevelILVarInit(HighLevelILInstruction):
 # Control Flow Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILIf(HighLevelILInstruction, ControlFlow):
     """If statement"""
 
@@ -317,7 +317,7 @@ class HighLevelILIf(HighLevelILInstruction, ControlFlow):
         return f"if ({self.condition}) {{\n  {self.true}\n}}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILWhile(HighLevelILInstruction, Loop):
     """While loop"""
 
@@ -344,7 +344,7 @@ class HighLevelILWhile(HighLevelILInstruction, Loop):
         return f"while ({self.condition}) {{\n  {self.body}\n}}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILFor(HighLevelILInstruction, Loop):
     """For loop"""
 
@@ -381,7 +381,7 @@ class HighLevelILFor(HighLevelILInstruction, Loop):
         return f"for ({self.init}; {self.condition}; {self.update}) {{\n  {self.body}\n}}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILDoWhile(HighLevelILInstruction, Loop):
     """Do-while loop"""
 
@@ -408,7 +408,7 @@ class HighLevelILDoWhile(HighLevelILInstruction, Loop):
         return f"do {{\n  {self.body}\n}} while ({self.condition})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILSwitch(HighLevelILInstruction, ControlFlow):
     """Switch statement"""
 
@@ -450,7 +450,7 @@ class HighLevelILSwitch(HighLevelILInstruction, ControlFlow):
         return result
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILJump(HighLevelILInstruction, Terminal):
     """Unconditional jump"""
 
@@ -472,7 +472,7 @@ class HighLevelILJump(HighLevelILInstruction, Terminal):
         return f"jump {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILGoto(HighLevelILInstruction, Terminal):
     """Goto label"""
 
@@ -494,7 +494,7 @@ class HighLevelILGoto(HighLevelILInstruction, Terminal):
         return f"goto {self.target}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILLabel(HighLevelILInstruction):
     """Label definition"""
 
@@ -520,7 +520,7 @@ class HighLevelILLabel(HighLevelILInstruction):
 # Function Call Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILCall(HighLevelILInstruction, Call):
     """Function call"""
 
@@ -552,7 +552,7 @@ class HighLevelILCall(HighLevelILInstruction, Call):
         return f"{self.dest}()"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILTailcall(HighLevelILInstruction, Call, Terminal):
     """Tail call"""
 
@@ -584,7 +584,7 @@ class HighLevelILTailcall(HighLevelILInstruction, Call, Terminal):
         return f"tailcall {self.dest}()"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILRet(HighLevelILInstruction, Return, Terminal):
     """Return from function"""
 
@@ -618,7 +618,7 @@ class HighLevelILRet(HighLevelILInstruction, Return, Terminal):
 # Block Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILBlock(HighLevelILInstruction):
     """Block of statements"""
 
@@ -654,7 +654,7 @@ class HighLevelILBlock(HighLevelILInstruction):
 # Constant Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class HighLevelILConst(HighLevelILInstruction, Constant):
     """Constant value"""
 

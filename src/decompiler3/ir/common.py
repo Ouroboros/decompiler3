@@ -244,11 +244,11 @@ class BaseILInstruction(ABC):
     """Base class for all IL instructions - inspired by BinaryNinja"""
 
     def __init__(self, operation: ILOperation, size: int = 0):
-        self.operation = operation
-        self.size = size
-        self.operands: List[Any] = []
-        self.attributes: Set[ILInstructionAttribute] = set()
-        self.source_location: Optional['ILSourceLocation'] = None
+        object.__setattr__(self, 'operation', operation)
+        object.__setattr__(self, 'size', size)
+        object.__setattr__(self, 'operands', [])
+        object.__setattr__(self, 'attributes', set())
+        object.__setattr__(self, 'source_location', None)
 
     @abstractmethod
     def __str__(self) -> str:

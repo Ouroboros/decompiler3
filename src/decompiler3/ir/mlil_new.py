@@ -87,7 +87,7 @@ class MediumLevelILInstruction(BaseILInstruction):
 # Arithmetic Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILAdd(MediumLevelILInstruction, Arithmetic, BinaryOperation):
     """Add two operands"""
 
@@ -114,7 +114,7 @@ class MediumLevelILAdd(MediumLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} + {self.right})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILSub(MediumLevelILInstruction, Arithmetic, BinaryOperation):
     """Subtract two operands"""
 
@@ -141,7 +141,7 @@ class MediumLevelILSub(MediumLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} - {self.right})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILMul(MediumLevelILInstruction, Arithmetic, BinaryOperation):
     """Multiply two operands"""
 
@@ -168,7 +168,7 @@ class MediumLevelILMul(MediumLevelILInstruction, Arithmetic, BinaryOperation):
         return f"({self.left} * {self.right})"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILDiv(MediumLevelILInstruction, Arithmetic, BinaryOperation):
     """Divide two operands"""
 
@@ -199,7 +199,7 @@ class MediumLevelILDiv(MediumLevelILInstruction, Arithmetic, BinaryOperation):
 # Variable Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILVar(MediumLevelILInstruction):
     """Variable reference"""
 
@@ -221,7 +221,7 @@ class MediumLevelILVar(MediumLevelILInstruction):
         return str(self.src)
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILSetVar(MediumLevelILInstruction):
     """Set variable value"""
 
@@ -248,7 +248,7 @@ class MediumLevelILSetVar(MediumLevelILInstruction):
         return f"{self.dest} = {self.src}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILVarSsa(MediumLevelILInstruction):
     """SSA variable reference"""
 
@@ -270,7 +270,7 @@ class MediumLevelILVarSsa(MediumLevelILInstruction):
         return str(self.src.name)
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILSetVarSsa(MediumLevelILInstruction):
     """Set SSA variable value"""
 
@@ -301,7 +301,7 @@ class MediumLevelILSetVarSsa(MediumLevelILInstruction):
 # Control Flow Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILJump(MediumLevelILInstruction, Terminal):
     """Unconditional jump"""
 
@@ -323,7 +323,7 @@ class MediumLevelILJump(MediumLevelILInstruction, Terminal):
         return f"jump {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILGoto(MediumLevelILInstruction, Terminal):
     """Goto instruction index"""
 
@@ -345,7 +345,7 @@ class MediumLevelILGoto(MediumLevelILInstruction, Terminal):
         return f"goto {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILIf(MediumLevelILInstruction, Terminal):
     """Conditional branch"""
 
@@ -377,7 +377,7 @@ class MediumLevelILIf(MediumLevelILInstruction, Terminal):
         return f"if ({self.condition}) goto {self.true} else goto {self.false}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILCall(MediumLevelILInstruction, Call):
     """Function call"""
 
@@ -409,7 +409,7 @@ class MediumLevelILCall(MediumLevelILInstruction, Call):
         return f"call {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILTailcall(MediumLevelILInstruction, Call, Terminal):
     """Tail call"""
 
@@ -441,7 +441,7 @@ class MediumLevelILTailcall(MediumLevelILInstruction, Call, Terminal):
         return f"tailcall {self.dest}"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILRet(MediumLevelILInstruction, Return, Terminal):
     """Return from function"""
 
@@ -475,7 +475,7 @@ class MediumLevelILRet(MediumLevelILInstruction, Return, Terminal):
 # Constant Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILConst(MediumLevelILInstruction, Constant):
     """Constant value"""
 
@@ -497,7 +497,7 @@ class MediumLevelILConst(MediumLevelILInstruction, Constant):
         return str(self.constant)
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILConstPtr(MediumLevelILInstruction, Constant):
     """Constant pointer"""
 
@@ -523,7 +523,7 @@ class MediumLevelILConstPtr(MediumLevelILInstruction, Constant):
 # Special Instructions
 # ============================================================================
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILNop(MediumLevelILInstruction):
     """No operation"""
 
@@ -534,7 +534,7 @@ class MediumLevelILNop(MediumLevelILInstruction):
         return "nop"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILUndef(MediumLevelILInstruction):
     """Undefined value"""
 
@@ -545,7 +545,7 @@ class MediumLevelILUndef(MediumLevelILInstruction):
         return "undef"
 
 
-@dataclass(frozen=True, repr=False, eq=False)
+
 class MediumLevelILUnimpl(MediumLevelILInstruction):
     """Unimplemented instruction"""
 
