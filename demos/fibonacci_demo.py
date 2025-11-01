@@ -31,20 +31,18 @@ def create_fibonacci_llil_function() -> LowLevelILFunction:
     builder = LowLevelILBuilderExtended(function)
     builder.set_current_block(entry_block)
 
-    # Stack operations: assume n is already on stack
-    # For demo purposes, let's say n=5 is the input
+    # Stack operations: n is passed as parameter on stack
+    # In stack VM, function parameters are already on stack when function starts
     builder.add_instruction(builder.label('fibonacci_start'))
 
-    # Push n (input parameter) for demo - let's use 5
-    builder.add_instruction(builder.push_int(5))  # n = 5
-
-    # Duplicate n and push 1 for comparison
-    n_val = builder.pop()  # Get n from stack
-    builder.add_instruction(builder.push(n_val))  # Push n back
+    # Get parameter n from stack and duplicate for comparison
+    n_val = builder.pop()  # Get parameter n from stack
+    builder.add_instruction(builder.push(n_val))  # Push n back for later use
+    builder.add_instruction(builder.push(n_val))  # Duplicate n for comparison
     builder.add_instruction(builder.push_int(1))   # Push 1
 
     # Compare: if n <= 1 goto base_case (comparing n with 1)
-    cmp_result = builder.cmp_sle(n_val, builder.pop())  # n <= 1
+    cmp_result = builder.cmp_sle(builder.pop(), builder.pop())  # n <= 1
     if_stmt = builder.if_stmt(cmp_result, InstructionIndex(1), InstructionIndex(2))
     builder.add_instruction(if_stmt)
 
