@@ -10,7 +10,8 @@ from .llil import (
     LowLevelILFunction, LowLevelILInstruction, LowLevelILBasicBlock,
     LowLevelILAdd, LowLevelILSub, LowLevelILMul, LowLevelILConst,
     LowLevelILReg, LowLevelILSetReg, LowLevelILLoad, LowLevelILStore,
-    LowLevelILJump, LowLevelILGoto, LowLevelILIf, LowLevelILCall, LowLevelILRet
+    LowLevelILJump, LowLevelILGoto, LowLevelILIf, LowLevelILCall, LowLevelILRet,
+    LowLevelILPush, LowLevelILPop, LowLevelILLabel
 )
 from .mlil import (
     MediumLevelILFunction, MediumLevelILInstruction, MediumLevelILBasicBlock,
@@ -33,6 +34,7 @@ class LLILToMLILLifter:
 
     def __init__(self):
         self.register_to_var: Dict[str, Variable] = {}
+        self.stack_var: Optional[Variable] = None
 
     def lift_function(self, llil_function: LowLevelILFunction) -> MediumLevelILFunction:
         """Convert LLIL function to MLIL"""
@@ -120,6 +122,42 @@ class LLILToMLILLifter:
                     return MediumLevelILRet([value])
             return MediumLevelILRet()
 
+        # Stack operations - convert to variable-based operations
+        elif isinstance(llil_instr, LowLevelILPush):
+            # For now, convert push to a stack variable assignment
+            # In a complete implementation, would maintain a proper stack model
+            stack_var = self._get_or_create_stack_variable(mlil_function)
+
+            # Handle typed operands
+            from .common import TypedOperand, OperandType
+            if isinstance(llil_instr.src, TypedOperand):
+                if llil_instr.src.operand_type == OperandType.INT:
+                    value = MediumLevelILConst(llil_instr.src.value, 4)
+                elif llil_instr.src.operand_type == OperandType.STR:
+                    # For demo purposes, represent strings as constants
+                    value = MediumLevelILConst(hash(llil_instr.src.value) & 0xFFFF, 4)
+                elif llil_instr.src.operand_type == OperandType.FUNC_ID:
+                    value = MediumLevelILConst(-1, 4)  # Special marker for func_id
+                elif llil_instr.src.operand_type == OperandType.RET_ADDR:
+                    value = MediumLevelILConst(hash(llil_instr.src.value) & 0xFFFF, 4)
+                else:
+                    value = MediumLevelILConst(0, 4)
+            else:
+                value = self._convert_llil_to_mlil(llil_instr.src, mlil_function)
+
+            if value:
+                return MediumLevelILSetVar(stack_var, value)
+
+        elif isinstance(llil_instr, LowLevelILPop):
+            # Convert pop to reading from stack variable
+            stack_var = self._get_or_create_stack_variable(mlil_function)
+            return MediumLevelILVar(stack_var)
+
+        elif isinstance(llil_instr, LowLevelILLabel):
+            # Labels don't translate directly to MLIL - they're control flow markers
+            # In a complete implementation, would handle this in control flow analysis
+            return None
+
         return None
 
     def _get_or_create_variable(self, reg_name: str, mlil_function: MediumLevelILFunction) -> Variable:
@@ -130,6 +168,12 @@ class LLILToMLILLifter:
         else:
             var = self.register_to_var[reg_name]
         return var
+
+    def _get_or_create_stack_variable(self, mlil_function: MediumLevelILFunction) -> Variable:
+        """Get or create stack variable for stack operations"""
+        if self.stack_var is None:
+            self.stack_var = mlil_function.create_variable("stack_top", "int", 4)
+        return self.stack_var
 
 
 class MLILToHLILLifter:
