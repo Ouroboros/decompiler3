@@ -56,7 +56,7 @@ def create_fibonacci_llil_function() -> LowLevelILFunction:
     builder.add_instruction(builder.label('base_case'))
     # Pop n from stack and return it
     builder.add_instruction(builder.set_reg(reg_result, builder.pop()))
-    builder.add_instruction(builder.ret())
+    builder.add_instruction(builder.ret(reg_result))
 
     # Block 2: Recursive case - stack-based fibonacci computation
     recursive_block = LowLevelILBasicBlock(0x2020)
@@ -124,7 +124,7 @@ def create_fibonacci_llil_function() -> LowLevelILFunction:
 
     # Pop final result from stack and return
     builder.add_instruction(builder.set_reg(reg_result, builder.pop()))
-    builder.add_instruction(builder.ret())
+    builder.add_instruction(builder.ret(reg_result))
 
     return function
 
