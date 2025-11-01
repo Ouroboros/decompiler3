@@ -1,4 +1,6 @@
-typing-extensions>=4.0.0
-dataclasses-json>=0.5.0
-pydantic>=2.0.0
-enum34>=1.1.0
+# No external dependencies required
+# This project uses only Python standard library:
+# - typing (for type hints)
+# - dataclasses (Python 3.7+)
+# - enum (standard library)
+# - abc (abstract base classes)
