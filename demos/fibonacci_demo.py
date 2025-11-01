@@ -12,9 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from decompiler3.ir.lifter import DecompilerPipeline
 from decompiler3.typescript.generator import TypeScriptGenerator
-from decompiler3.ir.llil import (
-    LowLevelILFunction, LowLevelILBasicBlock, LowLevelILBuilderExtended
-)
+from decompiler3.ir.llil import LowLevelILFunction, LowLevelILBasicBlock
+from falcom_vm_builder import LowLevelILBuilderExtended
 from decompiler3.ir.common import ILRegister, InstructionIndex
 
 

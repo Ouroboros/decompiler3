@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from decompiler3.ir.llil import LowLevelILFunction, LowLevelILBasicBlock
 from falcom_vm_builder import FalcomVMBuilder, create_falcom_builder
-from java_vm_builder import JavaVMBuilder, create_java_builder
 
 
 def demo_external_falcom_builder():
@@ -50,47 +49,6 @@ def demo_external_falcom_builder():
     return function
 
 
-def demo_external_java_builder():
-    """Demonstrate external Java VM builder"""
-    print("\n☕ External Java VM Builder Demo:")
-    print("-" * 50)
-
-    # Create function using external builder
-    function = LowLevelILFunction("java_hello_world", 0x2000)
-    builder = create_java_builder(function)
-
-    # Create main block
-    main_block = LowLevelILBasicBlock(0x2000)
-    function.add_basic_block(main_block)
-    builder.set_current_block(main_block)
-
-    # Use high-level Java patterns
-    builder.system_println("Hello, World!")
-    builder.java_method_call("String", "valueOf", 42)
-
-    # Low-level JVM operations
-    builder.add_instruction(builder.new("ArrayList"))
-    builder.add_instruction(builder.push_str("item1"))
-    builder.add_instruction(builder.invokevirtual("List.add"))
-
-    # Array operations
-    builder.add_instruction(builder.push_int(10))
-    builder.add_instruction(builder.newarray("int"))
-    builder.add_instruction(builder.arraylength())
-
-    builder.add_instruction(builder.ret())
-
-    print(f"✅ Created function: {function.name}")
-    print(f"   📊 Instructions: {sum(len(block.instructions) for block in function.basic_blocks)}")
-
-    print("\n🔧 Generated LLIL (JVM bytecode patterns):")
-    for i, block in enumerate(function.basic_blocks):
-        print(f"  Block {i}:")
-        for j, instr in enumerate(block.instructions):
-            print(f"    {j}: {instr}")
-        print()
-
-    return function
 
 
 def demo_builder_modularity():
@@ -100,9 +58,7 @@ def demo_builder_modularity():
 
     print("📁 External Builder Files:")
     print("  ✅ demos/falcom_vm_builder.py - Falcom game engine patterns")
-    print("  ✅ demos/java_vm_builder.py - JVM bytecode patterns")
-    print("  🚀 demos/python_vm_builder.py - CPython bytecode (could be added)")
-    print("  🚀 demos/webassembly_builder.py - WASM patterns (could be added)")
+    print("  🚀 demos/other_vm_builder.py - Other VMs (could be added as needed)")
 
     print("\n🏗️ Architecture Benefits:")
     print("  ✅ Clean separation: Core IR vs VM-specific logic")
@@ -141,7 +97,6 @@ def main():
 
     # Demo external builders
     falcom_func = demo_external_falcom_builder()
-    java_func = demo_external_java_builder()
     demo_builder_modularity()
 
     print("\n🎯 Key Advantages of External Builders:")
@@ -156,7 +111,6 @@ def main():
     print("-" * 50)
     print("  📂 decompiler3/ir/llil.py - Core IR (clean!)")
     print("  📂 demos/falcom_vm_builder.py - Falcom VM patterns")
-    print("  📂 demos/java_vm_builder.py - Java VM patterns")
     print("  📂 demos/external_builders_demo.py - Usage examples")
 
     print("\n🎉 External builders demo completed!")

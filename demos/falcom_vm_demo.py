@@ -12,9 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from decompiler3.ir.lifter import DecompilerPipeline
 from decompiler3.typescript.generator import TypeScriptGenerator
-from decompiler3.ir.llil import (
-    LowLevelILFunction, LowLevelILBasicBlock, LowLevelILBuilderExtended
-)
+from decompiler3.ir.llil import LowLevelILFunction, LowLevelILBasicBlock
+from falcom_vm_builder import FalcomVMBuilder
 from decompiler3.ir.common import ILRegister, InstructionIndex
 
 
@@ -27,8 +26,8 @@ def create_av_04_0017_llil_function() -> LowLevelILFunction:
     main_block = LowLevelILBasicBlock(0x2000)
     function.add_basic_block(main_block)
 
-    # Create extended builder for Falcom VM instructions
-    builder = LowLevelILBuilderExtended(function)
+    # Create Falcom VM builder
+    builder = FalcomVMBuilder(function)
     builder.set_current_block(main_block)
 
     # Create register for return value
