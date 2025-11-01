@@ -27,6 +27,9 @@ class TypeScriptGenerator:
 
     def generate_function(self, function: HighLevelILFunction) -> str:
         """Generate TypeScript function from HLIL"""
+        # Store function reference for _get_block_code
+        self._current_function = function
+
         lines = []
 
         # Function signature
@@ -45,6 +48,10 @@ class TypeScriptGenerator:
         lines.extend(self._indent_lines(body_lines))
 
         lines.append("}")
+
+        # Clean up function reference
+        self._current_function = None
+
         return "\n".join(lines)
 
     def _generate_parameters(self, function: HighLevelILFunction) -> str:
@@ -225,10 +232,16 @@ class TypeScriptGenerator:
         condition = self._generate_expression(if_stmt.condition)
         lines.append(f"if ({condition}) {{")
 
-        # Handle goto targets in if bodies - convert to comments for now
+        # Handle goto targets in if bodies - try to include target block code
         if hasattr(if_stmt.true, 'constant'):
-            lines.append(f"  // goto block {if_stmt.true.constant}")
-            lines.append(f"  return; // TODO: implement proper control flow")
+            target_block_index = int(if_stmt.true.constant)
+            lines.append(f"  // Block {target_block_index}")
+            # Try to find and include the target block's code
+            target_lines = self._get_block_code(target_block_index)
+            if target_lines:
+                lines.extend(self._indent_lines(target_lines))
+            else:
+                lines.append(f"  return; // TODO: target block {target_block_index} not found")
         else:
             true_lines = self._generate_instruction(if_stmt.true)
             lines.extend(self._indent_lines(true_lines))
@@ -236,14 +249,71 @@ class TypeScriptGenerator:
         if if_stmt.false:
             lines.append("} else {")
             if hasattr(if_stmt.false, 'constant'):
-                lines.append(f"  // goto block {if_stmt.false.constant}")
-                lines.append(f"  return; // TODO: implement proper control flow")
+                target_block_index = int(if_stmt.false.constant)
+                lines.append(f"  // Block {target_block_index}")
+                # Try to find and include the target block's code
+                target_lines = self._get_block_code(target_block_index)
+                if target_lines:
+                    lines.extend(self._indent_lines(target_lines))
+                else:
+                    lines.append(f"  return; // TODO: target block {target_block_index} not found")
             else:
                 false_lines = self._generate_instruction(if_stmt.false)
                 lines.extend(self._indent_lines(false_lines))
 
         lines.append("}")
         return lines
+
+    def _get_block_code(self, block_index: int) -> List[str]:
+        """Get code for a specific block index and all subsequent reachable blocks"""
+        if not (hasattr(self, '_current_function') and self._current_function):
+            return []
+
+        if not (0 <= block_index < len(self._current_function.basic_blocks)):
+            return []
+
+        lines = []
+        visited = set()
+
+        # Generate code for this block and follow control flow
+        self._generate_block_sequence(block_index, lines, visited)
+
+        return lines
+
+    def _generate_block_sequence(self, block_index: int, lines: List[str], visited: set):
+        """Generate code for a block and follow its control flow"""
+        if block_index in visited or block_index >= len(self._current_function.basic_blocks):
+            return
+
+        visited.add(block_index)
+        target_block = self._current_function.basic_blocks[block_index]
+
+        # Add block comment if not the first block
+        if lines:  # Only add comment if this isn't the first block in the sequence
+            lines.append(f"// Block {block_index}")
+
+        # Generate instructions for this block
+        for instruction in target_block.instructions:
+            # Handle control flow instructions specially
+            if isinstance(instruction, HighLevelILIf):
+                # For if statements, generate the condition and branches
+                instr_lines = self._generate_instruction(instruction)
+                lines.extend(instr_lines)
+                return  # Stop here - if statement handles its own control flow
+            elif isinstance(instruction, (HighLevelILRet)):
+                # Return statement - generate and stop
+                instr_lines = self._generate_instruction(instruction)
+                lines.extend(instr_lines)
+                return
+            else:
+                # Regular instruction
+                instr_lines = self._generate_instruction(instruction)
+                lines.extend(instr_lines)
+
+        # If we reach here without hitting control flow, continue to next block
+        next_block_index = block_index + 1
+        if next_block_index < len(self._current_function.basic_blocks):
+            self._generate_block_sequence(next_block_index, lines, visited)
 
     def _generate_while_loop(self, while_loop: HighLevelILWhile) -> List[str]:
         """Generate while loop"""

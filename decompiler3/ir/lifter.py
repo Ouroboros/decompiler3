@@ -123,7 +123,14 @@ class LLILToMLILLifter:
 
         elif isinstance(llil_instr, LowLevelILRet):
             if llil_instr.dest:
-                value = self._convert_llil_to_mlil(llil_instr.dest, mlil_function)
+                # Handle ILRegister directly instead of trying to convert as instruction
+                from .common import ILRegister
+                if isinstance(llil_instr.dest, ILRegister):
+                    var = self._get_or_create_variable(llil_instr.dest.name, mlil_function)
+                    value = MediumLevelILVar(var)
+                else:
+                    value = self._convert_llil_to_mlil(llil_instr.dest, mlil_function)
+
                 if value:
                     return MediumLevelILRet([value])
             return MediumLevelILRet()
