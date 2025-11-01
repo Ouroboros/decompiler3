@@ -250,6 +250,32 @@ class LowLevelILCmpSlt(LowLevelILInstruction, Comparison, BinaryOperation):
         return f"{self.left} < {self.right}"
 
 
+class LowLevelILCmpSle(LowLevelILInstruction, Comparison, BinaryOperation):
+    """Compare signed less than or equal"""
+
+    def __init__(self, left: LowLevelILInstruction, right: LowLevelILInstruction, size: int = 4):
+        super().__init__(LowLevelILOperation.CMP_SLE, size)
+        self.operands = [left, right]
+
+    @property
+    def left(self) -> LowLevelILInstruction:
+        return self._get_expr(0)
+
+    @property
+    def right(self) -> LowLevelILInstruction:
+        return self._get_expr(1)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "LowLevelILInstruction"),
+            ("right", self.right, "LowLevelILInstruction"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.left} <= {self.right}"
+
+
 # ============================================================================
 # Memory Instructions
 # ============================================================================
@@ -645,6 +671,9 @@ class LowLevelILBuilder:
 
     def cmp_slt(self, left: LowLevelILInstruction, right: LowLevelILInstruction, size: int = 4) -> LowLevelILCmpSlt:
         return LowLevelILCmpSlt(left, right, size)
+
+    def cmp_sle(self, left: LowLevelILInstruction, right: LowLevelILInstruction, size: int = 4) -> LowLevelILCmpSle:
+        return LowLevelILCmpSle(left, right, size)
 
     # Memory operations
     def load(self, address: LowLevelILInstruction, size: int = 4) -> LowLevelILLoad:
