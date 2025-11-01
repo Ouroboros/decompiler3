@@ -13,111 +13,110 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from decompiler3.ir.lifter import DecompilerPipeline
 from decompiler3.typescript.generator import TypeScriptGenerator
 from decompiler3.ir.llil import (
-    LowLevelILFunction, LowLevelILBasicBlock, LowLevelILBuilder
+    LowLevelILFunction, LowLevelILBasicBlock, LowLevelILBuilderExtended
 )
 from decompiler3.ir.common import ILRegister, InstructionIndex
 
 
 def create_fibonacci_llil_function() -> LowLevelILFunction:
-    """Create a fibonacci LLIL function with control flow"""
-    # Create fibonacci function: int fibonacci(int n)
+    """Create a fibonacci LLIL function with STACK-BASED control flow (Falcom VM style)"""
+    # Create fibonacci function in stack VM style
     function = LowLevelILFunction("fibonacci", 0x2000)
 
-    # Create registers
-    reg_n = ILRegister("eax", 0, 4)      # input parameter n
-    reg_a = ILRegister("ebx", 1, 4)      # fibonacci(i-2)
-    reg_b = ILRegister("ecx", 2, 4)      # fibonacci(i-1)
-    reg_i = ILRegister("edx", 3, 4)      # loop counter
-    reg_temp = ILRegister("esi", 4, 4)   # temporary
+    # Only one register for return value (like Falcom VM)
+    reg_result = ILRegister("reg0", 0, 4)
 
-    # Block 0: Entry - check if n <= 1
+    # Block 0: Entry - check if n <= 1 (stack-based)
     entry_block = LowLevelILBasicBlock(0x2000)
     function.add_basic_block(entry_block)
-    builder = LowLevelILBuilder(function)
+    builder = LowLevelILBuilderExtended(function)
     builder.set_current_block(entry_block)
 
-    # if (n <= 1) goto base_case else goto loop_init
-    n_val = builder.reg(reg_n)
-    const1 = builder.const(1)
-    cmp_result = builder.cmp_sle(n_val, const1)  # n <= 1
+    # Stack operations: assume n is already on stack
+    # Duplicate n for comparison: PUSH(n), PUSH(1), compare
+    builder.add_instruction(builder.label('fibonacci_start'))
+
+    # Push 1 for comparison
+    builder.add_instruction(builder.push_int(1))
+
+    # Compare: if stack_top <= 1 goto base_case
+    cmp_result = builder.cmp_sle(builder.pop(), builder.pop())
     if_stmt = builder.if_stmt(cmp_result, InstructionIndex(1), InstructionIndex(2))
     builder.add_instruction(if_stmt)
 
-    # Block 1: Base case - return n
+    # Block 1: Base case - return n (stack-based)
     base_case_block = LowLevelILBasicBlock(0x2010)
     function.add_basic_block(base_case_block)
     builder.set_current_block(base_case_block)
 
-    ret_n = builder.ret(n_val)
-    builder.add_instruction(ret_n)
+    builder.add_instruction(builder.label('base_case'))
+    # Pop n from stack and return it
+    builder.add_instruction(builder.set_reg(reg_result, builder.pop()))
+    builder.add_instruction(builder.ret())
 
-    # Block 2: Loop initialization
-    loop_init_block = LowLevelILBasicBlock(0x2020)
-    function.add_basic_block(loop_init_block)
-    builder.set_current_block(loop_init_block)
+    # Block 2: Recursive case - stack-based fibonacci computation
+    recursive_block = LowLevelILBasicBlock(0x2020)
+    function.add_basic_block(recursive_block)
+    builder.set_current_block(recursive_block)
 
-    # a = 0, b = 1, i = 2
-    const0 = builder.const(0)
-    set_a = builder.set_reg(reg_a, const0)
-    set_b = builder.set_reg(reg_b, const1)
-    const2 = builder.const(2)
-    set_i = builder.set_reg(reg_i, const2)
-    builder.add_instruction(set_a)
-    builder.add_instruction(set_b)
-    builder.add_instruction(set_i)
+    builder.add_instruction(builder.label('recursive_case'))
+
+    # Stack-based fibonacci: fib(n) = fib(n-1) + fib(n-2)
+    # Push initial values: a=0, b=1, i=2
+    builder.add_instruction(builder.push_int(0))    # a = 0
+    builder.add_instruction(builder.push_int(1))    # b = 1
+    builder.add_instruction(builder.push_int(2))    # i = 2
 
     # goto loop_condition
-    goto_cond = builder.goto(InstructionIndex(3))
-    builder.add_instruction(goto_cond)
+    builder.add_instruction(builder.goto(InstructionIndex(3)))
 
-    # Block 3: Loop condition - while (i <= n)
+    # Block 3: Loop condition - while (i <= n) [stack-based]
     loop_cond_block = LowLevelILBasicBlock(0x2030)
     function.add_basic_block(loop_cond_block)
     builder.set_current_block(loop_cond_block)
 
-    i_val = builder.reg(reg_i)
-    loop_cmp = builder.cmp_sle(i_val, n_val)  # i <= n
+    builder.add_instruction(builder.label('loop_condition'))
+
+    # Compare i <= n (both on stack)
+    loop_cmp = builder.cmp_sle(builder.pop(), builder.pop())  # i <= n
     loop_if = builder.if_stmt(loop_cmp, InstructionIndex(4), InstructionIndex(5))
     builder.add_instruction(loop_if)
 
-    # Block 4: Loop body
+    # Block 4: Loop body - stack-based operations
     loop_body_block = LowLevelILBasicBlock(0x2040)
     function.add_basic_block(loop_body_block)
     builder.set_current_block(loop_body_block)
 
-    # temp = a + b
-    a_val = builder.reg(reg_a)
-    b_val = builder.reg(reg_b)
-    add_ab = builder.add(a_val, b_val)
-    set_temp = builder.set_reg(reg_temp, add_ab)
-    builder.add_instruction(set_temp)
+    builder.add_instruction(builder.label('loop_body'))
 
-    # a = b
-    set_a_b = builder.set_reg(reg_a, b_val)
-    builder.add_instruction(set_a_b)
+    # Stack-based: temp = a + b, a = b, b = temp, i = i + 1
+    # Pop a, b, add them, push result
+    a_val = builder.pop()  # pop a
+    b_val = builder.pop()  # pop b
+    temp_val = builder.add(a_val, b_val)  # temp = a + b
 
-    # b = temp
-    temp_val = builder.reg(reg_temp)
-    set_b_temp = builder.set_reg(reg_b, temp_val)
-    builder.add_instruction(set_b_temp)
+    # Update stack: push b (new a), push temp (new b)
+    builder.add_instruction(builder.push(b_val))     # a = b
+    builder.add_instruction(builder.push(temp_val))  # b = temp
 
-    # i = i + 1
-    inc_i = builder.add(i_val, const1)
-    set_i_inc = builder.set_reg(reg_i, inc_i)
-    builder.add_instruction(set_i_inc)
+    # Increment i: pop i, add 1, push back
+    i_val = builder.pop()
+    inc_i = builder.add(i_val, builder.const(1))
+    builder.add_instruction(builder.push(inc_i))
 
     # goto loop_condition
-    goto_loop = builder.goto(InstructionIndex(3))
-    builder.add_instruction(goto_loop)
+    builder.add_instruction(builder.goto(InstructionIndex(3)))
 
-    # Block 5: Return result
+    # Block 5: Return result - stack-based
     return_block = LowLevelILBasicBlock(0x2050)
     function.add_basic_block(return_block)
     builder.set_current_block(return_block)
 
-    # return b
-    ret_b = builder.ret(b_val)
-    builder.add_instruction(ret_b)
+    builder.add_instruction(builder.label('return_result'))
+
+    # Pop final result from stack and return
+    builder.add_instruction(builder.set_reg(reg_result, builder.pop()))
+    builder.add_instruction(builder.ret())
 
     return function
 
