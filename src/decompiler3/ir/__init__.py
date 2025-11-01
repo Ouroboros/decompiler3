@@ -9,7 +9,8 @@ Contains three-layer IR system following BinaryNinja architecture:
 Each layer supports both normal and SSA forms.
 """
 
-from .base import *
+from .common import *
 from .llil import *
 from .mlil import *
 from .hlil import *
+from .lifter import *

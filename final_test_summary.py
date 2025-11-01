@@ -16,11 +16,11 @@ def run_final_validation():
     print("\n📦 Testing Module Imports...")
     try:
         from src.decompiler3.ir.common import BaseILInstruction, ILRegister
-        from src.decompiler3.ir.llil_new import LowLevelILFunction
-        from src.decompiler3.ir.mlil_new import MediumLevelILFunction
-        from src.decompiler3.ir.hlil_new import HighLevelILFunction
-        from src.decompiler3.ir.new_lifter import NewDecompilerPipeline
-        from src.decompiler3.typescript.new_generator import NewTypeScriptGenerator
+        from src.decompiler3.ir.llil import LowLevelILFunction
+        from src.decompiler3.ir.mlil import MediumLevelILFunction
+        from src.decompiler3.ir.hlil import HighLevelILFunction
+        from src.decompiler3.ir.lifter import DecompilerPipeline
+        from src.decompiler3.typescript.generator import TypeScriptGenerator
         print("✅ All modules imported successfully")
         test_results.append(("Module Imports", True))
     except Exception as e:
@@ -30,7 +30,7 @@ def run_final_validation():
     # Test 2: Basic instruction creation
     print("\n🔧 Testing Instruction Creation...")
     try:
-        from src.decompiler3.ir.llil_new import LowLevelILConst, LowLevelILAdd, LowLevelILReg
+        from src.decompiler3.ir.llil import LowLevelILConst, LowLevelILAdd, LowLevelILReg
         from src.decompiler3.ir.common import ILRegister
 
         reg = ILRegister("eax", 0, 4)
@@ -50,7 +50,7 @@ def run_final_validation():
     # Test 3: Complete pipeline
     print("\n🔄 Testing Complete Pipeline...")
     try:
-        pipeline = NewDecompilerPipeline()
+        pipeline = DecompilerPipeline()
         llil_func = pipeline.create_sample_llil_function()
         hlil_func = pipeline.decompile_function(llil_func)
 
@@ -66,7 +66,7 @@ def run_final_validation():
     # Test 4: TypeScript generation
     print("\n📄 Testing TypeScript Generation...")
     try:
-        generator = NewTypeScriptGenerator()
+        generator = TypeScriptGenerator()
         ts_code = generator.generate_function(hlil_func)
 
         assert "function sample_function" in ts_code
@@ -81,7 +81,7 @@ def run_final_validation():
     # Test 5: Control flow instructions (the original problem)
     print("\n🔀 Testing Control Flow Instructions...")
     try:
-        from src.decompiler3.ir.llil_new import LowLevelILIf, LowLevelILGoto, LowLevelILJump
+        from src.decompiler3.ir.llil import LowLevelILIf, LowLevelILGoto, LowLevelILJump
         from src.decompiler3.ir.common import InstructionIndex
 
         condition = LowLevelILReg(reg)

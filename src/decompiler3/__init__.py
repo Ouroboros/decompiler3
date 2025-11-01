@@ -5,11 +5,15 @@ BinaryNinja风格的三层IR系统与双向TypeScript编译管道
 __version__ = "0.1.0"
 __author__ = "Claude"
 
-# 仅导出确实存在且能正常工作的核心模块
-from .ir.base import OperationType, IRFunction, IRBasicBlock, IRExpression, IRVariable
-from .ir.hlil import HLILExpression, HLILConstant, HLILVariable, HLILBinaryOp
+# 导出新的BinaryNinja风格IR系统
+from .ir.common import BaseILInstruction, ILRegister
+from .ir.llil import LowLevelILFunction
+from .ir.mlil import MediumLevelILFunction
+from .ir.hlil import HighLevelILFunction
+from .ir.lifter import DecompilerPipeline
 
 __all__ = [
-    "OperationType", "IRFunction", "IRBasicBlock", "IRExpression", "IRVariable",
-    "HLILExpression", "HLILConstant", "HLILVariable", "HLILBinaryOp",
+    "BaseILInstruction", "ILRegister",
+    "LowLevelILFunction", "MediumLevelILFunction", "HighLevelILFunction",
+    "DecompilerPipeline",
 ]

@@ -5,8 +5,8 @@ Complete Pipeline Test for New IR System
 Tests the complete flow: LLIL -> MLIL -> HLIL -> TypeScript
 """
 
-from src.decompiler3.ir.new_lifter import NewDecompilerPipeline
-from src.decompiler3.typescript.new_generator import NewTypeScriptGenerator
+from src.decompiler3.ir.lifter import DecompilerPipeline
+from src.decompiler3.typescript.generator import TypeScriptGenerator
 
 
 def test_complete_pipeline():
@@ -15,8 +15,8 @@ def test_complete_pipeline():
     print("=" * 50)
 
     # Create pipeline and generator
-    pipeline = NewDecompilerPipeline()
-    generator = NewTypeScriptGenerator()
+    pipeline = DecompilerPipeline()
+    generator = TypeScriptGenerator()
 
     # Test 1: Simple arithmetic function
     print("\n📝 Test 1: Simple Arithmetic Function")
@@ -42,7 +42,7 @@ def test_complete_pipeline():
     print("\n📝 Test 2: Generator Style Options")
     print("-" * 30)
 
-    generator_compact = NewTypeScriptGenerator(style="compact")
+    generator_compact = TypeScriptGenerator(style="compact")
     ts_code_compact = generator_compact.generate_function(hlil_func)
     print("Compact style:")
     print(ts_code_compact)
@@ -55,7 +55,7 @@ def test_ir_levels():
     print("\n🔬 Testing Individual IR Levels")
     print("=" * 50)
 
-    pipeline = NewDecompilerPipeline()
+    pipeline = DecompilerPipeline()
     llil_func = pipeline.create_sample_llil_function()
 
     # Test LLIL

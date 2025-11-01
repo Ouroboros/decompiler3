@@ -11,7 +11,7 @@ def test_llil():
     """Test LLIL instructions"""
     print("🔧 Testing LLIL System...")
 
-    from decompiler3.ir.llil_new import (
+    from decompiler3.ir.llil import (
         LowLevelILBuilder, LowLevelILFunction, LowLevelILBasicBlock,
         LowLevelILConst, LowLevelILAdd, LowLevelILRet
     )
@@ -51,7 +51,7 @@ def test_mlil():
     """Test MLIL instructions"""
     print("\n🔧 Testing MLIL System...")
 
-    from decompiler3.ir.mlil_new import (
+    from decompiler3.ir.mlil import (
         MediumLevelILBuilder, MediumLevelILFunction, MediumLevelILBasicBlock,
         Variable, MediumLevelILConst
     )
@@ -106,10 +106,10 @@ def test_hlil():
     """Test HLIL instructions"""
     print("\n🔧 Testing HLIL System...")
 
-    from decompiler3.ir.hlil_new import (
+    from decompiler3.ir.hlil import (
         HighLevelILBuilder, HighLevelILFunction, HighLevelILBasicBlock
     )
-    from decompiler3.ir.mlil_new import Variable
+    from decompiler3.ir.mlil import Variable
 
     # Create function and basic block
     function = HighLevelILFunction("test_hlil_function", 0x3000)

@@ -1,413 +1,671 @@
 """
-MLIL (Medium Level Intermediate Language)
+Medium Level Intermediate Language (MLIL) - Based on BinaryNinja Design
 
-Similar to BinaryNinja's MLIL, this represents code with:
-- Variables instead of registers/stack locations
-- Structured control flow
-- No stack manipulation
-- Function calls with proper argument passing
-- Basic type information
+This module implements MLIL instructions following BinaryNinja's architecture.
+MLIL is a higher-level IR with variables instead of registers and memory locations.
 """
 
-from typing import List, Optional, Union, Any, Dict
+from typing import Any, List, Optional, Union, Dict, Tuple
 from dataclasses import dataclass
-from .base import (
-    IRExpression, IRVariable, IRBasicBlock, IRFunction, IRVisitor,
-    OperationType, SourceLocation
+
+from .common import (
+    BaseILInstruction, ILBasicBlock, ILFunction, ILRegister, ILFlag,
+    MediumLevelILOperation, ILOperationAndSize, InstructionIndex, ExpressionIndex,
+    Terminal, ControlFlow, Memory, Arithmetic, Comparison, Constant,
+    BinaryOperation, UnaryOperation, Call, Return
 )
 
 
-class MLILExpression(IRExpression):
-    """Base MLIL expression"""
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_mlil_expression(self)
-
-
-class MLILVariable(MLILExpression):
-    """Variable reference"""
-
-    def __init__(self, variable: IRVariable):
-        super().__init__(OperationType.VAR, variable.size)
-        self.variable = variable
-
-    def __str__(self) -> str:
-        return str(self.variable)
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_variable(self)
+@dataclass(frozen=True)
+class MediumLevelILOperationAndSize(ILOperationAndSize):
+    """MLIL operation with size"""
+    operation: MediumLevelILOperation
 
 
-class MLILConstant(MLILExpression):
-    """Constant value"""
-
-    def __init__(self, value: Union[int, float, str, bool], size: int = 4, const_type: Optional[str] = None):
-        super().__init__(OperationType.CONST, size)
-        self.value = value
-        self.const_type = const_type
+@dataclass(frozen=True)
+class Variable:
+    """Variable representation in MLIL"""
+    name: str
+    var_type: Optional[str] = None
+    size: int = 4
+    source_type: str = "auto"  # auto, user, etc.
 
     def __str__(self) -> str:
-        if isinstance(self.value, str):
-            return f'"{self.value}"'
-        elif isinstance(self.value, bool):
-            return "true" if self.value else "false"
-        return str(self.value)
+        return self.name
 
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_constant(self)
+    def __repr__(self) -> str:
+        return f"<Variable: {self.name}>"
 
 
-class MLILBinaryOp(MLILExpression):
-    """Binary operation"""
+@dataclass(frozen=True, order=True)
+class SSAVariable:
+    """SSA form variable with version number"""
+    var: Variable
+    version: int
 
-    def __init__(self, operation: OperationType, left: MLILExpression, right: MLILExpression,
-                 size: int = 4, result_type: Optional[str] = None):
+    def __repr__(self):
+        return f"<SSAVariable: {self.var} version {self.version}>"
+
+    @property
+    def name(self) -> str:
+        return f"{self.var.name}#{self.version}"
+
+
+class MediumLevelILInstruction(BaseILInstruction):
+    """Base class for all MLIL instructions"""
+
+    def __init__(self, operation: MediumLevelILOperation, size: int = 0):
         super().__init__(operation, size)
-        self.left = left
-        self.right = right
-        self.result_type = result_type
+        self.operation = operation
+
+    def _get_expr(self, index: int) -> 'MediumLevelILInstruction':
+        """Get expression operand at index"""
+        if index < len(self.operands):
+            return self.operands[index]
+        raise IndexError(f"Operand index {index} out of range")
+
+    def _get_int(self, index: int) -> int:
+        """Get integer operand at index"""
+        if index < len(self.operands):
+            return int(self.operands[index])
+        raise IndexError(f"Operand index {index} out of range")
+
+    def _get_var(self, index: int) -> Variable:
+        """Get variable operand at index"""
+        if index < len(self.operands):
+            return self.operands[index]
+        raise IndexError(f"Operand index {index} out of range")
+
+    def _get_var_ssa(self, index: int) -> SSAVariable:
+        """Get SSA variable operand at index"""
+        if index < len(self.operands):
+            return self.operands[index]
+        raise IndexError(f"Operand index {index} out of range")
+
+
+# ============================================================================
+# Arithmetic Instructions
+# ============================================================================
+
+
+class MediumLevelILAdd(MediumLevelILInstruction, Arithmetic, BinaryOperation):
+    """Add two operands"""
+
+    def __init__(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4):
+        super().__init__(MediumLevelILOperation.ADD, size)
         self.operands = [left, right]
 
-    def __str__(self) -> str:
-        op_symbols = {
-            OperationType.ADD: "+",
-            OperationType.SUB: "-",
-            OperationType.MUL: "*",
-            OperationType.DIV: "/",
-            OperationType.MOD: "%",
-            OperationType.AND: "&",
-            OperationType.OR: "|",
-            OperationType.XOR: "^",
-            OperationType.LSL: "<<",
-            OperationType.LSR: ">>",
-            OperationType.ASR: ">>",
-            OperationType.CMP_E: "==",
-            OperationType.CMP_NE: "!=",
-            OperationType.CMP_SLT: "<",
-            OperationType.CMP_ULT: "<u",
-            OperationType.CMP_SLE: "<=",
-            OperationType.CMP_ULE: "<=u",
-        }
-        symbol = op_symbols.get(self.operation, "?")
-        return f"({self.left} {symbol} {self.right})"
+    @property
+    def left(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
 
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_binary_op(self)
+    @property
+    def right(self) -> MediumLevelILInstruction:
+        return self._get_expr(1)
 
-
-class MLILUnaryOp(MLILExpression):
-    """Unary operation"""
-
-    def __init__(self, operation: OperationType, operand: MLILExpression,
-                 size: int = 4, result_type: Optional[str] = None):
-        super().__init__(operation, size)
-        self.operand = operand
-        self.result_type = result_type
-        self.operands = [operand]
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "MediumLevelILInstruction"),
+            ("right", self.right, "MediumLevelILInstruction"),
+        ]
 
     def __str__(self) -> str:
-        op_symbols = {
-            OperationType.NEG: "-",
-            OperationType.NOT: "~",
-        }
-        symbol = op_symbols.get(self.operation, "?")
-        if self.operation == OperationType.NOT:
-            return f"!({self.operand})"
-        return f"{symbol}{self.operand}"
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_unary_op(self)
+        return f"({self.left} + {self.right})"
 
 
-class MLILAssignment(MLILExpression):
-    """Variable assignment"""
 
-    def __init__(self, dest: MLILVariable, source: MLILExpression):
-        super().__init__(OperationType.STORE, dest.size)
-        self.dest = dest
-        self.source = source
-        self.operands = [dest, source]
+class MediumLevelILSub(MediumLevelILInstruction, Arithmetic, BinaryOperation):
+    """Subtract two operands"""
 
-    def __str__(self) -> str:
-        return f"{self.dest} = {self.source}"
+    def __init__(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4):
+        super().__init__(MediumLevelILOperation.SUB, size)
+        self.operands = [left, right]
 
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_assignment(self)
+    @property
+    def left(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
 
+    @property
+    def right(self) -> MediumLevelILInstruction:
+        return self._get_expr(1)
 
-class MLILLoad(MLILExpression):
-    """Memory load (pointer dereference)"""
-
-    def __init__(self, address: MLILExpression, size: int = 4, load_type: Optional[str] = None):
-        super().__init__(OperationType.LOAD, size)
-        self.address = address
-        self.load_type = load_type
-        self.operands = [address]
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "MediumLevelILInstruction"),
+            ("right", self.right, "MediumLevelILInstruction"),
+        ]
 
     def __str__(self) -> str:
-        return f"*({self.address})"
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_load(self)
+        return f"({self.left} - {self.right})"
 
 
-class MLILStore(MLILExpression):
-    """Memory store (pointer assignment)"""
 
-    def __init__(self, address: MLILExpression, value: MLILExpression, size: int = 4):
-        super().__init__(OperationType.STORE, size)
-        self.address = address
-        self.value = value
-        self.operands = [address, value]
+class MediumLevelILMul(MediumLevelILInstruction, Arithmetic, BinaryOperation):
+    """Multiply two operands"""
 
-    def __str__(self) -> str:
-        return f"*({self.address}) = {self.value}"
+    def __init__(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4):
+        super().__init__(MediumLevelILOperation.MUL, size)
+        self.operands = [left, right]
 
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_store(self)
+    @property
+    def left(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
 
+    @property
+    def right(self) -> MediumLevelILInstruction:
+        return self._get_expr(1)
 
-class MLILFieldAccess(MLILExpression):
-    """Structure/object field access"""
-
-    def __init__(self, base: MLILExpression, field: str, size: int = 4, field_type: Optional[str] = None):
-        super().__init__(OperationType.VAR_FIELD, size)
-        self.base = base
-        self.field = field
-        self.field_type = field_type
-        self.operands = [base]
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "MediumLevelILInstruction"),
+            ("right", self.right, "MediumLevelILInstruction"),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.base}.{self.field}"
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_field_access(self)
+        return f"({self.left} * {self.right})"
 
 
-class MLILCall(MLILExpression):
-    """Function call"""
 
-    def __init__(self, target: MLILExpression, arguments: List[MLILExpression],
-                 size: int = 4, return_type: Optional[str] = None):
-        super().__init__(OperationType.CALL, size)
-        self.target = target
-        self.arguments = arguments
-        self.return_type = return_type
-        self.operands = [target] + arguments
+class MediumLevelILDiv(MediumLevelILInstruction, Arithmetic, BinaryOperation):
+    """Divide two operands"""
 
-    def __str__(self) -> str:
-        args_str = ", ".join(str(arg) for arg in self.arguments)
-        return f"{self.target}({args_str})"
+    def __init__(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4):
+        super().__init__(MediumLevelILOperation.DIV, size)
+        self.operands = [left, right]
 
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_call(self)
+    @property
+    def left(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
 
+    @property
+    def right(self) -> MediumLevelILInstruction:
+        return self._get_expr(1)
 
-class MLILBuiltinCall(MLILExpression):
-    """Built-in function call"""
-
-    def __init__(self, builtin_name: str, arguments: List[MLILExpression],
-                 size: int = 4, return_type: Optional[str] = None):
-        super().__init__(OperationType.BUILTIN_CALL, size)
-        self.builtin_name = builtin_name
-        self.arguments = arguments
-        self.return_type = return_type
-        self.operands = arguments
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("left", self.left, "MediumLevelILInstruction"),
+            ("right", self.right, "MediumLevelILInstruction"),
+        ]
 
     def __str__(self) -> str:
-        args_str = ", ".join(str(arg) for arg in self.arguments)
-        return f"__builtin_{self.builtin_name}({args_str})"
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_builtin_call(self)
+        return f"({self.left} / {self.right})"
 
 
-class MLILJump(MLILExpression):
+# ============================================================================
+# Variable Instructions
+# ============================================================================
+
+
+class MediumLevelILVar(MediumLevelILInstruction):
+    """Variable reference"""
+
+    def __init__(self, var: Variable):
+        super().__init__(MediumLevelILOperation.VAR, var.size)
+        self.operands = [var]
+
+    @property
+    def src(self) -> Variable:
+        return self._get_var(0)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("src", self.src, "Variable"),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.src)
+
+
+
+class MediumLevelILSetVar(MediumLevelILInstruction):
+    """Set variable value"""
+
+    def __init__(self, var: Variable, value: MediumLevelILInstruction):
+        super().__init__(MediumLevelILOperation.SET_VAR, var.size)
+        self.operands = [var, value]
+
+    @property
+    def dest(self) -> Variable:
+        return self._get_var(0)
+
+    @property
+    def src(self) -> MediumLevelILInstruction:
+        return self._get_expr(1)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("dest", self.dest, "Variable"),
+            ("src", self.src, "MediumLevelILInstruction"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.dest} = {self.src}"
+
+
+
+class MediumLevelILVarSsa(MediumLevelILInstruction):
+    """SSA variable reference"""
+
+    def __init__(self, var: SSAVariable):
+        super().__init__(MediumLevelILOperation.VAR, var.var.size)
+        self.operands = [var]
+
+    @property
+    def src(self) -> SSAVariable:
+        return self._get_var_ssa(0)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("src", self.src, "SSAVariable"),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.src.name)
+
+
+
+class MediumLevelILSetVarSsa(MediumLevelILInstruction):
+    """Set SSA variable value"""
+
+    def __init__(self, var: SSAVariable, value: MediumLevelILInstruction):
+        super().__init__(MediumLevelILOperation.SET_VAR, var.var.size)
+        self.operands = [var, value]
+
+    @property
+    def dest(self) -> SSAVariable:
+        return self._get_var_ssa(0)
+
+    @property
+    def src(self) -> MediumLevelILInstruction:
+        return self._get_expr(1)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("dest", self.dest, "SSAVariable"),
+            ("src", self.src, "MediumLevelILInstruction"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.dest.name} = {self.src}"
+
+
+# ============================================================================
+# Control Flow Instructions
+# ============================================================================
+
+
+class MediumLevelILJump(MediumLevelILInstruction, Terminal):
     """Unconditional jump"""
 
-    def __init__(self, target: Union[MLILExpression, int, str]):
-        super().__init__(OperationType.JUMP, 0)
-        self.target = target
-        if isinstance(target, MLILExpression):
-            self.operands = [target]
+    def __init__(self, dest: MediumLevelILInstruction):
+        super().__init__(MediumLevelILOperation.JUMP, 0)
+        self.operands = [dest]
+
+    @property
+    def dest(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("dest", self.dest, "MediumLevelILInstruction"),
+        ]
 
     def __str__(self) -> str:
-        return f"goto {self.target}"
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_jump(self)
+        return f"jump {self.dest}"
 
 
-class MLILIf(MLILExpression):
+
+class MediumLevelILGoto(MediumLevelILInstruction, Terminal):
+    """Goto instruction index"""
+
+    def __init__(self, dest: InstructionIndex):
+        super().__init__(MediumLevelILOperation.GOTO, 0)
+        self.operands = [dest]
+
+    @property
+    def dest(self) -> InstructionIndex:
+        return InstructionIndex(self._get_int(0))
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("dest", self.dest, "InstructionIndex"),
+        ]
+
+    def __str__(self) -> str:
+        return f"goto {self.dest}"
+
+
+
+class MediumLevelILIf(MediumLevelILInstruction, Terminal):
     """Conditional branch"""
 
-    def __init__(self, condition: MLILExpression, true_target: Union[MLILExpression, int, str],
-                 false_target: Optional[Union[MLILExpression, int, str]] = None):
-        super().__init__(OperationType.IF, 0)
-        self.condition = condition
-        self.true_target = true_target
-        self.false_target = false_target
-        self.operands = [condition]
-        if isinstance(true_target, MLILExpression):
-            self.operands.append(true_target)
-        if isinstance(false_target, MLILExpression):
-            self.operands.append(false_target)
+    def __init__(self, condition: MediumLevelILInstruction, true_target: InstructionIndex, false_target: InstructionIndex):
+        super().__init__(MediumLevelILOperation.IF, 0)
+        self.operands = [condition, true_target, false_target]
+
+    @property
+    def condition(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
+
+    @property
+    def true(self) -> InstructionIndex:
+        return InstructionIndex(self._get_int(1))
+
+    @property
+    def false(self) -> InstructionIndex:
+        return InstructionIndex(self._get_int(2))
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("condition", self.condition, "MediumLevelILInstruction"),
+            ("true", self.true, "InstructionIndex"),
+            ("false", self.false, "InstructionIndex"),
+        ]
 
     def __str__(self) -> str:
-        if self.false_target:
-            return f"if ({self.condition}) goto {self.true_target} else goto {self.false_target}"
-        return f"if ({self.condition}) goto {self.true_target}"
-
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_if(self)
+        return f"if ({self.condition}) goto {self.true} else goto {self.false}"
 
 
-class MLILReturn(MLILExpression):
+
+class MediumLevelILCall(MediumLevelILInstruction, Call):
+    """Function call"""
+
+    def __init__(self, dest: MediumLevelILInstruction, arguments: Optional[List[MediumLevelILInstruction]] = None):
+        super().__init__(MediumLevelILOperation.CALL, 0)
+        if arguments is None:
+            arguments = []
+        self.operands = [dest] + arguments
+
+    @property
+    def dest(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
+
+    @property
+    def arguments(self) -> List[MediumLevelILInstruction]:
+        return self.operands[1:]
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        operands = [("dest", self.dest, "MediumLevelILInstruction")]
+        if self.arguments:
+            operands.append(("arguments", self.arguments, "List[MediumLevelILInstruction]"))
+        return operands
+
+    def __str__(self) -> str:
+        if self.arguments:
+            args = ", ".join(str(arg) for arg in self.arguments)
+            return f"call {self.dest}({args})"
+        return f"call {self.dest}"
+
+
+
+class MediumLevelILTailcall(MediumLevelILInstruction, Call, Terminal):
+    """Tail call"""
+
+    def __init__(self, dest: MediumLevelILInstruction, arguments: Optional[List[MediumLevelILInstruction]] = None):
+        super().__init__(MediumLevelILOperation.TAILCALL, 0)
+        if arguments is None:
+            arguments = []
+        self.operands = [dest] + arguments
+
+    @property
+    def dest(self) -> MediumLevelILInstruction:
+        return self._get_expr(0)
+
+    @property
+    def arguments(self) -> List[MediumLevelILInstruction]:
+        return self.operands[1:]
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        operands = [("dest", self.dest, "MediumLevelILInstruction")]
+        if self.arguments:
+            operands.append(("arguments", self.arguments, "List[MediumLevelILInstruction]"))
+        return operands
+
+    def __str__(self) -> str:
+        if self.arguments:
+            args = ", ".join(str(arg) for arg in self.arguments)
+            return f"tailcall {self.dest}({args})"
+        return f"tailcall {self.dest}"
+
+
+
+class MediumLevelILRet(MediumLevelILInstruction, Return, Terminal):
     """Return from function"""
 
-    def __init__(self, value: Optional[MLILExpression] = None):
-        super().__init__(OperationType.RET, 0)
-        self.value = value
-        if value:
-            self.operands = [value]
+    def __init__(self, sources: Optional[List[MediumLevelILInstruction]] = None):
+        super().__init__(MediumLevelILOperation.RET, 0)
+        if sources is None:
+            sources = []
+        self.operands = sources
+
+    @property
+    def src(self) -> List[MediumLevelILInstruction]:
+        return self.operands
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        if self.src:
+            return [("src", self.src, "List[MediumLevelILInstruction]")]
+        return []
 
     def __str__(self) -> str:
-        if self.value:
-            return f"return {self.value}"
+        if self.src:
+            if len(self.src) == 1:
+                return f"return {self.src[0]}"
+            else:
+                src_str = ", ".join(str(s) for s in self.src)
+                return f"return ({src_str})"
         return "return"
 
-    def accept(self, visitor: 'MLILVisitor') -> Any:
-        return visitor.visit_return(self)
+
+# ============================================================================
+# Constant Instructions
+# ============================================================================
 
 
-class MLILVisitor(IRVisitor):
-    """Visitor for MLIL expressions"""
+class MediumLevelILConst(MediumLevelILInstruction, Constant):
+    """Constant value"""
 
-    def visit_expression(self, expr: IRExpression) -> Any:
-        if isinstance(expr, MLILExpression):
-            return self.visit_mlil_expression(expr)
-        raise NotImplementedError(f"Unknown expression type: {type(expr)}")
+    def __init__(self, value: Union[int, float], size: int = 4):
+        super().__init__(MediumLevelILOperation.CONST, size)
+        self.operands = [value]
 
-    def visit_mlil_expression(self, expr: MLILExpression) -> Any:
-        """Generic MLIL expression visitor"""
-        return expr.accept(self)
+    @property
+    def constant(self) -> Union[int, float]:
+        return self.operands[0]
 
-    def visit_variable(self, expr: MLILVariable) -> Any:
-        pass
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("constant", self.constant, "int"),
+        ]
 
-    def visit_constant(self, expr: MLILConstant) -> Any:
-        pass
-
-    def visit_binary_op(self, expr: MLILBinaryOp) -> Any:
-        pass
-
-    def visit_unary_op(self, expr: MLILUnaryOp) -> Any:
-        pass
-
-    def visit_assignment(self, expr: MLILAssignment) -> Any:
-        pass
-
-    def visit_load(self, expr: MLILLoad) -> Any:
-        pass
-
-    def visit_store(self, expr: MLILStore) -> Any:
-        pass
-
-    def visit_field_access(self, expr: MLILFieldAccess) -> Any:
-        pass
-
-    def visit_call(self, expr: MLILCall) -> Any:
-        pass
-
-    def visit_builtin_call(self, expr: MLILBuiltinCall) -> Any:
-        pass
-
-    def visit_jump(self, expr: MLILJump) -> Any:
-        pass
-
-    def visit_if(self, expr: MLILIf) -> Any:
-        pass
-
-    def visit_return(self, expr: MLILReturn) -> Any:
-        pass
+    def __str__(self) -> str:
+        return str(self.constant)
 
 
-class MLILBuilder:
-    """Builder for constructing MLIL expressions"""
 
-    def __init__(self, function: IRFunction):
+class MediumLevelILConstPtr(MediumLevelILInstruction, Constant):
+    """Constant pointer"""
+
+    def __init__(self, value: int, size: int = 8):
+        super().__init__(MediumLevelILOperation.CONST_PTR, size)
+        self.operands = [value]
+
+    @property
+    def constant(self) -> int:
+        return self.operands[0]
+
+    @property
+    def detailed_operands(self) -> List[Tuple[str, Any, str]]:
+        return [
+            ("constant", self.constant, "int"),
+        ]
+
+    def __str__(self) -> str:
+        return f"0x{self.constant:x}"
+
+
+# ============================================================================
+# Special Instructions
+# ============================================================================
+
+
+class MediumLevelILNop(MediumLevelILInstruction):
+    """No operation"""
+
+    def __init__(self):
+        super().__init__(MediumLevelILOperation.NOP, 0)
+
+    def __str__(self) -> str:
+        return "nop"
+
+
+
+class MediumLevelILUndef(MediumLevelILInstruction):
+    """Undefined value"""
+
+    def __init__(self):
+        super().__init__(MediumLevelILOperation.UNDEF, 0)
+
+    def __str__(self) -> str:
+        return "undef"
+
+
+
+class MediumLevelILUnimpl(MediumLevelILInstruction):
+    """Unimplemented instruction"""
+
+    def __init__(self):
+        super().__init__(MediumLevelILOperation.UNIMPL, 0)
+
+    def __str__(self) -> str:
+        return "unimpl"
+
+
+# ============================================================================
+# MLIL Function and Basic Block Classes
+# ============================================================================
+
+class MediumLevelILBasicBlock(ILBasicBlock):
+    """MLIL Basic Block"""
+
+    def __init__(self, start_address: int):
+        super().__init__(start_address)
+        self.instructions: List[MediumLevelILInstruction] = []
+
+
+class MediumLevelILFunction(ILFunction):
+    """MLIL Function"""
+
+    def __init__(self, name: str, address: Optional[int] = None):
+        super().__init__(name, address)
+        self.basic_blocks: List[MediumLevelILBasicBlock] = []
+        self.variables: Dict[str, Variable] = {}
+
+    def create_variable(self, name: str, var_type: Optional[str] = None, size: int = 4) -> Variable:
+        """Create a new variable in this function"""
+        var = Variable(name, var_type, size)
+        self.variables[name] = var
+        return var
+
+    def get_variable(self, name: str) -> Optional[Variable]:
+        """Get variable by name"""
+        return self.variables.get(name)
+
+
+# ============================================================================
+# MLIL Builder (for constructing MLIL)
+# ============================================================================
+
+class MediumLevelILBuilder:
+    """Builder for constructing MLIL instructions"""
+
+    def __init__(self, function: MediumLevelILFunction):
         self.function = function
-        self.current_block: Optional[IRBasicBlock] = None
+        self.current_block: Optional[MediumLevelILBasicBlock] = None
 
-    def set_current_block(self, block: IRBasicBlock):
-        """Set current basic block for instruction insertion"""
+    def set_current_block(self, block: MediumLevelILBasicBlock):
+        """Set the current basic block for instruction insertion"""
         self.current_block = block
 
-    def add_instruction(self, expr: MLILExpression):
+    def add_instruction(self, instruction: MediumLevelILInstruction):
         """Add instruction to current block"""
-        if not self.current_block:
-            raise ValueError("No current block set")
-        self.current_block.add_instruction(expr)
+        if self.current_block is None:
+            raise RuntimeError("No current block set")
+        self.current_block.add_instruction(instruction)
 
-    # Convenience methods for building expressions
-    def const(self, value: Union[int, float, str, bool], size: int = 4, const_type: Optional[str] = None) -> MLILConstant:
-        return MLILConstant(value, size, const_type)
+    # Arithmetic operations
+    def add(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4) -> MediumLevelILAdd:
+        return MediumLevelILAdd(left, right, size)
 
-    def var(self, variable: IRVariable) -> MLILVariable:
-        return MLILVariable(variable)
+    def sub(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4) -> MediumLevelILSub:
+        return MediumLevelILSub(left, right, size)
 
-    def assign(self, dest: MLILVariable, source: MLILExpression) -> MLILAssignment:
-        return MLILAssignment(dest, source)
+    def mul(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4) -> MediumLevelILMul:
+        return MediumLevelILMul(left, right, size)
 
-    def load(self, address: MLILExpression, size: int = 4, load_type: Optional[str] = None) -> MLILLoad:
-        return MLILLoad(address, size, load_type)
+    def div(self, left: MediumLevelILInstruction, right: MediumLevelILInstruction, size: int = 4) -> MediumLevelILDiv:
+        return MediumLevelILDiv(left, right, size)
 
-    def store(self, address: MLILExpression, value: MLILExpression, size: int = 4) -> MLILStore:
-        return MLILStore(address, value, size)
+    # Variable operations
+    def var(self, var: Variable) -> MediumLevelILVar:
+        return MediumLevelILVar(var)
 
-    def field_access(self, base: MLILExpression, field: str, size: int = 4, field_type: Optional[str] = None) -> MLILFieldAccess:
-        return MLILFieldAccess(base, field, size, field_type)
+    def set_var(self, var: Variable, value: MediumLevelILInstruction) -> MediumLevelILSetVar:
+        return MediumLevelILSetVar(var, value)
 
-    def add(self, left: MLILExpression, right: MLILExpression, size: int = 4, result_type: Optional[str] = None) -> MLILBinaryOp:
-        return MLILBinaryOp(OperationType.ADD, left, right, size, result_type)
+    def var_ssa(self, var: SSAVariable) -> MediumLevelILVarSsa:
+        return MediumLevelILVarSsa(var)
 
-    def sub(self, left: MLILExpression, right: MLILExpression, size: int = 4, result_type: Optional[str] = None) -> MLILBinaryOp:
-        return MLILBinaryOp(OperationType.SUB, left, right, size, result_type)
+    def set_var_ssa(self, var: SSAVariable, value: MediumLevelILInstruction) -> MediumLevelILSetVarSsa:
+        return MediumLevelILSetVarSsa(var, value)
 
-    def mul(self, left: MLILExpression, right: MLILExpression, size: int = 4, result_type: Optional[str] = None) -> MLILBinaryOp:
-        return MLILBinaryOp(OperationType.MUL, left, right, size, result_type)
+    # Control flow
+    def jump(self, dest: MediumLevelILInstruction) -> MediumLevelILJump:
+        return MediumLevelILJump(dest)
 
-    def call(self, target: MLILExpression, arguments: List[MLILExpression],
-             size: int = 4, return_type: Optional[str] = None) -> MLILCall:
-        return MLILCall(target, arguments, size, return_type)
+    def goto(self, dest: InstructionIndex) -> MediumLevelILGoto:
+        return MediumLevelILGoto(dest)
 
-    def builtin_call(self, builtin_name: str, arguments: List[MLILExpression],
-                    size: int = 4, return_type: Optional[str] = None) -> MLILBuiltinCall:
-        return MLILBuiltinCall(builtin_name, arguments, size, return_type)
+    def if_stmt(self, condition: MediumLevelILInstruction, true_target: InstructionIndex, false_target: InstructionIndex) -> MediumLevelILIf:
+        return MediumLevelILIf(condition, true_target, false_target)
 
-    def jump(self, target: Union[MLILExpression, int, str]) -> MLILJump:
-        return MLILJump(target)
+    def call(self, dest: MediumLevelILInstruction, arguments: Optional[List[MediumLevelILInstruction]] = None) -> MediumLevelILCall:
+        return MediumLevelILCall(dest, arguments)
 
-    def if_then(self, condition: MLILExpression, true_target: Union[MLILExpression, int, str],
-               false_target: Optional[Union[MLILExpression, int, str]] = None) -> MLILIf:
-        return MLILIf(condition, true_target, false_target)
+    def tailcall(self, dest: MediumLevelILInstruction, arguments: Optional[List[MediumLevelILInstruction]] = None) -> MediumLevelILTailcall:
+        return MediumLevelILTailcall(dest, arguments)
 
-    def ret(self, value: Optional[MLILExpression] = None) -> MLILReturn:
-        return MLILReturn(value)
+    def ret(self, sources: Optional[List[MediumLevelILInstruction]] = None) -> MediumLevelILRet:
+        return MediumLevelILRet(sources)
 
-    def not_op(self, operand: MLILExpression, size: int = 4) -> MLILUnaryOp:
-        return MLILUnaryOp(OperationType.NOT, operand, size)
+    # Constants
+    def const(self, value: Union[int, float], size: int = 4) -> MediumLevelILConst:
+        return MediumLevelILConst(value, size)
 
-    def negate(self, operand: MLILExpression, size: int = 4) -> MLILUnaryOp:
-        return MLILUnaryOp(OperationType.NEG, operand, size)
+    def const_ptr(self, value: int, size: int = 8) -> MediumLevelILConstPtr:
+        return MediumLevelILConstPtr(value, size)
 
+    # Special
+    def nop(self) -> MediumLevelILNop:
+        return MediumLevelILNop()
 
-# Convenience functions for creating MLIL
-def mlil_const(value: Union[int, float, str, bool], size: int = 4) -> MLILConstant:
-    return MLILConstant(value, size)
+    def undef(self) -> MediumLevelILUndef:
+        return MediumLevelILUndef()
 
-def mlil_var(variable: IRVariable) -> MLILVariable:
-    return MLILVariable(variable)
-
-def mlil_add(left: MLILExpression, right: MLILExpression, size: int = 4) -> MLILBinaryOp:
-    return MLILBinaryOp(OperationType.ADD, left, right, size)
+    def unimpl(self) -> MediumLevelILUnimpl:
+        return MediumLevelILUnimpl()

@@ -6,9 +6,9 @@ Demonstrates the complete BinaryNinja-style IR system:
 LLIL -> MLIL -> HLIL -> TypeScript
 """
 
-from ..ir.new_lifter import NewDecompilerPipeline
-from ..typescript.new_generator import NewTypeScriptGenerator
-from ..ir.llil_new import (
+from ..ir.lifter import DecompilerPipeline
+from ..typescript.generator import TypeScriptGenerator
+from ..ir.llil import (
     LowLevelILFunction, LowLevelILBasicBlock, LowLevelILBuilder,
     LowLevelILConst, LowLevelILAdd, LowLevelILSetReg, LowLevelILReg, LowLevelILRet,
     LowLevelILIf, LowLevelILGoto, LowLevelILCall
@@ -91,8 +91,8 @@ def demo_complete_pipeline():
     print("=" * 50)
 
     # Create pipeline components
-    pipeline = NewDecompilerPipeline()
-    generator = NewTypeScriptGenerator()
+    pipeline = DecompilerPipeline()
+    generator = TypeScriptGenerator()
 
     # Test 1: Simple function
     print("\n📝 Test 1: Simple Arithmetic Function")
@@ -139,7 +139,7 @@ def demo_ir_levels():
     print("\n🔬 IR Level Transformation Demo")
     print("=" * 50)
 
-    pipeline = NewDecompilerPipeline()
+    pipeline = DecompilerPipeline()
     llil_func = pipeline.create_sample_llil_function()
 
     print("\n🔧 LLIL (Low Level IL):")
@@ -172,7 +172,7 @@ def demo_ir_levels():
             print(f"    {j}: {instr}")
 
     print("\n📄 TypeScript Output:")
-    generator = NewTypeScriptGenerator()
+    generator = TypeScriptGenerator()
     ts_code = generator.generate_function(hlil_func)
     print(ts_code)
 
@@ -182,7 +182,7 @@ def demo_instruction_types():
     print("\n🧩 Instruction Type Demo")
     print("=" * 50)
 
-    from ..ir.llil_new import (
+    from ..ir.llil import (
         LowLevelILConst, LowLevelILAdd, LowLevelILReg, LowLevelILSetReg,
         LowLevelILIf, LowLevelILRet
     )
