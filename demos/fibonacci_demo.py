@@ -32,14 +32,19 @@ def create_fibonacci_llil_function() -> LowLevelILFunction:
     builder.set_current_block(entry_block)
 
     # Stack operations: assume n is already on stack
-    # Duplicate n for comparison: PUSH(n), PUSH(1), compare
+    # For demo purposes, let's say n=5 is the input
     builder.add_instruction(builder.label('fibonacci_start'))
 
-    # Push 1 for comparison
-    builder.add_instruction(builder.push_int(1))
+    # Push n (input parameter) for demo - let's use 5
+    builder.add_instruction(builder.push_int(5))  # n = 5
 
-    # Compare: if stack_top <= 1 goto base_case
-    cmp_result = builder.cmp_sle(builder.pop(), builder.pop())
+    # Duplicate n and push 1 for comparison
+    n_val = builder.pop()  # Get n from stack
+    builder.add_instruction(builder.push(n_val))  # Push n back
+    builder.add_instruction(builder.push_int(1))   # Push 1
+
+    # Compare: if n <= 1 goto base_case (comparing n with 1)
+    cmp_result = builder.cmp_sle(n_val, builder.pop())  # n <= 1
     if_stmt = builder.if_stmt(cmp_result, InstructionIndex(1), InstructionIndex(2))
     builder.add_instruction(if_stmt)
 
@@ -76,8 +81,12 @@ def create_fibonacci_llil_function() -> LowLevelILFunction:
 
     builder.add_instruction(builder.label('loop_condition'))
 
-    # Compare i <= n (both on stack)
-    loop_cmp = builder.cmp_sle(builder.pop(), builder.pop())  # i <= n
+    # Compare i <= n (for demo, i=2 initially, n=5)
+    # Get i and n from stack for comparison
+    i_val = builder.pop()  # Get i
+    n_val = builder.pop()  # Get n
+    # Compare i <= n
+    loop_cmp = builder.cmp_sle(i_val, n_val)  # i <= n
     loop_if = builder.if_stmt(loop_cmp, InstructionIndex(4), InstructionIndex(5))
     builder.add_instruction(loop_if)
 
@@ -159,6 +168,16 @@ def main():
 
     # Run complete pipeline
     hlil_func = pipeline.decompile_function(fib_func)
+
+    # Debug: show MLIL structure first
+    print("\n🔧 MLIL Structure (Variable-based):")
+    print("-" * 40)
+    mlil_func = pipeline.llil_to_mlil.lift_function(fib_func)
+    for i, block in enumerate(mlil_func.basic_blocks):
+        print(f"  Block {i}:")
+        for j, instr in enumerate(block.instructions):
+            print(f"    {j}: {instr}")
+        print()
 
     print("\n🔧 HLIL Structure (Variable-based):")
     print("-" * 40)
