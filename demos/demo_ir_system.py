@@ -6,6 +6,10 @@ Demonstrates the complete BinaryNinja-style IR system:
 LLIL -> MLIL -> HLIL -> TypeScript
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from decompiler3.ir.lifter import DecompilerPipeline
 from decompiler3.typescript.generator import TypeScriptGenerator
 from decompiler3.ir.llil import (

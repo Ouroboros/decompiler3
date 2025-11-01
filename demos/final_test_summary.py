@@ -5,6 +5,10 @@ Final Test Summary for BinaryNinja-style IR Refactor
 This script validates that all components work together correctly
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def run_final_validation():
     """Run comprehensive validation of the new IR system"""
     print("🏁 Final IR System Validation")
