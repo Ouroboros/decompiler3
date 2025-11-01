@@ -6,8 +6,8 @@ Main entry point for demonstrating the complete IR system.
 Run this script to see the IR system in action.
 """
 
-from src.decompiler3.ir.lifter import DecompilerPipeline
-from src.decompiler3.typescript.generator import TypeScriptGenerator
+from decompiler3.ir.lifter import DecompilerPipeline
+from decompiler3.typescript.generator import TypeScriptGenerator
 
 
 def main():
@@ -44,8 +44,8 @@ def main():
 
     print("\n🎉 Demo completed successfully!")
     print("\nFor more detailed demos, run:")
-    print("  📁 PYTHONPATH=src python3 demo_ir_system.py")
-    print("  📁 PYTHONPATH=src python3 -m decompiler3.demos.ir_demo")
+    print("  📁 python3 demo_ir_system.py")
+    print("  📁 python3 -m decompiler3.demos.ir_demo")
 
 
 if __name__ == "__main__":

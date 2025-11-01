@@ -15,12 +15,12 @@ def run_final_validation():
     # Test 1: Import all new IR modules
     print("\n📦 Testing Module Imports...")
     try:
-        from src.decompiler3.ir.common import BaseILInstruction, ILRegister
-        from src.decompiler3.ir.llil import LowLevelILFunction
-        from src.decompiler3.ir.mlil import MediumLevelILFunction
-        from src.decompiler3.ir.hlil import HighLevelILFunction
-        from src.decompiler3.ir.lifter import DecompilerPipeline
-        from src.decompiler3.typescript.generator import TypeScriptGenerator
+        from decompiler3.ir.common import BaseILInstruction, ILRegister
+        from decompiler3.ir.llil import LowLevelILFunction
+        from decompiler3.ir.mlil import MediumLevelILFunction
+        from decompiler3.ir.hlil import HighLevelILFunction
+        from decompiler3.ir.lifter import DecompilerPipeline
+        from decompiler3.typescript.generator import TypeScriptGenerator
         print("✅ All modules imported successfully")
         test_results.append(("Module Imports", True))
     except Exception as e:
@@ -30,8 +30,8 @@ def run_final_validation():
     # Test 2: Basic instruction creation
     print("\n🔧 Testing Instruction Creation...")
     try:
-        from src.decompiler3.ir.llil import LowLevelILConst, LowLevelILAdd, LowLevelILReg
-        from src.decompiler3.ir.common import ILRegister
+        from decompiler3.ir.llil import LowLevelILConst, LowLevelILAdd, LowLevelILReg
+        from decompiler3.ir.common import ILRegister
 
         reg = ILRegister("eax", 0, 4)
         const = LowLevelILConst(42, 4)
@@ -81,8 +81,8 @@ def run_final_validation():
     # Test 5: Control flow instructions (the original problem)
     print("\n🔀 Testing Control Flow Instructions...")
     try:
-        from src.decompiler3.ir.llil import LowLevelILIf, LowLevelILGoto, LowLevelILJump
-        from src.decompiler3.ir.common import InstructionIndex
+        from decompiler3.ir.llil import LowLevelILIf, LowLevelILGoto, LowLevelILJump
+        from decompiler3.ir.common import InstructionIndex
 
         condition = LowLevelILReg(reg)
         if_instr = LowLevelILIf(condition, InstructionIndex(10), InstructionIndex(20))

@@ -6,7 +6,7 @@ This guide shows how to run demonstrations of the BinaryNinja-style IR system.
 
 Run the main demo:
 ```bash
-PYTHONPATH=src python3 demo.py
+python3 demo.py
 ```
 
 ## Available Demos
@@ -17,13 +17,13 @@ Simple demonstration showing the complete pipeline in action.
 ### 2. Comprehensive Demo (`demo_ir_system.py`)
 Detailed demonstration with multiple test cases:
 ```bash
-PYTHONPATH=src python3 demo_ir_system.py
+python3 demo_ir_system.py
 ```
 
 ### 3. Module Demo
 Run as a Python module:
 ```bash
-PYTHONPATH=src python3 -m decompiler3.demos.ir_demo
+python3 -m decompiler3.demos.ir_demo
 ```
 
 ## What the Demos Show

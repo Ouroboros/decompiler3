@@ -6,14 +6,14 @@ Demonstrates the complete BinaryNinja-style IR system:
 LLIL -> MLIL -> HLIL -> TypeScript
 """
 
-from src.decompiler3.ir.lifter import DecompilerPipeline
-from src.decompiler3.typescript.generator import TypeScriptGenerator
-from src.decompiler3.ir.llil import (
+from decompiler3.ir.lifter import DecompilerPipeline
+from decompiler3.typescript.generator import TypeScriptGenerator
+from decompiler3.ir.llil import (
     LowLevelILFunction, LowLevelILBasicBlock, LowLevelILBuilder,
     LowLevelILConst, LowLevelILAdd, LowLevelILSetReg, LowLevelILReg, LowLevelILRet,
     LowLevelILIf, LowLevelILGoto, LowLevelILCall, LowLevelILMul
 )
-from src.decompiler3.ir.common import ILRegister, InstructionIndex
+from decompiler3.ir.common import ILRegister, InstructionIndex
 
 
 def create_complex_llil_function() -> LowLevelILFunction:

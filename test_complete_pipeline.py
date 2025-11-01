@@ -5,8 +5,8 @@ Complete Pipeline Test for New IR System
 Tests the complete flow: LLIL -> MLIL -> HLIL -> TypeScript
 """
 
-from src.decompiler3.ir.lifter import DecompilerPipeline
-from src.decompiler3.typescript.generator import TypeScriptGenerator
+from decompiler3.ir.lifter import DecompilerPipeline
+from decompiler3.typescript.generator import TypeScriptGenerator
 
 
 def test_complete_pipeline():
