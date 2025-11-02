@@ -203,7 +203,8 @@ class LowLevelILGoto(Terminal):
         self.target = target
 
     def __str__(self) -> str:
-        return f"goto block_{self.target.index}"
+        target_name = self.target.label_name or f"block_{self.target.index}"
+        return f"goto {target_name}"
 
 
 class LowLevelILJmp(LowLevelILGoto):
@@ -222,10 +223,12 @@ class LowLevelILIf(ControlFlow):
         self.false_target = false_target
 
     def __str__(self) -> str:
+        true_name = self.true_target.label_name or f"block_{self.true_target.index}"
         if self.false_target:
-            return f"if {self.condition} goto block_{self.true_target.index} else block_{self.false_target.index}"
+            false_name = self.false_target.label_name or f"block_{self.false_target.index}"
+            return f"if {self.condition} goto {true_name} else {false_name}"
         else:
-            return f"if {self.condition} goto block_{self.true_target.index}"
+            return f"if {self.condition} goto {true_name}"
 
 
 class LowLevelILBranch(LowLevelILIf):
@@ -235,7 +238,8 @@ class LowLevelILBranch(LowLevelILIf):
         super().__init__(condition, target, None)
 
     def __str__(self) -> str:
-        return f"if {self.condition} goto block_{self.true_target.index}"
+        target_name = self.true_target.label_name or f"block_{self.true_target.index}"
+        return f"if {self.condition} goto {target_name}"
 
 
 class LowLevelILCall(ControlFlow):
@@ -355,6 +359,13 @@ class LowLevelILBasicBlock:
         if not self.instructions:
             return False
         return isinstance(self.instructions[-1], Terminal)
+
+    @property
+    def label_name(self) -> Optional[str]:
+        """Get label name if this block starts with a label instruction"""
+        if self.instructions and isinstance(self.instructions[0], LowLevelILLabelInstr):
+            return self.instructions[0].name
+        return None
 
     def __str__(self) -> str:
         result = f"block_{self.index} @ {hex(self.start)}: [vsp={self.vsp_in}]\n"
