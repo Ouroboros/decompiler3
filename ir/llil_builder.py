@@ -349,7 +349,7 @@ class LLILFormatter:
                 LowLevelILOperation.LLIL_GE: "(lhs >= rhs) ? 1 : 0",
             }
 
-            expr = op_expr_map.get(instr.operation, f"lhs {op_name} rhs")
+            expr = op_expr_map[instr.operation]
 
             return [
                 f"; {op_name}()",
