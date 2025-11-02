@@ -189,12 +189,15 @@ class LLILFormatter:
         ]
 
         for block in func.basic_blocks:
-            # Block header
+            # Block header: {block_N}  label_name: [sp=0]
+            block_info = f"block_{block.index}"
+
             if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
-                result.append(f"{block.instructions[0].name}: [sp={block.sp_in}]")
+                label_name = block.instructions[0].name
+                result.append(f"{block_info}  {label_name}: [sp={block.sp_in}]")
                 instructions_to_format = block.instructions[1:]
             else:
-                result.append(f"bb_{hex(block.start)}: [sp={block.sp_in}]")
+                result.append(f"{block_info}: [sp={block.sp_in}]")
                 instructions_to_format = block.instructions
 
             # Format instructions - now returns list
