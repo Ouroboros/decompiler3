@@ -284,6 +284,66 @@ def create_DOF_ON():
     return function
 
 
+def create_sound_play_se():
+    '''
+    sound_play_se - Simple function call demo
+    Demonstrates basic function call pattern with single argument
+
+    Original bytecode concept:
+    def sound_play_se(se_id):
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_return')
+        LOAD_STACK(-4)  # Load se_id parameter
+        CALL(sound_play)
+
+        label('loc_return')
+        PUSH(0)
+        SET_REG(0)
+        POP(4)  # Clean up parameter
+        RETURN()
+    '''
+
+    function = LowLevelILFunction('sound_play_se', 0x10000)
+
+    # Create blocks
+    entry_block = LowLevelILBasicBlock(0x10000, 0)
+    loc_return = LowLevelILBasicBlock(0x10020, 1)
+
+    function.add_basic_block(entry_block)
+    function.add_basic_block(loc_return)
+
+    builder = FalcomVMBuilder(function)
+
+    # === BLOCK 0: Entry - sound_play call ===
+    # Function has 1 parameter (se_id), so sp starts at 1
+    builder.set_current_block(entry_block, sp = 1)
+    builder.label('sound_play_se')
+
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_return')
+    builder.push_ret_addr('loc_return')
+    # LOAD_STACK(-4) - Load se_id parameter from stack
+    builder.load_stack(-4)
+    # CALL(sound_play)
+    builder.call('sound_play')
+
+    # === BLOCK 1: Return ===
+    builder.set_current_block(loc_return)
+    builder.label('loc_return')
+
+    # PUSH(0)
+    builder.push_int(0)
+    # SET_REG(0)
+    builder.set_reg(0)
+    # POP(4) - Clean up parameter (1 word = 4 bytes)
+    builder.add_instruction(LowLevelILSpAdd(-1))
+    # RETURN()
+    builder.ret()
+
+    return function
+
+
 def main():
     print('🔧 LLIL Demo - Expression-based Architecture')
     print('=' * 60)
@@ -313,6 +373,15 @@ def main():
     func2 = create_DOF_ON()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
 
+    # Test 3: sound_play_se - Simple function with parameter
+    print('\n🧪 Test 3: sound_play_se - Function with Parameter')
+    print('-' * 60)
+    print('Concept: Simple sound effect playback')
+    print('1 parameter, 2 blocks, demonstrates parameter access')
+
+    func3 = create_sound_play_se()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
+
     print('\n✅ Demo completed successfully!')
     print('\nKey features demonstrated:')
     print('  ✅ First-class PUSH/POP: STACK[sp++] = value, STACK[--sp]')
@@ -320,6 +389,7 @@ def main():
     print('  ✅ Expression tracking in operands: EQ(STACK[--sp], STACK[--sp])')
     print('  ✅ Clean separation: Push/Pop vs Load/Store')
     print('  ✅ Stack state tracking: [sp = N] in each block')
+    print('  ✅ Parameter access: LOAD_STACK with negative offset')
 
 
 if __name__ == '__main__':
