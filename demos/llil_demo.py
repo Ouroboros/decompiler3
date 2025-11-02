@@ -286,58 +286,61 @@ def create_DOF_ON():
 
 def create_sound_play_se():
     '''
-    sound_play_se - Simple function call demo
-    Demonstrates basic function call pattern with single argument
+    sound_play_se - Strict 1:1 translation from real game bytecode
+    Source: c0000.py from Kuro no Kiseki
 
-    Original bytecode concept:
-    def sound_play_se(se_id):
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_return')
-        LOAD_STACK(-4)  # Load se_id parameter
-        CALL(sound_play)
-
-        label('loc_return')
-        PUSH(0)
+    Original bytecode:
+    # id: 0x008F offset: 0x149B2
+    @scena.Code('sound_play_se')
+    def sound_play_se(arg1, arg2 = -1, arg3 = 0, arg4 = -1, arg5 = 1.0, arg6 = 0.0, arg7 = 0.0, arg8 = 0.0):
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        LOAD_STACK(-32)
+        SYSCALL(6, 0x10, 0x08)
+        POP(32)
+        PUSH(0x00000000)
         SET_REG(0)
-        POP(4)  # Clean up parameter
+        POP(32)
         RETURN()
     '''
 
-    function = LowLevelILFunction('sound_play_se', 0x10000)
+    function = LowLevelILFunction('sound_play_se', 0x149B2)
 
-    # Create blocks
-    entry_block = LowLevelILBasicBlock(0x10000, 0)
-    loc_return = LowLevelILBasicBlock(0x10020, 1)
-
+    # Create single block
+    entry_block = LowLevelILBasicBlock(0x149B2, 0)
     function.add_basic_block(entry_block)
-    function.add_basic_block(loc_return)
 
     builder = FalcomVMBuilder(function)
 
-    # === BLOCK 0: Entry - sound_play call ===
-    # Function has 1 parameter (se_id), so sp starts at 1
-    builder.set_current_block(entry_block, sp = 1)
+    # === BLOCK 0: Entry - SYSCALL ===
+    # Function has 8 parameters, so sp starts at 8
+    builder.set_current_block(entry_block, sp = 8)
     builder.label('sound_play_se')
 
-    # PUSH_CURRENT_FUNC_ID()
-    builder.push_func_id()
-    # PUSH_RET_ADDR('loc_return')
-    builder.push_ret_addr('loc_return')
-    # LOAD_STACK(-4) - Load se_id parameter from stack
-    builder.load_stack(-4)
-    # CALL(sound_play)
-    builder.call('sound_play')
+    # LOAD_STACK(-32) x 8 - Load all 8 parameters
+    # -32 = -8 words offset (8 parameters * 4 bytes each)
+    for _ in range(8):
+        builder.load_stack(-32)
 
-    # === BLOCK 1: Return ===
-    builder.set_current_block(loc_return)
-    builder.label('loc_return')
+    # SYSCALL(6, 0x10, 0x08)
+    builder.syscall(6, 0x10, 0x08)
 
-    # PUSH(0)
+    # POP(32) - Clean up 8 words pushed by syscall
+    builder.add_instruction(LowLevelILSpAdd(-8))
+
+    # PUSH(0x00000000)
     builder.push_int(0)
     # SET_REG(0)
     builder.set_reg(0)
-    # POP(4) - Clean up parameter (1 word = 4 bytes)
-    builder.add_instruction(LowLevelILSpAdd(-1))
+
+    # POP(32) - Clean up 8 parameters (8 words = 32 bytes)
+    builder.add_instruction(LowLevelILSpAdd(-8))
+
     # RETURN()
     builder.ret()
 
@@ -373,11 +376,11 @@ def main():
     func2 = create_DOF_ON()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
 
-    # Test 3: sound_play_se - Simple function with parameter
-    print('\n🧪 Test 3: sound_play_se - Function with Parameter')
+    # Test 3: sound_play_se - SYSCALL with multiple parameters
+    print('\n🧪 Test 3: sound_play_se - SYSCALL with Multiple Parameters')
     print('-' * 60)
-    print('Concept: Simple sound effect playback')
-    print('1 parameter, 2 blocks, demonstrates parameter access')
+    print('Source: c0000.py (id: 0x008F offset: 0x149B2)')
+    print('8 parameters, 1 block, demonstrates SYSCALL and parameter loading')
 
     func3 = create_sound_play_se()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
