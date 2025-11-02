@@ -181,7 +181,8 @@ def create_DOF_ON():
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - Enable DOF ===
-    builder.set_current_block(entry_block, sp = 0)
+    # DOF_ON has 2 parameters (arg1, arg2), so sp starts at 2
+    builder.set_current_block(entry_block, sp = 2)
     builder.label('DOF_ON')
 
     # PUSH_CURRENT_FUNC_ID()
