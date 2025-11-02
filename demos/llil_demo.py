@@ -181,8 +181,9 @@ def create_DOF_ON():
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - Enable DOF ===
-    # DOF_ON has 2 parameters (arg1, arg2), so sp starts at 2
-    builder.set_current_block(entry_block, sp = 2)
+    # DOF_ON has 2 parameters (arg1, arg2), sp = 0 at function entry, frame = 0
+    # Parameters are at STACK[frame - 2] and STACK[frame - 1]
+    builder.set_current_block(entry_block, sp = 0)
     builder.label('DOF_ON')
 
     # PUSH_CURRENT_FUNC_ID()
@@ -318,14 +319,16 @@ def create_sound_play_se():
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - SYSCALL ===
-    # Function has 8 parameters, so sp starts at 8 (frame base = 8)
-    builder.set_current_block(entry_block, sp = 8)
+    # Function has 8 parameters (already pushed by caller)
+    # sp = 0 at function entry, frame = sp = 0
+    # Parameters are at STACK[frame - 8] through STACK[frame - 1]
+    builder.set_current_block(entry_block, sp = 0)
     builder.label('sound_play_se')
 
-    # LOAD_STACK(-32) x 8 - Load all 8 parameters using frame-relative addressing
-    # Parameters are at frame[0], frame[1], ..., frame[7]
+    # LOAD_STACK(-32) x 8 - Load all 8 parameters
+    # -32 bytes = -8 words, so accessing frame[-8] through frame[-1]
     for i in range(8):
-        builder.load_frame(i * 4)  # Load parameter i (byte offset = i * 4)
+        builder.load_frame(-(8 - i) * 4)  # Load frame[-(8-i)] = arg(i+1)
 
     # SYSCALL(6, 0x10, 0x08)
     builder.syscall(6, 0x10, 0x08)
