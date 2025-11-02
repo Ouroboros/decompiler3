@@ -2,24 +2,26 @@
 Falcom VM specific constants and types
 """
 
-from ir.llil import LowLevelILInstruction, LowLevelILOperation
+from ir.llil import LowLevelILConst
 
 
-class LowLevelILConstFuncId(LowLevelILInstruction):
+class LowLevelILConstFuncId(LowLevelILConst):
     """Falcom VM function ID constant"""
 
     def __init__(self):
-        super().__init__(LowLevelILOperation.LLIL_CONST, 4)
+        # Special constant with no actual value
+        super().__init__(None, 4, False)
 
     def __str__(self) -> str:
         return "<func_id>"
 
 
-class LowLevelILConstRetAddr(LowLevelILInstruction):
+class LowLevelILConstRetAddr(LowLevelILConst):
     """Falcom VM return address constant"""
 
     def __init__(self, label: str):
-        super().__init__(LowLevelILOperation.LLIL_CONST, 8)
+        # Store label as the value
+        super().__init__(label, 8, False)
         self.label = label
 
     def __str__(self) -> str:
