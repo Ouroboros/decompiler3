@@ -327,14 +327,52 @@ class LLILFormatter:
         return str(instr)
 
     @staticmethod
-    def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
-        '''Format instruction (single line by default)
+    def _format_binary_op_expanded(binary_op: LowLevelILBinaryOp) -> List[str]:
+        '''Format binary operation with expanded pseudo-code'''
+        # Map operation types to their expression strings
+        expr_map = {
+            LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
+            LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
+            LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
+            LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
+            LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
+        }
 
-        With first-class StackPush/StackPop instructions, we no longer need
-        to expand binary operations into pseudo-code, as the actual IR
-        instructions now explicitly show the push/pop operations.
+        expr = expr_map[binary_op.operation]
+
+        return [
+            f'; {binary_op.operation_name}()',
+            'rhs = STACK[--sp]',
+            'lhs = STACK[--sp]',
+            f'STACK[sp++] = {expr}'
+        ]
+
+    @staticmethod
+    def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
+        '''Format instruction with expanded stack operations (multi-line)
+
+        Returns a list of lines showing explicit stack behavior.
+        For binary operations like EQ, MUL, ADD, this shows:
+        - Pop operations to get operands
+        - The actual operation
+        - Push operation for result
         '''
-        # All instructions use single-line format
+        from .llil import LowLevelILStackPush
+
+        # StackPush containing a binary operation: expand the binary op
+        if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILBinaryOp):
+            return LLILFormatter._format_binary_op_expanded(instr.value)
+
+        # Binary operations: pop 2, compute, push 1
+        if isinstance(instr, LowLevelILBinaryOp):
+            return LLILFormatter._format_binary_op_expanded(instr)
+
+        # For non-binary operations, return single line
         return [str(instr)]
 
     @staticmethod
