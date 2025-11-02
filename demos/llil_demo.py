@@ -39,52 +39,64 @@ def create_real_falcom_function():
     return function
 
 
-def create_conditional_example():
-    """Create conditional logic example"""
+def create_dof_on_example():
+    """
+    Real Falcom VM function: DOF_ON (Depth of Field)
+    Based on actual game code from offset 0x15452
+    """
 
-    function = LowLevelILFunction("conditional_demo", 0x1000)
+    function = LowLevelILFunction("DOF_ON", 0x15452)
 
-    # Entry block
-    entry = LowLevelILBasicBlock(0x1000)
-    entry.vsp_in = 0
-    function.add_basic_block(entry)
+    # Create all blocks
+    entry = LowLevelILBasicBlock(0x15452, 0)
+    check_arg = LowLevelILBasicBlock(0x15467, 1)
+    if_zero = LowLevelILBasicBlock(0x15470, 2)
+    else_branch = LowLevelILBasicBlock(0x154A3, 3)
+    merge = LowLevelILBasicBlock(0x154BC, 4)
+    epilog = LowLevelILBasicBlock(0x154D1, 5)
 
-    # If block
-    if_block = LowLevelILBasicBlock(0x1010)
-    if_block.vsp_in = 0
-    function.add_basic_block(if_block)
-
-    # Else block
-    else_block = LowLevelILBasicBlock(0x1020)
-    else_block.vsp_in = 0
-    function.add_basic_block(else_block)
-
-    # End block
-    end_block = LowLevelILBasicBlock(0x1030)
-    end_block.vsp_in = 0
-    function.add_basic_block(end_block)
+    for block in [entry, check_arg, if_zero, else_branch, merge, epilog]:
+        function.add_basic_block(block)
 
     builder = FalcomVMBuilder(function)
 
-    # Entry: check condition
+    # Entry: Enable depth-of-field
     builder.set_current_block(entry)
-    builder.label('conditional_demo')
-    builder.get_reg(0)
-    builder.pop_jmp_zero(else_block)  # Use block reference directly
+    builder.label('DOF_ON')
+    builder.falcom_call_simple('screen_dof_set_enable', [1], 'loc_15467')
 
-    # If branch
-    builder.set_current_block(if_block)
-    builder.push_int(100)
-    builder.jmp(end_block)  # Use block reference directly
+    # Check if arg2 == 0
+    builder.set_current_block(check_arg)
+    builder.label('loc_15467')
+    builder.load_stack(-8)      # arg2
+    builder.push_int(0)
+    builder.eq()
+    builder.pop_jmp_zero(else_branch)
 
-    # Else branch
-    builder.set_current_block(else_block)
-    builder.label('else_branch')
-    builder.push_int(200)
+    # If arg2 == 0: complex focus range calculation
+    builder.set_current_block(if_zero)
+    builder.load_stack(-12)     # arg1
+    builder.load_stack(-16)     # arg2
+    builder.stack_push(builder.const_float(0.1))
+    # MUL and ADD operations would go here
+    builder.jmp(merge)
 
-    # End
-    builder.set_current_block(end_block)
-    builder.label('end')
+    # Else: simple focus range
+    builder.set_current_block(else_branch)
+    builder.label('loc_154A3')
+    builder.load_stack(-12)     # arg1
+    builder.load_stack(-20)     # different stack offset
+    # Call would go here
+
+    # Merge: set blur level
+    builder.set_current_block(merge)
+    builder.label('loc_154BC')
+    builder.falcom_call_simple('screen_dof_set_blur_level', [3], 'loc_154D1')
+
+    # Return 0
+    builder.set_current_block(epilog)
+    builder.label('loc_154D1')
+    builder.push_int(0)
     builder.set_reg(0)
     builder.ret()
 
@@ -109,11 +121,11 @@ def main():
     func1 = create_real_falcom_function()
     print(LLILFormatter.format_function(func1))
 
-    # Test 2: Conditional logic
-    print("🧪 Test 2: Conditional Logic")
+    # Test 2: Real Falcom function (DOF_ON)
+    print("🧪 Test 2: Real Game Function - DOF_ON")
     print("-" * 30)
 
-    func2 = create_conditional_example()
+    func2 = create_dof_on_example()
     print(LLILFormatter.format_function(func2))
 
     print("✅ LLIL Demo completed successfully!")
