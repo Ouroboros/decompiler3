@@ -74,9 +74,33 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(self.const_str(value))
 
     def load_stack(self, offset: int):
-        '''LOAD_STACK operation - loads from sp + offset and pushes result'''
-        stack_val = self.stack_load(offset)
-        self.stack_push(stack_val)
+        '''LOAD_STACK operation - loads from sp + offset and pushes result
+
+        Automatically determines whether to use sp-relative or fp-relative addressing:
+        - If accessing below stack frame (offset would go negative), uses fp
+        - Otherwise uses sp
+        '''
+        # Calculate word offset
+        word_offset = offset // 4
+        # Calculate absolute stack position
+        absolute_pos = self.current_sp + word_offset
+
+        if absolute_pos < 0:
+            # Accessing below frame (parameters) - use fp-relative
+            # Convert to fp-relative offset: we want fp + offset to reach absolute_pos
+            # Since fp = frame_base_sp, and parameters are at fp + negative_offset
+            # absolute_pos = fp + fp_offset, so fp_offset = absolute_pos - fp
+            if self.frame_base_sp is not None:
+                fp_offset = (absolute_pos - self.frame_base_sp) * 4  # Convert back to bytes
+                self.load_frame(fp_offset)
+            else:
+                # Fallback: use stack_load (shouldn't happen in well-formed code)
+                stack_val = self.stack_load(offset)
+                self.stack_push(stack_val)
+        else:
+            # Accessing within current stack - use sp-relative
+            stack_val = self.stack_load(offset)
+            self.stack_push(stack_val)
 
     def load_frame(self, offset: int):
         '''LOAD_FRAME operation - loads from frame + offset and pushes result
