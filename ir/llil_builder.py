@@ -408,6 +408,32 @@ class LLILFormatter:
         return None
 
     @staticmethod
+    def try_format_reg_store_pop_pattern(instructions: List[LowLevelILInstruction], i: int) -> Optional[PatternMatch]:
+        '''Try to match and format: sp--; REG[x] = STACK[sp] → REG[x] = STACK[--sp]
+
+        Returns:
+            PatternMatch if pattern matches, None otherwise
+            Lines are returned without indentation
+        '''
+        if i + 1 >= len(instructions):
+            return None
+
+        instr = instructions[i]
+        next_instr = instructions[i + 1]
+
+        # Check if it's sp-- followed by REG[x] = STACK[sp]
+        if (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
+            isinstance(next_instr, LowLevelILRegStore) and
+            isinstance(next_instr.value, LowLevelILStackLoad) and
+            next_instr.value.offset == 0):
+            return PatternMatch(
+                lines=[f'REG[{next_instr.reg_index}] = STACK[--sp]'],
+                skip_count=2
+            )
+
+        return None
+
+    @staticmethod
     def format_instruction_sequence(instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
         '''Format sequence with pattern recognition - returns list of lines
 
@@ -433,6 +459,13 @@ class LLILFormatter:
 
             # Try pattern: sp--; STACK[sp] → STACK[--sp]
             pattern = LLILFormatter.try_format_stack_pop_pattern(instructions, i)
+            if pattern:
+                result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
+                i += pattern.skip_count
+                continue
+
+            # Try pattern: sp--; REG[x] = STACK[sp] → REG[x] = STACK[--sp]
+            pattern = LLILFormatter.try_format_reg_store_pop_pattern(instructions, i)
             if pattern:
                 result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
                 i += pattern.skip_count
