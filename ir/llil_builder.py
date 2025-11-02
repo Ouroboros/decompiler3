@@ -291,9 +291,15 @@ class LowLevelILBuilder:
         '''Debug line number'''
         self.add_instruction(LowLevelILDebug('line', line_no))
 
-    def syscall(self, catalog: int, cmd: int, arg_count: int):
-        '''System call'''
-        self.add_instruction(LowLevelILSyscall(catalog, cmd, arg_count))
+    def syscall(self, subsystem: int, cmd: int, argc: int):
+        '''System call
+
+        Args:
+            subsystem: System call category (e.g., 6 for audio, graphics, etc.)
+            cmd: Command ID within the subsystem
+            argc: Number of arguments for this syscall
+        '''
+        self.add_instruction(LowLevelILSyscall(subsystem, cmd, argc))
 
 
 class LLILFormatter:

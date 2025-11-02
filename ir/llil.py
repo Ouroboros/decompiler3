@@ -390,14 +390,14 @@ class LowLevelILDebug(LowLevelILInstruction):
 class LowLevelILSyscall(LowLevelILInstruction):
     '''System call'''
 
-    def __init__(self, catalog: int, cmd: int, arg_count: int):
+    def __init__(self, subsystem: int, cmd: int, argc: int):
         super().__init__(LowLevelILOperation.LLIL_SYSCALL)
-        self.catalog = catalog
+        self.subsystem = subsystem
         self.cmd = cmd
-        self.arg_count = arg_count
+        self.argc = argc
 
     def __str__(self) -> str:
-        return f'SYSCALL({self.catalog}, 0x{self.cmd:02x}, {self.arg_count})'
+        return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'
 
 
 # === Container Classes ===
