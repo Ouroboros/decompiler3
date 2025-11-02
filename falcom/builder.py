@@ -80,8 +80,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
         - If accessing below stack frame (offset would go negative), uses fp
         - Otherwise uses sp
         '''
+        from ir.llil import WORD_SIZE
+
         # Calculate word offset
-        word_offset = offset // 4
+        word_offset = offset // WORD_SIZE
         # Calculate absolute stack position
         absolute_pos = self.current_sp + word_offset
 
@@ -91,7 +93,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             # Since fp = frame_base_sp, and parameters are at fp + negative_offset
             # absolute_pos = fp + fp_offset, so fp_offset = absolute_pos - fp
             if self.frame_base_sp is not None:
-                fp_offset = (absolute_pos - self.frame_base_sp) * 4  # Convert back to bytes
+                fp_offset = (absolute_pos - self.frame_base_sp) * WORD_SIZE  # Convert back to bytes
                 self.load_frame(fp_offset)
             else:
                 # Fallback: use stack_load (shouldn't happen in well-formed code)

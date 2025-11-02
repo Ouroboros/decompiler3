@@ -1,36 +1,77 @@
-# Coding Style Rules
+# Coding Style Guide
 
-## Spacing
-- ALL `=` must have spaces: `param = None`, `func(key = value)`, `x = 10`
+## Mandatory Rules
 
-## Strings
-- Use single quotes `'` by default: `'string'`
-- Use double quotes `"` only when necessary (e.g., string contains single quote)
+### 0. NEVER TOUCH binaryninja-api/
 
-## Naming
-- Use full names: `STACK` not `S`, `REG` not `R`, `sp` not `vsp`
-- Use specific methods: `eq()`, `ne()`, `add()` - NOT generic `compare(op_type: str)`
+**ABSOLUTELY FORBIDDEN** to modify any files in `binaryninja-api/` directory.
 
-## Type Safety
-- No hardcoded strings: use enums/types, not `if op_name == "EQ"`
-- Use instruction types: `condition: LowLevelILInstruction` not `condition: str`
+- ✅ READ ONLY: Can read files for reference
+- ❌ NO WRITES: Never modify, create, or delete files
+- ❌ NO EDITS: Never edit any file under `binaryninja-api/`
 
-## Return Values
-- Use NamedTuple for multi-value returns, NOT bare tuples
+This is third-party code. Do not touch it under any circumstances.
 
-## Formatting
-- Pattern functions return lines WITHOUT indentation - caller controls indent
+### 1. NO HARDCODED MAGIC NUMBERS
 
-## Binary Operations
-- Both-or-neither rule: `lhs` and `rhs` must BOTH be None or BOTH be provided
-- Never allow one None and one value
+**NEVER** hardcode numeric constants. Always use named constants.
 
-## Architecture
-- `ir/` = VM-agnostic generic LLIL
-- `falcom/` = Falcom VM-specific code
+#### ❌ WRONG:
+```python
+word_offset = offset // 4
+size = value * 4
+```
 
-## Examples
-- Use ONLY real game code examples, NOT synthetic/abstract examples
+#### ✅ CORRECT:
+```python
+from ir.llil import WORD_SIZE
 
-## Emojis
-- Do NOT use in code unless user explicitly requests
+word_offset = offset // WORD_SIZE
+size = value * WORD_SIZE
+```
+
+**Common Constants:**
+- `WORD_SIZE = 4` (defined in `ir/llil.py`)
+  - Use for all byte/word conversions
+  - Use for all stack offset calculations
+  - Use for all size multiplications
+
+**Why?**
+1. **Maintainability**: Change once, update everywhere
+2. **Readability**: `offset // WORD_SIZE` is clearer than `offset // 4`
+3. **Flexibility**: Easy to port to different architectures
+
+### 2. Import Constants at Function/Method Level
+
+For frequently used constants like `WORD_SIZE`, import at the function level to avoid circular dependencies:
+
+```python
+def some_method(self):
+    from ir.llil import WORD_SIZE
+    
+    word_offset = offset // WORD_SIZE
+```
+
+### 3. Comment Documentation
+
+When documenting offsets or sizes, refer to constants:
+
+#### ❌ WRONG:
+```python
+# offset is in bytes, converted to word index (offset // 4)
+```
+
+#### ✅ CORRECT:
+```python
+# offset is in bytes, converted to word index (offset // WORD_SIZE)
+```
+
+## Enforcement
+
+All code must follow these rules. Any hardcoded magic numbers will be rejected.
+
+### Code Review Checklist:
+- [ ] No hardcoded `4` for word size
+- [ ] No hardcoded numeric constants without names
+- [ ] All constants imported from appropriate modules
+- [ ] Comments reference constant names, not values
