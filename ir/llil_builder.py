@@ -163,16 +163,17 @@ class LowLevelILBuilder:
         Returns:
             The operation expression
         """
-        # Get operands
-        if rhs is None:
+        # Get operands - both must be None or both must be provided
+        if lhs is None and rhs is None:
+            # Implicit mode: pop both from vstack
             rhs = self.pop(size)
-        else:
-            rhs = self._to_expr(rhs)
-
-        if lhs is None:
             lhs = self.pop(size)
-        else:
+        elif lhs is not None and rhs is not None:
+            # Explicit mode: both provided
             lhs = self._to_expr(lhs)
+            rhs = self._to_expr(rhs)
+        else:
+            raise ValueError("Binary operation requires both operands or neither (lhs and rhs must both be None or both be provided)")
 
         # Create operation with operands
         op = op_class(lhs, rhs, size)
