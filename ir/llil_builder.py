@@ -30,7 +30,14 @@ class LowLevelILBuilder:
             block: The block to set as current
             sp: Optional stack pointer value. If None, uses function's num_params on first block,
                 or continues from previous block's sp
+
+        Raises:
+            RuntimeError: If block has not been added to function
         '''
+        # Verify block has been added to function
+        if block not in self.function.basic_blocks:
+            raise RuntimeError(f'Block {block} has not been added to function. Call function.add_basic_block() first.')
+
         # Save previous block's sp_out if we have a current block
         if self.current_block is not None:
             self.current_block.sp_out = self.current_sp

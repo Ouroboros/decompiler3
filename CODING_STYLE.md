@@ -90,9 +90,6 @@ This applies to:
 - Keyword arguments: `func(key = value)`
 - Annotated assignments: `x: int = 5`
 
-**Exceptions:**
-- No spaces in keyword arguments when calling: `func(key=value)` (follows PEP 8)
-
 ## Enforcement
 
 All code must follow these rules. Any hardcoded magic numbers will be rejected.

@@ -43,7 +43,7 @@ def create_AV_04_0017():
         RETURN()
     '''
 
-    function = LowLevelILFunction('AV_04_0017', 0x243C5, num_params=0)
+    function = LowLevelILFunction('AV_04_0017', 0x243C5, num_params = 0)
 
     # Create all blocks upfront
     entry_block = LowLevelILBasicBlock(0x243C5, 0)
@@ -160,7 +160,7 @@ def create_DOF_ON():
         RETURN()
     '''
 
-    function = LowLevelILFunction('DOF_ON', 0x1FFDB6, num_params=2)
+    function = LowLevelILFunction('DOF_ON', 0x1FFDB6, num_params = 2)
 
     # Create all blocks upfront
     entry_block = LowLevelILBasicBlock(0x1FFDB6, 0)
@@ -312,7 +312,7 @@ def create_sound_play_se():
         RETURN()
     '''
 
-    function = LowLevelILFunction('sound_play_se', 0x149B2, num_params=8)
+    function = LowLevelILFunction('sound_play_se', 0x149B2, num_params = 8)
 
     # Create single block
     entry_block = LowLevelILBasicBlock(0x149B2, 0)
