@@ -4,6 +4,7 @@ LLIL v2 Builder - Layered architecture for convenience
 
 from typing import Union, Optional, List
 from .llil import *
+from .llil import LowLevelILBinaryOp, LowLevelILOperation
 
 
 class LowLevelILBuilder:
@@ -327,26 +328,26 @@ class LLILFormatter:
         - The actual operation
         - Push operation for result
         '''
-        from ir.llil import (LowLevelILBinaryOp, LowLevelILAdd, LowLevelILMul,
-                            LowLevelILEq, LowLevelILOperation)
-
         # Binary operations: pop 2, compute, push 1
         if isinstance(instr, LowLevelILBinaryOp):
-            # Map operation types to their names and expression strings
-            op_info_map = {
-                LowLevelILOperation.LLIL_ADD: ('ADD', 'lhs + rhs'),
-                LowLevelILOperation.LLIL_SUB: ('SUB', 'lhs - rhs'),
-                LowLevelILOperation.LLIL_MUL: ('MUL', 'lhs * rhs'),
-                LowLevelILOperation.LLIL_DIV: ('DIV', 'lhs / rhs'),
-                LowLevelILOperation.LLIL_EQ: ('EQ', '(lhs == rhs) ? 1 : 0'),
-                LowLevelILOperation.LLIL_NE: ('NE', '(lhs != rhs) ? 1 : 0'),
-                LowLevelILOperation.LLIL_LT: ('LT', '(lhs < rhs) ? 1 : 0'),
-                LowLevelILOperation.LLIL_LE: ('LE', '(lhs <= rhs) ? 1 : 0'),
-                LowLevelILOperation.LLIL_GT: ('GT', '(lhs > rhs) ? 1 : 0'),
-                LowLevelILOperation.LLIL_GE: ('GE', '(lhs >= rhs) ? 1 : 0'),
+            # Get operation name from enum (e.g., 'LLIL_ADD' -> 'ADD')
+            op_name = instr.operation.name.replace('LLIL_', '')
+
+            # Map operation types to their expression strings
+            expr_map = {
+                LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
+                LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
+                LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
+                LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
+                LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
             }
 
-            op_name, expr = op_info_map[instr.operation]
+            expr = expr_map[instr.operation]
 
             return [
                 f'; {op_name}()',
