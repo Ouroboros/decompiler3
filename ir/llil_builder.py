@@ -178,11 +178,19 @@ class LowLevelILBuilder:
 
         # Create operation with operands
         op = op_class(lhs, rhs, size)
-        self.add_instruction(op)
 
-        # Optionally push result (binary operations implicitly push their result)
+        # Binary operations are expressions, not statements
+        # Only add as instruction if we're pushing (making it a statement via StackPush)
         if push:
+            # Generate StackPush instruction to push the result
+            # The StackPush contains the binary operation as its value
+            push_instr = LowLevelILStackPush(op, size)
+            self.add_instruction(push_instr)
+            self.current_sp += 1
             self.vstack.append(op)
+        else:
+            # If not pushing, add the operation itself (e.g., for comparisons in branches)
+            self.add_instruction(op)
 
         return op
 
@@ -320,40 +328,13 @@ class LLILFormatter:
 
     @staticmethod
     def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
-        '''Format instruction with expanded stack operations (multi-line)
+        '''Format instruction (single line by default)
 
-        Returns a list of lines showing explicit stack behavior.
-        For binary operations like EQ, MUL, ADD, this shows:
-        - Pop operations to get operands
-        - The actual operation
-        - Push operation for result
+        With first-class StackPush/StackPop instructions, we no longer need
+        to expand binary operations into pseudo-code, as the actual IR
+        instructions now explicitly show the push/pop operations.
         '''
-        # Binary operations: pop 2, compute, push 1
-        if isinstance(instr, LowLevelILBinaryOp):
-            # Map operation types to their expression strings
-            expr_map = {
-                LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
-                LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
-                LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
-                LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
-                LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
-            }
-
-            expr = expr_map[instr.operation]
-
-            return [
-                f'; {instr.operation_name}()',
-                'rhs = STACK[--sp]',
-                'lhs = STACK[--sp]',
-                f'STACK[sp++] = {expr}'
-            ]
-
-        # For non-binary operations, return single line
+        # All instructions use single-line format
         return [str(instr)]
 
     @staticmethod

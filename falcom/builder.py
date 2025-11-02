@@ -92,8 +92,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
         '''POP_JMP_ZERO operation'''
         # Pop from stack using StackPop expression
         cond = self.pop()
-        # Branch if condition == 0
-        self.branch_if(cond, target)
+        # Branch if condition == 0 (need to create comparison)
+        zero = self.const_int(0)
+        is_zero = self.eq(cond, zero, push = False)
+        self.branch_if(is_zero, target)
 
     def pop_jmp_not_zero(self, target):
         '''POP_JMP_NOT_ZERO operation'''
