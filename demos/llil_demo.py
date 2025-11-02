@@ -44,20 +44,32 @@ def create_dof_on_example():
     DOF_ON - Strict 1:1 translation from Falcom VM bytecode
     Every VM instruction mapped to LLIL instructions
 
+    BLOCK Structure Rules:
+    1. Function start = first BLOCK
+    2. Each label = start of new BLOCK
+    3. Each terminator = end of current BLOCK
+    4. Terminator successors = next BLOCKs
+
     Original bytecode from game:
     @scena.Code('DOF_ON')
     def DOF_ON(arg1, arg2 = 0):
+        # BLOCK 0: DOF_ON (entry)
         PUSH_CURRENT_FUNC_ID()
         PUSH_RET_ADDR('loc_15467')
         PUSH_INT(1)
         CALL(screen_dof_set_enable)
+        # Falls through to BLOCK 1
 
+        # BLOCK 1: loc_15467
         label('loc_15467')
         LOAD_STACK(-8)
         PUSH_INT(0)
         EQ()
-        POP_JMP_ZERO('loc_154A3')
+        POP_JMP_ZERO('loc_154A3')  # Terminator with 2 successors:
+                                    # - zero: BLOCK 4 (loc_154A3)
+                                    # - nonzero: BLOCK 2 (fall-through, no explicit label)
 
+        # BLOCK 2: (implicit block after POP_JMP_ZERO, nonzero path)
         PUSH_CURRENT_FUNC_ID()
         PUSH_RET_ADDR('loc_1549E')
         LOAD_STACK(-12)
@@ -67,44 +79,58 @@ def create_dof_on_example():
         ADD()
         LOAD_STACK(-16)
         CALL(screen_dof_set_focus_range)
+        # Falls through to BLOCK 3
 
+        # BLOCK 3: loc_1549E
         label('loc_1549E')
-        JMP('loc_154BC')
+        JMP('loc_154BC')  # Terminator with 1 successor: BLOCK 5
 
+        # BLOCK 4: loc_154A3 (zero path from BLOCK 1)
         label('loc_154A3')
         PUSH_CURRENT_FUNC_ID()
         PUSH_RET_ADDR('loc_154BC')
         LOAD_STACK(-12)
         LOAD_STACK(-20)
         CALL(screen_dof_set_focus_range)
+        # Falls through to BLOCK 5
 
+        # BLOCK 5: loc_154BC (merge point)
         label('loc_154BC')
         PUSH_CURRENT_FUNC_ID()
         PUSH_RET_ADDR('loc_154D1')
         PUSH_INT(3)
         CALL(screen_dof_set_blur_level)
+        # Falls through to BLOCK 6
 
+        # BLOCK 6: loc_154D1
         label('loc_154D1')
         PUSH(0x00000000)
         SET_REG(0)
         POP(8)
-        RETURN()
+        RETURN()  # Terminator, no successors
     """
 
     function = LowLevelILFunction("DOF_ON", 0x15452)
 
-    # Create all blocks upfront (following label structure)
+    # Create all blocks upfront
+    # BLOCK 0: Entry (function start)
     entry_block = LowLevelILBasicBlock(0x15452, 0)
+    # BLOCK 1: loc_15467 (label)
     loc_15467 = LowLevelILBasicBlock(0x15467, 1)
-    true_branch = LowLevelILBasicBlock(0x15470, 2)  # After condition, before loc_1549E
+    # BLOCK 2: Implicit block after POP_JMP_ZERO (nonzero path, no explicit label)
+    nonzero_path = LowLevelILBasicBlock(0x15470, 2)
+    # BLOCK 3: loc_1549E (label)
     loc_1549E = LowLevelILBasicBlock(0x1549E, 3)
+    # BLOCK 4: loc_154A3 (label, zero path from BLOCK 1)
     loc_154A3 = LowLevelILBasicBlock(0x154A3, 4)
+    # BLOCK 5: loc_154BC (label, merge point)
     loc_154BC = LowLevelILBasicBlock(0x154BC, 5)
+    # BLOCK 6: loc_154D1 (label)
     loc_154D1 = LowLevelILBasicBlock(0x154D1, 6)
 
     function.add_basic_block(entry_block)
     function.add_basic_block(loc_15467)
-    function.add_basic_block(true_branch)
+    function.add_basic_block(nonzero_path)
     function.add_basic_block(loc_1549E)
     function.add_basic_block(loc_154A3)
     function.add_basic_block(loc_154BC)
@@ -112,7 +138,7 @@ def create_dof_on_example():
 
     builder = FalcomVMBuilder(function)
 
-    # === Entry block: Enable DOF ===
+    # === BLOCK 0: Entry - Enable DOF ===
     builder.set_current_block(entry_block)
     builder.label('DOF_ON')
 
@@ -124,8 +150,9 @@ def create_dof_on_example():
     builder.push_int(1)
     # CALL(screen_dof_set_enable)
     builder.call('screen_dof_set_enable')
+    # Falls through to BLOCK 1
 
-    # === loc_15467: Check arg2 == 0 ===
+    # === BLOCK 1: loc_15467 - Check arg2 == 0 ===
     builder.set_current_block(loc_15467)
     builder.label('loc_15467')
 
@@ -136,10 +163,13 @@ def create_dof_on_example():
     # EQ()
     builder.eq()
     # POP_JMP_ZERO('loc_154A3')
+    # Terminator with 2 successors:
+    #   - zero: BLOCK 4 (loc_154A3)
+    #   - nonzero: BLOCK 2 (fall-through)
     builder.pop_jmp_zero(loc_154A3)
 
-    # === True branch: arg2 == 0, calculate focus range ===
-    builder.set_current_block(true_branch)
+    # === BLOCK 2: Nonzero path - Calculate focus range ===
+    builder.set_current_block(nonzero_path)
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
@@ -159,15 +189,17 @@ def create_dof_on_example():
     builder.load_stack(-16)
     # CALL(screen_dof_set_focus_range)
     builder.call('screen_dof_set_focus_range')
+    # Falls through to BLOCK 3
 
-    # === loc_1549E: Jump to merge point ===
+    # === BLOCK 3: loc_1549E - Jump to merge point ===
     builder.set_current_block(loc_1549E)
     builder.label('loc_1549E')
 
     # JMP('loc_154BC')
+    # Terminator with 1 successor: BLOCK 5 (loc_154BC)
     builder.jmp(loc_154BC)
 
-    # === loc_154A3: False branch, simple focus range ===
+    # === BLOCK 4: loc_154A3 - Zero path, simple focus range ===
     builder.set_current_block(loc_154A3)
     builder.label('loc_154A3')
 
@@ -181,8 +213,9 @@ def create_dof_on_example():
     builder.load_stack(-20)
     # CALL(screen_dof_set_focus_range)
     builder.call('screen_dof_set_focus_range')
+    # Falls through to BLOCK 5
 
-    # === loc_154BC: Merge point, set blur level ===
+    # === BLOCK 5: loc_154BC - Merge point, set blur level ===
     builder.set_current_block(loc_154BC)
     builder.label('loc_154BC')
 
@@ -194,8 +227,9 @@ def create_dof_on_example():
     builder.push_int(3)
     # CALL(screen_dof_set_blur_level)
     builder.call('screen_dof_set_blur_level')
+    # Falls through to BLOCK 6
 
-    # === loc_154D1: Return ===
+    # === BLOCK 6: loc_154D1 - Return ===
     builder.set_current_block(loc_154D1)
     builder.label('loc_154D1')
 
@@ -206,6 +240,7 @@ def create_dof_on_example():
     # POP(8) - pops 8 bytes from stack
     builder.add_instruction(LowLevelILVspAdd(-2))  # 8 bytes = 2 words
     # RETURN()
+    # Terminator, no successors
     builder.ret()
 
     return function
