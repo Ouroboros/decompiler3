@@ -177,6 +177,14 @@ class LowLevelILAdd(LowLevelILBinaryOp):
         return "ADD"
 
 
+class LowLevelILMul(LowLevelILBinaryOp):
+    def __init__(self, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_MUL, size)
+
+    def __str__(self) -> str:
+        return "MUL"
+
+
 class LowLevelILEq(LowLevelILBinaryOp):
     def __init__(self, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_EQ, size)

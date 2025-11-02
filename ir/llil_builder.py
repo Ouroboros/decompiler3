@@ -82,6 +82,10 @@ class LowLevelILBuilder:
         """Stack-based ADD"""
         self.add_instruction(LowLevelILAdd(size))
 
+    def mul(self, size: int = 4):
+        """Stack-based MUL"""
+        self.add_instruction(LowLevelILMul(size))
+
     def eq(self, size: int = 4):
         """Stack-based EQ"""
         self.add_instruction(LowLevelILEq(size))

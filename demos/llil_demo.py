@@ -41,63 +41,171 @@ def create_real_falcom_function():
 
 def create_dof_on_example():
     """
-    Real Falcom VM function: DOF_ON (Depth of Field)
-    Based on actual game code from offset 0x15452
+    DOF_ON - Strict 1:1 translation from Falcom VM bytecode
+    Every VM instruction mapped to LLIL instructions
+
+    Original bytecode from game:
+    @scena.Code('DOF_ON')
+    def DOF_ON(arg1, arg2 = 0):
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_15467')
+        PUSH_INT(1)
+        CALL(screen_dof_set_enable)
+
+        label('loc_15467')
+        LOAD_STACK(-8)
+        PUSH_INT(0)
+        EQ()
+        POP_JMP_ZERO('loc_154A3')
+
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_1549E')
+        LOAD_STACK(-12)
+        LOAD_STACK(-16)
+        PUSH_FLOAT(0.1)
+        MUL()
+        ADD()
+        LOAD_STACK(-16)
+        CALL(screen_dof_set_focus_range)
+
+        label('loc_1549E')
+        JMP('loc_154BC')
+
+        label('loc_154A3')
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_154BC')
+        LOAD_STACK(-12)
+        LOAD_STACK(-20)
+        CALL(screen_dof_set_focus_range)
+
+        label('loc_154BC')
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_154D1')
+        PUSH_INT(3)
+        CALL(screen_dof_set_blur_level)
+
+        label('loc_154D1')
+        PUSH(0x00000000)
+        SET_REG(0)
+        POP(8)
+        RETURN()
     """
 
     function = LowLevelILFunction("DOF_ON", 0x15452)
 
-    # Create all blocks
-    entry = LowLevelILBasicBlock(0x15452, 0)
-    check_arg = LowLevelILBasicBlock(0x15467, 1)
-    if_zero = LowLevelILBasicBlock(0x15470, 2)
-    else_branch = LowLevelILBasicBlock(0x154A3, 3)
-    merge = LowLevelILBasicBlock(0x154BC, 4)
-    epilog = LowLevelILBasicBlock(0x154D1, 5)
+    # Create all blocks upfront (following label structure)
+    entry_block = LowLevelILBasicBlock(0x15452, 0)
+    loc_15467 = LowLevelILBasicBlock(0x15467, 1)
+    true_branch = LowLevelILBasicBlock(0x15470, 2)  # After condition, before loc_1549E
+    loc_1549E = LowLevelILBasicBlock(0x1549E, 3)
+    loc_154A3 = LowLevelILBasicBlock(0x154A3, 4)
+    loc_154BC = LowLevelILBasicBlock(0x154BC, 5)
+    loc_154D1 = LowLevelILBasicBlock(0x154D1, 6)
 
-    for block in [entry, check_arg, if_zero, else_branch, merge, epilog]:
-        function.add_basic_block(block)
+    function.add_basic_block(entry_block)
+    function.add_basic_block(loc_15467)
+    function.add_basic_block(true_branch)
+    function.add_basic_block(loc_1549E)
+    function.add_basic_block(loc_154A3)
+    function.add_basic_block(loc_154BC)
+    function.add_basic_block(loc_154D1)
 
     builder = FalcomVMBuilder(function)
 
-    # Entry: Enable depth-of-field
-    builder.set_current_block(entry)
+    # === Entry block: Enable DOF ===
+    builder.set_current_block(entry_block)
     builder.label('DOF_ON')
-    builder.falcom_call_simple('screen_dof_set_enable', [1], 'loc_15467')
 
-    # Check if arg2 == 0
-    builder.set_current_block(check_arg)
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_15467')
+    builder.push_ret_addr('loc_15467')
+    # PUSH_INT(1)
+    builder.push_int(1)
+    # CALL(screen_dof_set_enable)
+    builder.call('screen_dof_set_enable')
+
+    # === loc_15467: Check arg2 == 0 ===
+    builder.set_current_block(loc_15467)
     builder.label('loc_15467')
-    builder.load_stack(-8)      # arg2
+
+    # LOAD_STACK(-8)
+    builder.load_stack(-8)
+    # PUSH_INT(0)
     builder.push_int(0)
+    # EQ()
     builder.eq()
-    builder.pop_jmp_zero(else_branch)
+    # POP_JMP_ZERO('loc_154A3')
+    builder.pop_jmp_zero(loc_154A3)
 
-    # If arg2 == 0: complex focus range calculation
-    builder.set_current_block(if_zero)
-    builder.load_stack(-12)     # arg1
-    builder.load_stack(-16)     # arg2
+    # === True branch: arg2 == 0, calculate focus range ===
+    builder.set_current_block(true_branch)
+
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_1549E')
+    builder.push_ret_addr('loc_1549E')
+    # LOAD_STACK(-12)
+    builder.load_stack(-12)
+    # LOAD_STACK(-16)
+    builder.load_stack(-16)
+    # PUSH_FLOAT(0.1)
     builder.stack_push(builder.const_float(0.1))
-    # MUL and ADD operations would go here
-    builder.jmp(merge)
+    # MUL()
+    builder.mul()
+    # ADD()
+    builder.add()
+    # LOAD_STACK(-16)
+    builder.load_stack(-16)
+    # CALL(screen_dof_set_focus_range)
+    builder.call('screen_dof_set_focus_range')
 
-    # Else: simple focus range
-    builder.set_current_block(else_branch)
+    # === loc_1549E: Jump to merge point ===
+    builder.set_current_block(loc_1549E)
+    builder.label('loc_1549E')
+
+    # JMP('loc_154BC')
+    builder.jmp(loc_154BC)
+
+    # === loc_154A3: False branch, simple focus range ===
+    builder.set_current_block(loc_154A3)
     builder.label('loc_154A3')
-    builder.load_stack(-12)     # arg1
-    builder.load_stack(-20)     # different stack offset
-    # Call would go here
 
-    # Merge: set blur level
-    builder.set_current_block(merge)
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_154BC')
+    builder.push_ret_addr('loc_154BC')
+    # LOAD_STACK(-12)
+    builder.load_stack(-12)
+    # LOAD_STACK(-20)
+    builder.load_stack(-20)
+    # CALL(screen_dof_set_focus_range)
+    builder.call('screen_dof_set_focus_range')
+
+    # === loc_154BC: Merge point, set blur level ===
+    builder.set_current_block(loc_154BC)
     builder.label('loc_154BC')
-    builder.falcom_call_simple('screen_dof_set_blur_level', [3], 'loc_154D1')
 
-    # Return 0
-    builder.set_current_block(epilog)
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_154D1')
+    builder.push_ret_addr('loc_154D1')
+    # PUSH_INT(3)
+    builder.push_int(3)
+    # CALL(screen_dof_set_blur_level)
+    builder.call('screen_dof_set_blur_level')
+
+    # === loc_154D1: Return ===
+    builder.set_current_block(loc_154D1)
     builder.label('loc_154D1')
+
+    # PUSH(0x00000000)
     builder.push_int(0)
+    # SET_REG(0)
     builder.set_reg(0)
+    # POP(8) - pops 8 bytes from stack
+    builder.add_instruction(LowLevelILVspAdd(-2))  # 8 bytes = 2 words
+    # RETURN()
     builder.ret()
 
     return function
