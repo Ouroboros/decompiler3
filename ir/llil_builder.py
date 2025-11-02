@@ -64,17 +64,23 @@ class LowLevelILBuilder:
 
     # === Constants ===
 
-    def const_int(self, value: int, size: int = 4) -> LowLevelILConst:
-        """Integer constant"""
-        return LowLevelILConst(value, size)
+    def const_int(self, value: int, size: int = 4, is_hex: bool = False) -> LowLevelILConst:
+        """Integer constant
+
+        Args:
+            value: Integer value
+            size: Size in bytes (default 4)
+            is_hex: If True, display as hex; if False, use auto detection (default)
+        """
+        return LowLevelILConst(value, size, is_hex)
 
     def const_float(self, value: float, size: int = 4) -> LowLevelILConst:
         """Float constant (size: 4 for float, 8 for double)"""
-        return LowLevelILConst(value, size)
+        return LowLevelILConst(value, size, False)
 
     def const_str(self, value: str) -> LowLevelILConst:
         """String constant"""
-        return LowLevelILConst(value, 0)
+        return LowLevelILConst(value, 0, False)
 
     # === Arithmetic Operations ===
 

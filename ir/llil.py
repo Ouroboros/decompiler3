@@ -275,9 +275,10 @@ class LowLevelILRet(Terminal):
 class LowLevelILConst(LowLevelILInstruction):
     """Constant value (int, float, or string)"""
 
-    def __init__(self, value: Union[int, float, str], size: int = 4):
+    def __init__(self, value: Union[int, float, str], size: int = 4, is_hex: bool = False):
         super().__init__(LowLevelILOperation.LLIL_CONST, size)
         self.value = value
+        self.is_hex = is_hex  # True to display as hex, False for decimal (default)
 
     def __str__(self) -> str:
         if isinstance(self.value, str):
@@ -287,7 +288,11 @@ class LowLevelILConst(LowLevelILInstruction):
         elif isinstance(self.value, int):
             if self.value < 0:
                 return str(self.value)
+            elif self.is_hex:
+                # Force hex output
+                return f"0x{self.value:X}"
             else:
+                # Default: decimal for small values, hex for large values
                 return f"0x{self.value:08x}" if self.value > 255 else str(self.value)
         else:
             return str(self.value)
