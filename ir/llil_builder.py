@@ -4,7 +4,12 @@ LLIL v2 Builder - Layered architecture for convenience
 
 from typing import Union, Optional, List
 from .llil import *
-from .llil import LowLevelILBinaryOp, LowLevelILOperation
+from .llil import (
+    LowLevelILBinaryOp, LowLevelILOperation,
+    LowLevelILSub, LowLevelILDiv, LowLevelILEq, LowLevelILNe,
+    LowLevelILLt, LowLevelILLe, LowLevelILGt, LowLevelILGe,
+    LowLevelILStackPush
+)
 
 
 class LowLevelILBuilder:
@@ -200,7 +205,6 @@ class LowLevelILBuilder:
 
     def sub(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''SUB operation'''
-        from ir.llil import LowLevelILSub
         return self._binary_op(LowLevelILSub, lhs, rhs, push = push, size = size)
 
     def mul(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
@@ -209,39 +213,32 @@ class LowLevelILBuilder:
 
     def div(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''DIV operation'''
-        from ir.llil import LowLevelILDiv
         return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size)
 
     # === Comparison Operations ===
 
     def eq(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''EQ operation (==)'''
-        from ir.llil import LowLevelILEq
         return self._binary_op(LowLevelILEq, lhs, rhs, push = push, size = size)
 
     def ne(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''NE operation (!=)'''
-        from ir.llil import LowLevelILNe
         return self._binary_op(LowLevelILNe, lhs, rhs, push = push, size = size)
 
     def lt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''LT operation (<)'''
-        from ir.llil import LowLevelILLt
         return self._binary_op(LowLevelILLt, lhs, rhs, push = push, size = size)
 
     def le(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''LE operation (<=)'''
-        from ir.llil import LowLevelILLe
         return self._binary_op(LowLevelILLe, lhs, rhs, push = push, size = size)
 
     def gt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''GT operation (>)'''
-        from ir.llil import LowLevelILGt
         return self._binary_op(LowLevelILGt, lhs, rhs, push = push, size = size)
 
     def ge(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         '''GE operation (>=)'''
-        from ir.llil import LowLevelILGe
         return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size)
 
     # === Control Flow ===
@@ -362,8 +359,6 @@ class LLILFormatter:
         - The actual operation
         - Push operation for result
         '''
-        from .llil import LowLevelILStackPush
-
         # StackPush containing a binary operation: expand the binary op
         if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr.value)

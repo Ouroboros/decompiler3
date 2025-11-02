@@ -3,6 +3,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
 from typing import Union, List
+from ir.llil import LowLevelILEq, LowLevelILBranch
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
 
@@ -94,7 +95,6 @@ class FalcomVMBuilder(LowLevelILBuilder):
         cond = self.pop()
         # Create EQ(cond, 0) without adding as instruction
         # This is just used as the branch condition expression
-        from ir.llil import LowLevelILEq, LowLevelILBranch
         zero = self.const_int(0)
         is_zero = LowLevelILEq(cond, zero)
         # Branch if is_zero is true
