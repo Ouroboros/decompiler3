@@ -119,14 +119,14 @@ def main():
     print("-" * 30)
 
     func1 = create_real_falcom_function()
-    print(LLILFormatter.format_function(func1))
+    print("\n".join(LLILFormatter.format_function(func1)))
 
     # Test 2: Real Falcom function (DOF_ON)
     print("🧪 Test 2: Real Game Function - DOF_ON")
     print("-" * 30)
 
     func2 = create_dof_on_example()
-    print(LLILFormatter.format_function(func2))
+    print("\n".join(LLILFormatter.format_function(func2)))
 
     print("✅ LLIL Demo completed successfully!")
     print("\nKey improvements:")

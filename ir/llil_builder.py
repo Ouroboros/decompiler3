@@ -145,8 +145,8 @@ class LLILFormatter:
     """Formatting layer for beautiful output"""
 
     @staticmethod
-    def format_instruction_sequence(instructions: List[LowLevelILInstruction]) -> str:
-        """Format sequence with pattern recognition"""
+    def format_instruction_sequence(instructions: List[LowLevelILInstruction]) -> list[str]:
+        """Format sequence with pattern recognition - returns list of lines"""
         result = []
         i = 0
 
@@ -159,7 +159,7 @@ class LLILFormatter:
                 isinstance(instructions[i + 1], LowLevelILVspAdd) and
                 instructions[i + 1].delta == 1):
 
-                result.append(f"S[vsp++] = {instr.value}")
+                result.append(f"  S[vsp++] = {instr.value}")
                 i += 2  # Skip both instructions
 
             # Pattern: vsp--; S[vsp] → S[--vsp]
@@ -168,31 +168,33 @@ class LLILFormatter:
                   isinstance(instructions[i + 1], LowLevelILStackLoad) and
                   instructions[i + 1].offset == 0):
 
-                result.append("S[--vsp]")
+                result.append("  S[--vsp]")
                 i += 2  # Skip both instructions
 
             else:
-                result.append(str(instr))
+                result.append(f"  {str(instr)}")
                 i += 1
 
-        return "\n".join(f"  {line}" for line in result)
+        return result
 
     @staticmethod
-    def format_function(func: LowLevelILFunction) -> str:
-        """Format entire function with beautiful output"""
-        result = f"; ---------- {func.name} ----------\n"
+    def format_function(func: LowLevelILFunction) -> list[str]:
+        """Format entire function with beautiful output - returns list of lines"""
+        result = [
+            f"; ---------- {func.name} ----------",
+        ]
 
         for block in func.basic_blocks:
             # Block header
             if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
-                result += f"{block.instructions[0].name}: [vsp={block.vsp_in}]\n"
+                result.append(f"{block.instructions[0].name}: [vsp={block.vsp_in}]")
                 instructions_to_format = block.instructions[1:]
             else:
-                result += f"bb_{hex(block.start)}: [vsp={block.vsp_in}]\n"
+                result.append(f"bb_{hex(block.start)}: [vsp={block.vsp_in}]")
                 instructions_to_format = block.instructions
 
-            # Format instructions
-            result += LLILFormatter.format_instruction_sequence(instructions_to_format)
-            result += "\n\n"
+            # Format instructions - now returns list
+            result.extend(LLILFormatter.format_instruction_sequence(instructions_to_format))
+            result.append("")
 
         return result

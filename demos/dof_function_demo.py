@@ -190,7 +190,7 @@ def main():
     print("-" * 60)
 
     func = create_dof_simplified()
-    print(LLILFormatter.format_function(func))
+    print("\n".join(LLILFormatter.format_function(func)))
 
     # Build CFG
     func.build_cfg()
