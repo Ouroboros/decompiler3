@@ -43,7 +43,7 @@ def create_AV_04_0017():
         RETURN()
     '''
 
-    function = LowLevelILFunction('AV_04_0017', 0x243C5)
+    function = LowLevelILFunction('AV_04_0017', 0x243C5, num_params=0)
 
     # Create all blocks upfront
     entry_block = LowLevelILBasicBlock(0x243C5, 0)
@@ -57,7 +57,8 @@ def create_AV_04_0017():
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - map_event_box_set_enable call ===
-    builder.set_current_block(entry_block, sp = 0)
+    # sp auto-set to num_params (0), fp = 0
+    builder.set_current_block(entry_block)
     builder.label('AV_04_0017')
 
     # DEBUG_SET_LINENO(2519)
@@ -159,7 +160,7 @@ def create_DOF_ON():
         RETURN()
     '''
 
-    function = LowLevelILFunction('DOF_ON', 0x1FFDB6)
+    function = LowLevelILFunction('DOF_ON', 0x1FFDB6, num_params=2)
 
     # Create all blocks upfront
     entry_block = LowLevelILBasicBlock(0x1FFDB6, 0)
@@ -182,9 +183,9 @@ def create_DOF_ON():
 
     # === BLOCK 0: Entry - Enable DOF ===
     # DOF_ON has 2 parameters (arg1, arg2)
-    # sp = 2 at function entry (2 parameters on stack), fp = 2
-    # Parameters are at STACK[fp - 2] and STACK[fp - 1] = STACK[0] and STACK[1]
-    builder.set_current_block(entry_block, sp = 2)
+    # sp auto-set to num_params (2), fp = 0
+    # Parameters: STACK[fp + 0] = STACK[0] = arg1, STACK[fp + 1] = STACK[1] = arg2
+    builder.set_current_block(entry_block)
     builder.label('DOF_ON')
 
     # PUSH_CURRENT_FUNC_ID()
@@ -311,7 +312,7 @@ def create_sound_play_se():
         RETURN()
     '''
 
-    function = LowLevelILFunction('sound_play_se', 0x149B2)
+    function = LowLevelILFunction('sound_play_se', 0x149B2, num_params=8)
 
     # Create single block
     entry_block = LowLevelILBasicBlock(0x149B2, 0)
@@ -321,15 +322,15 @@ def create_sound_play_se():
 
     # === BLOCK 0: Entry - SYSCALL ===
     # Function has 8 parameters (already pushed by caller)
-    # sp = 8 at function entry (8 parameters on stack), fp = 8
-    # Parameters are at STACK[fp - 8..fp - 1] = STACK[0..7]
-    builder.set_current_block(entry_block, sp = 8)
+    # sp auto-set to num_params (8), fp = 0
+    # Parameters: STACK[fp + 0..7] = STACK[0..7]
+    builder.set_current_block(entry_block)
     builder.label('sound_play_se')
 
     # LOAD_STACK(-32) x 8 - Load all 8 parameters
-    # -32 bytes = -8 words, so accessing fp[-8] through fp[-1]
+    # Will auto-detect and use fp-relative: STACK[fp + 0..7]
     for i in range(8):
-        builder.load_frame(-(8 - i) * 4)  # Load fp[-(8-i)] = STACK[i]
+        builder.load_frame(i * 4)  # Load STACK[fp + i] = STACK[i]
 
     # SYSCALL(6, 0x10, 0x08)
     builder.syscall(6, 0x10, 0x08)

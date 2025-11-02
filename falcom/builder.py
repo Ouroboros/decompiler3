@@ -77,7 +77,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         '''LOAD_STACK operation - loads from sp + offset and pushes result
 
         Automatically determines whether to use sp-relative or fp-relative addressing:
-        - If accessing below frame base (parameters), uses fp
+        - If accessing parameter area (STACK[0..num_params-1]), uses fp
         - Otherwise uses sp
         '''
         from ir.llil import WORD_SIZE
@@ -87,15 +87,16 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Calculate absolute stack position
         absolute_pos = self.current_sp + word_offset
 
-        # Check if accessing parameter area (below frame base)
-        if self.frame_base_sp is not None and absolute_pos < self.frame_base_sp:
-            # Accessing below frame (parameters) - use fp-relative
-            # Convert to fp-relative offset: we want fp + offset to reach absolute_pos
-            # absolute_pos = fp + fp_offset, so fp_offset = absolute_pos - fp
-            fp_offset = (absolute_pos - self.frame_base_sp) * WORD_SIZE  # Convert back to bytes
+        # Check if accessing parameter area
+        # New scheme: fp = 0, parameters at STACK[0..num_params-1]
+        num_params = self.function.num_params if hasattr(self.function, 'num_params') else 0
+        if absolute_pos >= 0 and absolute_pos < num_params:
+            # Accessing parameters - use fp-relative
+            # absolute_pos = fp + fp_offset, and fp = 0, so fp_offset = absolute_pos
+            fp_offset = absolute_pos * WORD_SIZE  # Convert to bytes
             self.load_frame(fp_offset)
         else:
-            # Accessing within current stack frame - use sp-relative
+            # Accessing within current stack frame (temporaries/locals) - use sp-relative
             stack_val = self.stack_load(offset)
             self.stack_push(stack_val)
 

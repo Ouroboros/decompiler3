@@ -28,7 +28,8 @@ class LowLevelILBuilder:
 
         Args:
             block: The block to set as current
-            sp: Optional stack pointer value. If None, continues from previous block's sp
+            sp: Optional stack pointer value. If None, uses function's num_params on first block,
+                or continues from previous block's sp
         '''
         # Save previous block's sp_out if we have a current block
         if self.current_block is not None:
@@ -39,12 +40,18 @@ class LowLevelILBuilder:
         # Set new block's sp_in and current sp
         if sp is not None:
             self.current_sp = sp
+        elif self.frame_base_sp is None:
+            # First block: use function's parameter count as initial sp
+            self.current_sp = self.function.num_params
+        # else: continue from previous block's sp
+
         block.sp_in = self.current_sp
 
         # Save frame base sp on first block (function entry)
-        if self.frame_base_sp is None and sp is not None:
-            self.frame_base_sp = sp
-            self.function.frame_base_sp = sp  # Also save to function
+        # New scheme: fp = 0 (points to first parameter)
+        if self.frame_base_sp is None:
+            self.frame_base_sp = 0
+            self.function.frame_base_sp = 0
 
     def mark_label(self, name: str, block: LowLevelILBasicBlock):
         '''Associate a label name with a block'''

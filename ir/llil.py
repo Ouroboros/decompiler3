@@ -162,10 +162,9 @@ class LowLevelILFrameLoad(LowLevelILInstruction):
 
     def __str__(self) -> str:
         # Convert byte offset to word offset for display
+        # Always show explicit offset: fp + 0, fp + 1, etc.
         word_offset = self.offset // WORD_SIZE
-        if word_offset == 0:
-            return 'STACK[fp]'
-        elif word_offset > 0:
+        if word_offset >= 0:
             return f'STACK[fp + {word_offset}]'
         else:
             return f'STACK[fp - {-word_offset}]'
@@ -187,10 +186,9 @@ class LowLevelILFrameStore(LowLevelILInstruction):
 
     def __str__(self) -> str:
         # Convert byte offset to word offset for display
+        # Always show explicit offset: fp + 0, fp + 1, etc.
         word_offset = self.offset // WORD_SIZE
-        if word_offset == 0:
-            return f'STACK[fp] = {self.value}'
-        elif word_offset > 0:
+        if word_offset >= 0:
             return f'STACK[fp + {word_offset}] = {self.value}'
         else:
             return f'STACK[fp - {-word_offset}] = {self.value}'
@@ -528,9 +526,10 @@ class LowLevelILBasicBlock:
 class LowLevelILFunction:
     '''Function containing LLIL basic blocks (following BN design)'''
 
-    def __init__(self, name: str, start_addr: int = 0):
+    def __init__(self, name: str, start_addr: int = 0, num_params: int = 0):
         self.name = name
         self.start_addr = start_addr
+        self.num_params = num_params  # Number of parameters
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
         self.frame_base_sp: Optional[int] = None  # Frame pointer (sp at function entry)
