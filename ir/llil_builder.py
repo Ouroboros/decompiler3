@@ -2,8 +2,14 @@
 LLIL v2 Builder - Layered architecture for convenience
 """
 
-from typing import Union, Optional, List
+from typing import Union, Optional, List, NamedTuple
 from .llil import *
+
+
+class PatternMatch(NamedTuple):
+    """Result of a pattern matching attempt"""
+    lines: List[str]      # Formatted output lines
+    skip_count: int       # Number of instructions to skip
 
 
 class LowLevelILBuilder:
@@ -13,10 +19,26 @@ class LowLevelILBuilder:
         self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
         self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label name -> block
+        self._current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
+        self._vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
 
-    def set_current_block(self, block: LowLevelILBasicBlock):
-        """Set the current basic block for instruction insertion"""
+    def set_current_block(self, block: LowLevelILBasicBlock, sp: Optional[int] = None):
+        """Set the current basic block for instruction insertion
+
+        Args:
+            block: The block to set as current
+            sp: Optional stack pointer value. If None, continues from previous block's sp
+        """
+        # Save previous block's sp_out if we have a current block
+        if self.current_block is not None:
+            self.current_block.sp_out = self._current_sp
+
         self.current_block = block
+
+        # Set new block's sp_in and current sp
+        if sp is not None:
+            self._current_sp = sp
+        block.sp_in = self._current_sp
 
     def mark_label(self, name: str, block: LowLevelILBasicBlock):
         """Associate a label name with a block"""
@@ -27,22 +49,66 @@ class LowLevelILBuilder:
         return self._label_map.get(label)
 
     def add_instruction(self, instr: LowLevelILInstruction):
-        """Add instruction to current block"""
+        """Add instruction to current block and update stack pointer tracking"""
         if self.current_block is None:
             raise RuntimeError("No current basic block set")
         self.current_block.add_instruction(instr)
 
-    # === Stack Operations (convenience methods) ===
+        # Update stack pointer based on instruction type
+        if isinstance(instr, LowLevelILSpAdd):
+            self._current_sp += instr.delta
+
+    # === Virtual Stack Management ===
+
+    def _to_expr(self, value: Union[LowLevelILInstruction, int, float, str]) -> LowLevelILInstruction:
+        """Convert value to expression"""
+        if isinstance(value, LowLevelILInstruction):
+            return value
+        elif isinstance(value, int):
+            return self.const_int(value)
+        elif isinstance(value, float):
+            return self.const_float(value)
+        elif isinstance(value, str):
+            return self.const_str(value)
+        else:
+            raise TypeError(f"Cannot convert {type(value)} to expression")
+
+    def push(self, value: Union[LowLevelILInstruction, int, float, str], size: int = 4) -> LowLevelILInstruction:
+        """Push value onto virtual stack and emit instructions
+
+        Returns the expression that was pushed
+        """
+        expr = self._to_expr(value)
+        self.add_instruction(LowLevelILStackStore(expr, 0, size))
+        self.add_instruction(LowLevelILSpAdd(1))
+        self._vstack.append(expr)
+        return expr
+
+    def pop(self, size: int = 4) -> LowLevelILInstruction:
+        """Pop value from virtual stack
+
+        Returns the expression that was popped (does NOT emit instructions here,
+        the caller decides what to do with it)
+        """
+        # Pop from virtual stack
+        if self._vstack:
+            expr = self._vstack.pop()
+        else:
+            # If vstack is empty, return a load expression
+            # This will be emitted by the caller if needed
+            expr = LowLevelILStackLoad(0, size)
+
+        return expr
+
+    # === Legacy Stack Operations (kept for compatibility) ===
 
     def stack_push(self, value: Union[LowLevelILInstruction, int, str], size: int = 4):
-        """STACK[sp++] = value"""
-        self.add_instruction(LowLevelILStackStore(value, 0, size))
-        self.add_instruction(LowLevelILSpAdd(1))
+        """STACK[sp++] = value (legacy, use push() instead)"""
+        self.push(value, size)
 
     def stack_pop(self, size: int = 4) -> LowLevelILStackLoad:
-        """STACK[--sp]"""
-        self.add_instruction(LowLevelILSpAdd(-1))
-        return LowLevelILStackLoad(0, size)
+        """STACK[--sp] (legacy, use pop() instead)"""
+        return self.pop(size)
 
     def stack_load(self, offset: int, size: int = 4) -> LowLevelILStackLoad:
         """STACK[sp + offset] (no sp change)"""
@@ -82,19 +148,114 @@ class LowLevelILBuilder:
         """String constant"""
         return LowLevelILConst(value, 0, False)
 
-    # === Arithmetic Operations ===
+    # === Binary Operations ===
 
-    def add(self, size: int = 4):
-        """Stack-based ADD"""
-        self.add_instruction(LowLevelILAdd(size))
+    def _binary_op(self, op_class, lhs=None, rhs=None, *, push: bool = True, size: int = 4) -> LowLevelILInstruction:
+        """Generic binary operation handler
 
-    def mul(self, size: int = 4):
-        """Stack-based MUL"""
-        self.add_instruction(LowLevelILMul(size))
+        Args:
+            op_class: The operation class (e.g., LowLevelILAdd)
+            lhs: Left operand (None = pop from vstack)
+            rhs: Right operand (None = pop from vstack)
+            push: Whether to push result back to vstack
+            size: Operation size
 
-    def eq(self, size: int = 4):
-        """Stack-based EQ"""
-        self.add_instruction(LowLevelILEq(size))
+        Returns:
+            The operation expression
+        """
+        # Get operands
+        if rhs is None:
+            rhs = self.pop(size)
+        else:
+            rhs = self._to_expr(rhs)
+
+        if lhs is None:
+            lhs = self.pop(size)
+        else:
+            lhs = self._to_expr(lhs)
+
+        # Create operation with operands
+        op = op_class(lhs, rhs, size)
+        self.add_instruction(op)
+
+        # Optionally push result
+        if push:
+            self._vstack.append(op)
+
+        return op
+
+    def add(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """ADD operation"""
+        return self._binary_op(LowLevelILAdd, lhs, rhs, push = push, size = size)
+
+    def sub(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """SUB operation"""
+        from ir.llil import LowLevelILSub
+        return self._binary_op(LowLevelILSub, lhs, rhs, push = push, size = size)
+
+    def mul(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """MUL operation"""
+        return self._binary_op(LowLevelILMul, lhs, rhs, push = push, size = size)
+
+    def div(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """DIV operation"""
+        from ir.llil import LowLevelILDiv
+        return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size)
+
+    def compare(self, op_type: str, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """Unified comparison operation
+
+        Args:
+            op_type: Comparison type ("eq", "ne", "lt", "le", "gt", "ge")
+            lhs: Left operand (None = pop from vstack)
+            rhs: Right operand (None = pop from vstack)
+            push: Whether to push result back to vstack
+            size: Operation size
+
+        Returns:
+            The comparison expression
+        """
+        from ir.llil import (LowLevelILEq, LowLevelILNe, LowLevelILLt,
+                            LowLevelILLe, LowLevelILGt, LowLevelILGe)
+
+        op_map = {
+            "eq": LowLevelILEq,
+            "ne": LowLevelILNe,
+            "lt": LowLevelILLt,
+            "le": LowLevelILLe,
+            "gt": LowLevelILGt,
+            "ge": LowLevelILGe,
+        }
+
+        op_class = op_map.get(op_type.lower())
+        if op_class is None:
+            raise ValueError(f"Unknown comparison type: {op_type}")
+
+        return self._binary_op(op_class, lhs, rhs, push = push, size = size)
+
+    def eq(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """EQ operation"""
+        return self.compare("eq", lhs, rhs, push = push, size = size)
+
+    def ne(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """NE operation"""
+        return self.compare("ne", lhs, rhs, push = push, size = size)
+
+    def lt(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """LT operation"""
+        return self.compare("lt", lhs, rhs, push = push, size = size)
+
+    def le(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """LE operation"""
+        return self.compare("le", lhs, rhs, push = push, size = size)
+
+    def gt(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """GT operation"""
+        return self.compare("gt", lhs, rhs, push = push, size = size)
+
+    def ge(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+        """GE operation"""
+        return self.compare("ge", lhs, rhs, push = push, size = size)
 
     # === Control Flow ===
 
@@ -146,35 +307,160 @@ class LLILFormatter:
     """Formatting layer for beautiful output"""
 
     @staticmethod
-    def format_instruction_sequence(instructions: List[LowLevelILInstruction]) -> list[str]:
-        """Format sequence with pattern recognition - returns list of lines"""
+    def indent_lines(lines: List[str], indent: str) -> List[str]:
+        """Add indentation to multiple lines
+
+        Args:
+            lines: List of lines to indent
+            indent: Indentation string to prepend
+
+        Returns:
+            List of indented lines
+        """
+        return [indent + line for line in lines]
+
+    @staticmethod
+    def format_instruction(instr: LowLevelILInstruction) -> str:
+        """Format a single instruction - can be customized per instruction type
+
+        Returns a single line for simple instructions.
+        For multi-line instructions, use format_instruction_expanded().
+        """
+        # For now, use the instruction's __str__ method
+        # This can be extended with custom formatting logic for specific instruction types
+        return str(instr)
+
+    @staticmethod
+    def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
+        """Format instruction with expanded stack operations (multi-line)
+
+        Returns a list of lines showing explicit stack behavior.
+        For binary operations like EQ, MUL, ADD, this shows:
+        - Pop operations to get operands
+        - The actual operation
+        - Push operation for result
+        """
+        from ir.llil import (LowLevelILBinaryOp, LowLevelILAdd, LowLevelILMul,
+                            LowLevelILEq, LowLevelILOperation)
+
+        # Binary operations: pop 2, compute, push 1
+        if isinstance(instr, LowLevelILBinaryOp):
+            op_name = str(instr)
+
+            # Map operation types to their expression strings
+            # Using the operation type instead of string matching
+            op_expr_map = {
+                LowLevelILOperation.LLIL_ADD: "lhs + rhs",
+                LowLevelILOperation.LLIL_SUB: "lhs - rhs",
+                LowLevelILOperation.LLIL_MUL: "lhs * rhs",
+                LowLevelILOperation.LLIL_DIV: "lhs / rhs",
+                LowLevelILOperation.LLIL_EQ: "(lhs == rhs) ? 1 : 0",
+                LowLevelILOperation.LLIL_NE: "(lhs != rhs) ? 1 : 0",
+                LowLevelILOperation.LLIL_LT: "(lhs < rhs) ? 1 : 0",
+                LowLevelILOperation.LLIL_LE: "(lhs <= rhs) ? 1 : 0",
+                LowLevelILOperation.LLIL_GT: "(lhs > rhs) ? 1 : 0",
+                LowLevelILOperation.LLIL_GE: "(lhs >= rhs) ? 1 : 0",
+            }
+
+            expr = op_expr_map.get(instr.operation, f"lhs {op_name} rhs")
+
+            return [
+                f"; {op_name}()",
+                "rhs = STACK[--sp]",
+                "lhs = STACK[--sp]",
+                f"STACK[sp++] = {expr}"
+            ]
+
+        # For non-binary operations, return single line
+        return [str(instr)]
+
+    @staticmethod
+    def try_format_stack_push_pattern(instructions: List[LowLevelILInstruction], i: int) -> Optional[PatternMatch]:
+        """Try to match and format: STACK[sp] = value; sp++ → STACK[sp++] = value
+
+        Returns:
+            PatternMatch if pattern matches, None otherwise
+            Lines are returned without indentation
+        """
+        if i + 1 >= len(instructions):
+            return None
+
+        instr = instructions[i]
+        next_instr = instructions[i + 1]
+
+        if (isinstance(instr, LowLevelILStackStore) and instr.offset == 0 and
+            isinstance(next_instr, LowLevelILSpAdd) and next_instr.delta == 1):
+            return PatternMatch(
+                lines=[f"STACK[sp++] = {instr.value}"],
+                skip_count=2
+            )
+
+        return None
+
+    @staticmethod
+    def try_format_stack_pop_pattern(instructions: List[LowLevelILInstruction], i: int) -> Optional[PatternMatch]:
+        """Try to match and format: sp--; STACK[sp] → STACK[--sp]
+
+        Returns:
+            PatternMatch if pattern matches, None otherwise
+            Lines are returned without indentation
+        """
+        if i + 1 >= len(instructions):
+            return None
+
+        instr = instructions[i]
+        next_instr = instructions[i + 1]
+
+        if (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
+            isinstance(next_instr, LowLevelILStackLoad) and next_instr.offset == 0):
+            return PatternMatch(
+                lines=["STACK[--sp]"],
+                skip_count=2
+            )
+
+        return None
+
+    @staticmethod
+    def format_instruction_sequence(instructions: List[LowLevelILInstruction], indent: str = "  ") -> list[str]:
+        """Format sequence with pattern recognition - returns list of lines
+
+        Args:
+            instructions: List of instructions to format
+            indent: Indentation string to prepend to each line (default: "  ")
+
+        Returns:
+            List of formatted lines with indentation
+        """
         result = []
         i = 0
 
         while i < len(instructions):
             instr = instructions[i]
 
-            # Pattern: STACK[sp] = value; sp++ → STACK[sp++] = value
-            if (isinstance(instr, LowLevelILStackStore) and instr.offset == 0 and
-                i + 1 < len(instructions) and
-                isinstance(instructions[i + 1], LowLevelILSpAdd) and
-                instructions[i + 1].delta == 1):
+            # Try pattern: STACK[sp] = value; sp++ → STACK[sp++] = value
+            pattern = LLILFormatter.try_format_stack_push_pattern(instructions, i)
+            if pattern:
+                result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
+                i += pattern.skip_count
+                continue
 
-                result.append(f"  STACK[sp++] = {instr.value}")
-                i += 2  # Skip both instructions
+            # Try pattern: sp--; STACK[sp] → STACK[--sp]
+            pattern = LLILFormatter.try_format_stack_pop_pattern(instructions, i)
+            if pattern:
+                result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
+                i += pattern.skip_count
+                continue
 
-            # Pattern: sp--; STACK[sp] → STACK[--sp]
-            elif (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
-                  i + 1 < len(instructions) and
-                  isinstance(instructions[i + 1], LowLevelILStackLoad) and
-                  instructions[i + 1].offset == 0):
-
-                result.append("  STACK[--sp]")
-                i += 2  # Skip both instructions
-
+            # No pattern matched, format single instruction
+            # Use expanded format for multi-line instructions
+            expanded = LLILFormatter.format_instruction_expanded(instr)
+            if len(expanded) > 1:
+                # Multi-line instruction
+                result.extend(LLILFormatter.indent_lines(expanded, indent))
             else:
-                result.append(f"  {str(instr)}")
-                i += 1
+                # Single line instruction
+                result.append(f"{indent}{expanded[0]}")
+            i += 1
 
         return result
 
@@ -186,7 +472,7 @@ class LLILFormatter:
         ]
 
         for block in func.basic_blocks:
-            # Block header: {block_N}  label_name: [sp=0]
+            # Block header: {block_N}  label_name: [sp = 0]
 
             block_info = [
                 f"block_{block.index}",
@@ -196,13 +482,16 @@ class LLILFormatter:
                 label_name = block.instructions[0].name
                 block_info.append(label_name)
                 instructions_to_format = block.instructions[1:]
+            else:
+                instructions_to_format = block.instructions
 
             block_info.append(f"[sp = {block.sp_in}]")
 
             result.append(", ".join(block_info))
 
             # Format instructions - now returns list
-            result.extend(LLILFormatter.format_instruction_sequence(instructions_to_format))
+            indent = '  '
+            result.extend(LLILFormatter.format_instruction_sequence(instructions_to_format, indent))
             result.append("")
 
         return result

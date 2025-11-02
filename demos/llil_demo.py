@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Final LLIL Demo - Clean and optimized
+LLIL Demo - Expression-based Architecture
+Demonstrates real game functions from Kuro no Kiseki
 """
 
 import sys
@@ -56,7 +57,7 @@ def create_AV_04_0017():
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - map_event_box_set_enable call ===
-    builder.set_current_block(entry_block)
+    builder.set_current_block(entry_block, sp = 0)
     builder.label('AV_04_0017')
 
     # DEBUG_SET_LINENO(2519)
@@ -100,45 +101,33 @@ def create_AV_04_0017():
     # SET_REG(0)
     builder.set_reg(0)
     # RETURN()
-    # Terminator, no successors
     builder.ret()
 
     return function
 
 
-def create_dof_on_example():
+def create_DOF_ON():
     """
-    DOF_ON - Strict 1:1 translation from Falcom VM bytecode
-    Every VM instruction mapped to LLIL instructions
+    DOF_ON - Strict 1:1 translation from real game bytecode
+    Source: c0000.py from Kuro no Kiseki
 
-    BLOCK Structure Rules:
-    1. Function start = first BLOCK
-    2. Each label = start of new BLOCK
-    3. Each terminator = end of current BLOCK
-    4. Terminator successors = next BLOCKs
-
-    Original bytecode from game:
+    Original bytecode:
+    # id: 0x003F offset: 0x1FFDB6
     @scena.Code('DOF_ON')
     def DOF_ON(arg1, arg2 = 0):
-        # BLOCK 0: DOF_ON (entry)
         PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_15467')
+        PUSH_RET_ADDR('loc_1FFDCB')
         PUSH_INT(1)
         CALL(screen_dof_set_enable)
-        # Falls through to BLOCK 1
 
-        # BLOCK 1: loc_15467
-        label('loc_15467')
+        label('loc_1FFDCB')
         LOAD_STACK(-8)
         PUSH_INT(0)
         EQ()
-        POP_JMP_ZERO('loc_154A3')  # Terminator with 2 successors:
-                                    # - zero: BLOCK 4 (loc_154A3)
-                                    # - nonzero: BLOCK 2 (fall-through, no explicit label)
+        POP_JMP_ZERO('loc_1FFE07')
 
-        # BLOCK 2: (implicit block after POP_JMP_ZERO, nonzero path)
         PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_1549E')
+        PUSH_RET_ADDR('loc_1FFE02')
         LOAD_STACK(-12)
         LOAD_STACK(-16)
         PUSH_FLOAT(0.1)
@@ -146,82 +135,68 @@ def create_dof_on_example():
         ADD()
         LOAD_STACK(-16)
         CALL(screen_dof_set_focus_range)
-        # Falls through to BLOCK 3
 
-        # BLOCK 3: loc_1549E
-        label('loc_1549E')
-        JMP('loc_154BC')  # Terminator with 1 successor: BLOCK 5
+        label('loc_1FFE02')
+        JMP('loc_1FFE20')
 
-        # BLOCK 4: loc_154A3 (zero path from BLOCK 1)
-        label('loc_154A3')
+        label('loc_1FFE07')
         PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_154BC')
+        PUSH_RET_ADDR('loc_1FFE20')
         LOAD_STACK(-12)
         LOAD_STACK(-20)
         CALL(screen_dof_set_focus_range)
-        # Falls through to BLOCK 5
 
-        # BLOCK 5: loc_154BC (merge point)
-        label('loc_154BC')
+        label('loc_1FFE20')
         PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_154D1')
+        PUSH_RET_ADDR('loc_1FFE35')
         PUSH_INT(3)
         CALL(screen_dof_set_blur_level)
-        # Falls through to BLOCK 6
 
-        # BLOCK 6: loc_154D1
-        label('loc_154D1')
+        label('loc_1FFE35')
         PUSH(0x00000000)
         SET_REG(0)
         POP(8)
-        RETURN()  # Terminator, no successors
+        RETURN()
     """
 
-    function = LowLevelILFunction("DOF_ON", 0x15452)
+    function = LowLevelILFunction("DOF_ON", 0x1FFDB6)
 
     # Create all blocks upfront
-    # BLOCK 0: Entry (function start)
-    entry_block = LowLevelILBasicBlock(0x15452, 0)
-    # BLOCK 1: loc_15467 (label)
-    loc_15467 = LowLevelILBasicBlock(0x15467, 1)
-    # BLOCK 2: Implicit block after POP_JMP_ZERO (nonzero path, no explicit label)
-    nonzero_path = LowLevelILBasicBlock(0x15470, 2)
-    # BLOCK 3: loc_1549E (label)
-    loc_1549E = LowLevelILBasicBlock(0x1549E, 3)
-    # BLOCK 4: loc_154A3 (label, zero path from BLOCK 1)
-    loc_154A3 = LowLevelILBasicBlock(0x154A3, 4)
-    # BLOCK 5: loc_154BC (label, merge point)
-    loc_154BC = LowLevelILBasicBlock(0x154BC, 5)
-    # BLOCK 6: loc_154D1 (label)
-    loc_154D1 = LowLevelILBasicBlock(0x154D1, 6)
+    entry_block = LowLevelILBasicBlock(0x1FFDB6, 0)
+    loc_1FFDCB = LowLevelILBasicBlock(0x1FFDCB, 1)
+    nonzero_path = LowLevelILBasicBlock(0x1FFDD8, 2)  # Implicit block after POP_JMP_ZERO
+    loc_1FFE02 = LowLevelILBasicBlock(0x1FFE02, 3)
+    loc_1FFE07 = LowLevelILBasicBlock(0x1FFE07, 4)    # Zero branch target
+    loc_1FFE20 = LowLevelILBasicBlock(0x1FFE20, 5)    # Merge point
+    loc_1FFE35 = LowLevelILBasicBlock(0x1FFE35, 6)
 
     function.add_basic_block(entry_block)
-    function.add_basic_block(loc_15467)
+    function.add_basic_block(loc_1FFDCB)
     function.add_basic_block(nonzero_path)
-    function.add_basic_block(loc_1549E)
-    function.add_basic_block(loc_154A3)
-    function.add_basic_block(loc_154BC)
-    function.add_basic_block(loc_154D1)
+    function.add_basic_block(loc_1FFE02)
+    function.add_basic_block(loc_1FFE07)
+    function.add_basic_block(loc_1FFE20)
+    function.add_basic_block(loc_1FFE35)
 
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - Enable DOF ===
-    builder.set_current_block(entry_block)
+    builder.set_current_block(entry_block, sp = 0)
     builder.label('DOF_ON')
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
-    # PUSH_RET_ADDR('loc_15467')
-    builder.push_ret_addr('loc_15467')
+    # PUSH_RET_ADDR('loc_1FFDCB')
+    builder.push_ret_addr('loc_1FFDCB')
     # PUSH_INT(1)
     builder.push_int(1)
     # CALL(screen_dof_set_enable)
     builder.call('screen_dof_set_enable')
     # Falls through to BLOCK 1
 
-    # === BLOCK 1: loc_15467 - Check arg2 == 0 ===
-    builder.set_current_block(loc_15467)
-    builder.label('loc_15467')
+    # === BLOCK 1: loc_1FFDCB - Check arg2 == 0 ===
+    builder.set_current_block(loc_1FFDCB)
+    builder.label('loc_1FFDCB')
 
     # LOAD_STACK(-8)
     builder.load_stack(-8)
@@ -229,25 +204,22 @@ def create_dof_on_example():
     builder.push_int(0)
     # EQ()
     builder.eq()
-    # POP_JMP_ZERO('loc_154A3')
-    # Terminator with 2 successors:
-    #   - zero: BLOCK 4 (loc_154A3)
-    #   - nonzero: BLOCK 2 (fall-through)
-    builder.pop_jmp_zero(loc_154A3)
+    # POP_JMP_ZERO('loc_1FFE07')
+    builder.pop_jmp_zero(loc_1FFE07)
 
     # === BLOCK 2: Nonzero path - Calculate focus range ===
     builder.set_current_block(nonzero_path)
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
-    # PUSH_RET_ADDR('loc_1549E')
-    builder.push_ret_addr('loc_1549E')
+    # PUSH_RET_ADDR('loc_1FFE02')
+    builder.push_ret_addr('loc_1FFE02')
     # LOAD_STACK(-12)
     builder.load_stack(-12)
     # LOAD_STACK(-16)
     builder.load_stack(-16)
     # PUSH_FLOAT(0.1)
-    builder.stack_push(builder.const_float(0.1))
+    builder.push(builder.const_float(0.1))
     # MUL()
     builder.mul()
     # ADD()
@@ -258,22 +230,21 @@ def create_dof_on_example():
     builder.call('screen_dof_set_focus_range')
     # Falls through to BLOCK 3
 
-    # === BLOCK 3: loc_1549E - Jump to merge point ===
-    builder.set_current_block(loc_1549E)
-    builder.label('loc_1549E')
+    # === BLOCK 3: loc_1FFE02 - Jump to merge point ===
+    builder.set_current_block(loc_1FFE02)
+    builder.label('loc_1FFE02')
 
-    # JMP('loc_154BC')
-    # Terminator with 1 successor: BLOCK 5 (loc_154BC)
-    builder.jmp(loc_154BC)
+    # JMP('loc_1FFE20')
+    builder.jmp(loc_1FFE20)
 
-    # === BLOCK 4: loc_154A3 - Zero path, simple focus range ===
-    builder.set_current_block(loc_154A3)
-    builder.label('loc_154A3')
+    # === BLOCK 4: loc_1FFE07 - Zero path, simple focus range ===
+    builder.set_current_block(loc_1FFE07)
+    builder.label('loc_1FFE07')
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
-    # PUSH_RET_ADDR('loc_154BC')
-    builder.push_ret_addr('loc_154BC')
+    # PUSH_RET_ADDR('loc_1FFE20')
+    builder.push_ret_addr('loc_1FFE20')
     # LOAD_STACK(-12)
     builder.load_stack(-12)
     # LOAD_STACK(-20)
@@ -282,23 +253,23 @@ def create_dof_on_example():
     builder.call('screen_dof_set_focus_range')
     # Falls through to BLOCK 5
 
-    # === BLOCK 5: loc_154BC - Merge point, set blur level ===
-    builder.set_current_block(loc_154BC)
-    builder.label('loc_154BC')
+    # === BLOCK 5: loc_1FFE20 - Merge point, set blur level ===
+    builder.set_current_block(loc_1FFE20)
+    builder.label('loc_1FFE20')
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
-    # PUSH_RET_ADDR('loc_154D1')
-    builder.push_ret_addr('loc_154D1')
+    # PUSH_RET_ADDR('loc_1FFE35')
+    builder.push_ret_addr('loc_1FFE35')
     # PUSH_INT(3)
     builder.push_int(3)
     # CALL(screen_dof_set_blur_level)
     builder.call('screen_dof_set_blur_level')
     # Falls through to BLOCK 6
 
-    # === BLOCK 6: loc_154D1 - Return ===
-    builder.set_current_block(loc_154D1)
-    builder.label('loc_154D1')
+    # === BLOCK 6: loc_1FFE35 - Return ===
+    builder.set_current_block(loc_1FFE35)
+    builder.label('loc_1FFE35')
 
     # PUSH(0x00000000)
     builder.push_int(0)
@@ -307,48 +278,46 @@ def create_dof_on_example():
     # POP(8) - pops 8 bytes from stack
     builder.add_instruction(LowLevelILSpAdd(-2))  # 8 bytes = 2 words
     # RETURN()
-    # Terminator, no successors
     builder.ret()
 
     return function
 
 
 def main():
-    print("🔧 Final LLIL Demo - Falcom Stack VM")
-    print("=" * 50)
-    print("Source: m4000.py from Kuro no Kiseki")
-
-    print("\n📋 Features:")
-    print("  🔹 Optimized stack syntax: STACK[sp++], STACK[--sp]")
-    print("  🔹 Full names: STACK, REG, sp (not S, R, vsp)")
-    print("  🔹 func_id instead of CFID")
-    print("  🔹 Layered architecture")
-    print("  🔹 Pattern recognition")
-    print("  🔹 Beautiful formatting")
+    print("🔧 LLIL Demo - Expression-based Architecture")
+    print("=" * 60)
+    print("Source: Real game functions from Kuro no Kiseki")
+    print()
+    print("Features:")
+    print("  ✓ Virtual stack tracks expressions")
+    print("  ✓ Operations hold operands: EQ(lhs, rhs)")
+    print("  ✓ Data flow visible for optimization")
+    print("  ✓ Unified compare() method")
 
     # Test 1: AV_04_0017 - Simple linear function
     print("\n🧪 Test 1: AV_04_0017 - Simple Linear Function")
     print("-" * 60)
+    print("Source: m4000.py (id: 0x0000 offset: 0x243C5)")
     print("3 blocks, no branching, 2 function calls")
 
     func1 = create_AV_04_0017()
-    print("\n".join(LLILFormatter.format_llil_function(func1)))
+    print("\n" + "\n".join(LLILFormatter.format_llil_function(func1)))
 
     # Test 2: DOF_ON - Complex control flow
     print("\n🧪 Test 2: DOF_ON - Complex Control Flow")
     print("-" * 60)
+    print("Source: c0000.py (id: 0x003F offset: 0x1FFDB6)")
     print("7 blocks, conditional branching, merge points")
 
-    func2 = create_dof_on_example()
-    print("\n".join(LLILFormatter.format_llil_function(func2)))
+    func2 = create_DOF_ON()
+    print("\n" + "\n".join(LLILFormatter.format_llil_function(func2)))
 
-    print("\n✅ LLIL Demo completed successfully!")
-    print("\nKey improvements:")
-    print("  ✅ 4x more concise than verbose IR")
-    print("  ✅ Direct VM semantics mapping")
-    print("  ✅ Clean, readable output")
-    print("  ✅ Proper func_id naming")
-    print("  ✅ Label names in control flow")
+    print("\n✅ Demo completed successfully!")
+    print("\nKey features demonstrated:")
+    print("  ✅ Expression tracking: EQ(STACK[sp - 8], 0)")
+    print("  ✅ Operand visibility: MUL(STACK[sp - 16], 0.100000)")
+    print("  ✅ Data flow analysis ready")
+    print("  ✅ Stack state tracking: [sp = N] in each block")
 
 
 if __name__ == "__main__":

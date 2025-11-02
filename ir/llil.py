@@ -169,32 +169,111 @@ class LowLevelILRegLoad(LowLevelILInstruction):
 class LowLevelILBinaryOp(LowLevelILInstruction):
     """Base for binary operations"""
 
-    def __init__(self, operation: LowLevelILOperation, size: int = 4):
+    def __init__(self, operation: LowLevelILOperation, lhs: 'LowLevelILInstruction' = None,
+                 rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(operation, size)
+        self.lhs = lhs  # Left operand expression
+        self.rhs = rhs  # Right operand expression
 
 
 class LowLevelILAdd(LowLevelILBinaryOp):
-    def __init__(self, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_ADD, size)
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_ADD, lhs, rhs, size)
 
     def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"ADD({self.lhs}, {self.rhs})"
         return "ADD"
 
 
 class LowLevelILMul(LowLevelILBinaryOp):
-    def __init__(self, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_MUL, size)
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_MUL, lhs, rhs, size)
 
     def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"MUL({self.lhs}, {self.rhs})"
         return "MUL"
 
 
-class LowLevelILEq(LowLevelILBinaryOp):
-    def __init__(self, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_EQ, size)
+class LowLevelILSub(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_SUB, lhs, rhs, size)
 
     def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"SUB({self.lhs}, {self.rhs})"
+        return "SUB"
+
+
+class LowLevelILDiv(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_DIV, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"DIV({self.lhs}, {self.rhs})"
+        return "DIV"
+
+
+class LowLevelILEq(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_EQ, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"EQ({self.lhs}, {self.rhs})"
         return "EQ"
+
+
+class LowLevelILNe(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_NE, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"NE({self.lhs}, {self.rhs})"
+        return "NE"
+
+
+class LowLevelILLt(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_LT, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"LT({self.lhs}, {self.rhs})"
+        return "LT"
+
+
+class LowLevelILLe(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_LE, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"LE({self.lhs}, {self.rhs})"
+        return "LE"
+
+
+class LowLevelILGt(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_GT, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"GT({self.lhs}, {self.rhs})"
+        return "GT"
+
+
+class LowLevelILGe(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_GE, lhs, rhs, size)
+
+    def __str__(self) -> str:
+        if self.lhs and self.rhs:
+            return f"GE({self.lhs}, {self.rhs})"
+        return "GE"
 
 
 # === Control Flow ===

@@ -46,9 +46,14 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     # === VM Operations ===
 
-    def push_int(self, value: int):
-        """PUSH_INT operation"""
-        self.stack_push(self.const_int(value))
+    def push_int(self, value: int, is_hex: bool = False):
+        """PUSH_INT operation
+
+        Args:
+            value: Integer value to push
+            is_hex: If True, display as hex; if False, display as decimal (default)
+        """
+        self.stack_push(self.const_int(value, is_hex = is_hex))
 
     def push_str(self, value: str):
         """PUSH_STR operation"""
