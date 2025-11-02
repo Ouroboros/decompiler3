@@ -330,9 +330,6 @@ class LLILFormatter:
         '''
         # Binary operations: pop 2, compute, push 1
         if isinstance(instr, LowLevelILBinaryOp):
-            # Get operation name from enum (e.g., 'LLIL_ADD' -> 'ADD')
-            op_name = instr.operation.name.replace('LLIL_', '')
-
             # Map operation types to their expression strings
             expr_map = {
                 LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
@@ -350,7 +347,7 @@ class LLILFormatter:
             expr = expr_map[instr.operation]
 
             return [
-                f'; {op_name}()',
+                f'; {instr.operation_name}()',
                 'rhs = STACK[--sp]',
                 'lhs = STACK[--sp]',
                 f'STACK[sp++] = {expr}'

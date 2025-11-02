@@ -64,6 +64,11 @@ class LowLevelILInstruction(ABC):
         self.address = 0
         self.instr_index = 0
 
+    @property
+    def operation_name(self) -> str:
+        '''Get operation name without LLIL_ prefix (e.g., 'LLIL_ADD' -> 'ADD')'''
+        return self.operation.name.replace('LLIL_', '')
+
     @abstractmethod
     def __str__(self) -> str:
         pass
@@ -199,11 +204,9 @@ class LowLevelILBinaryOp(LowLevelILInstruction):
         self.rhs = rhs  # Right operand expression
 
     def __str__(self) -> str:
-        # Get operation name from enum (e.g., 'LLIL_ADD' -> 'ADD')
-        op_name = self.operation.name.replace('LLIL_', '')
         if self.lhs and self.rhs:
-            return f'{op_name}({self.lhs}, {self.rhs})'
-        return op_name
+            return f'{self.operation_name}({self.lhs}, {self.rhs})'
+        return self.operation_name
 
 
 class LowLevelILAdd(LowLevelILBinaryOp):
