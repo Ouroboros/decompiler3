@@ -1,6 +1,6 @@
-"""
+'''
 Falcom VM Builder - High-level builder with Falcom VM patterns
-"""
+'''
 
 from typing import Union, List
 from ir.llil import LowLevelILSpAdd, LowLevelILStackLoad, LowLevelILBranch
@@ -9,7 +9,7 @@ from .constants import FalcomConstants
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
-    """High-level builder with Falcom VM patterns"""
+    '''High-level builder with Falcom VM patterns'''
 
     def __init__(self, function):
         super().__init__(function)
@@ -18,17 +18,17 @@ class FalcomVMBuilder(LowLevelILBuilder):
     # === Falcom Specific Constants ===
 
     def push_func_id(self):
-        """Push current function ID - marks the start of call setup"""
+        '''Push current function ID - marks the start of call setup'''
         # Save sp before we start pushing for the call
         self.sp_before_call = self.current_sp
         self.stack_push(FalcomConstants.current_func_id())
 
     def push_ret_addr(self, label: str):
-        """Push return address"""
+        '''Push return address'''
         self.stack_push(FalcomConstants.ret_addr(label))
 
     def call(self, target):
-        """Falcom VM call - automatically cleans up stack (callee cleanup convention)"""
+        '''Falcom VM call - automatically cleans up stack (callee cleanup convention)'''
         super().call(target)
         # Falcom VM: callee cleans up all arguments, ret_addr, and func_id
         if self.sp_before_call is not None:
@@ -38,7 +38,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     # === Falcom Call Patterns ===
 
     def falcom_call_simple(self, func_name: str, args: List[Union[int, str]], ret_label: str):
-        """Standard Falcom call pattern"""
+        '''Standard Falcom call pattern'''
         # Push call context
         self.push_func_id()
         self.push_ret_addr(ret_label)
@@ -61,42 +61,42 @@ class FalcomVMBuilder(LowLevelILBuilder):
     # === VM Operations ===
 
     def push_int(self, value: int, is_hex: bool = False):
-        """PUSH_INT operation
+        '''PUSH_INT operation
 
         Args:
             value: Integer value to push
             is_hex: If True, display as hex; if False, display as decimal (default)
-        """
+        '''
         self.stack_push(self.const_int(value, is_hex = is_hex))
 
     def push_str(self, value: str):
-        """PUSH_STR operation"""
+        '''PUSH_STR operation'''
         self.stack_push(self.const_str(value))
 
     def load_stack(self, offset: int):
-        """LOAD_STACK operation"""
+        '''LOAD_STACK operation'''
         stack_val = self.stack_load(offset)
         self.stack_push(stack_val)
 
     def set_reg(self, reg_index: int):
-        """SET_REG operation"""
+        '''SET_REG operation'''
         stack_val = self.stack_pop()
         self.reg_store(reg_index, stack_val)
 
     def get_reg(self, reg_index: int):
-        """GET_REG operation"""
+        '''GET_REG operation'''
         reg_val = self.reg_load(reg_index)
         self.stack_push(reg_val)
 
     def pop_jmp_zero(self, target):
-        """POP_JMP_ZERO operation"""
+        '''POP_JMP_ZERO operation'''
         self.add_instruction(LowLevelILSpAdd(-1))  # sp--
         cond = LowLevelILStackLoad(0)  # STACK[sp] (popped value)
         # Branch if condition == 0
         self.branch_if(cond, target)
 
     def pop_jmp_not_zero(self, target):
-        """POP_JMP_NOT_ZERO operation"""
+        '''POP_JMP_NOT_ZERO operation'''
         self.add_instruction(LowLevelILSpAdd(-1))  # sp--
         cond = LowLevelILStackLoad(0)  # STACK[sp] (popped value)
         # Branch if condition != 0

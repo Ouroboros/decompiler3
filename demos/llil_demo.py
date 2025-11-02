@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""
+'''
 LLIL Demo - Expression-based Architecture
 Demonstrates real game functions from Kuro no Kiseki
-"""
+'''
 
 import sys
 import os
@@ -14,7 +14,7 @@ from falcom import FalcomVMBuilder
 
 
 def create_AV_04_0017():
-    """
+    '''
     AV_04_0017 - Strict 1:1 translation from real game bytecode
     Source: m4000.py from Kuro no Kiseki
 
@@ -41,7 +41,7 @@ def create_AV_04_0017():
         PUSH(0x00000000)
         SET_REG(0)
         RETURN()
-    """
+    '''
 
     function = LowLevelILFunction("AV_04_0017", 0x243C5)
 
@@ -107,7 +107,7 @@ def create_AV_04_0017():
 
 
 def create_DOF_ON():
-    """
+    '''
     DOF_ON - Strict 1:1 translation from real game bytecode
     Source: c0000.py from Kuro no Kiseki
 
@@ -157,7 +157,7 @@ def create_DOF_ON():
         SET_REG(0)
         POP(8)
         RETURN()
-    """
+    '''
 
     function = LowLevelILFunction("DOF_ON", 0x1FFDB6)
 
