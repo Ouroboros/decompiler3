@@ -43,7 +43,7 @@ def create_AV_04_0017():
         RETURN()
     '''
 
-    function = LowLevelILFunction("AV_04_0017", 0x243C5)
+    function = LowLevelILFunction('AV_04_0017', 0x243C5)
 
     # Create all blocks upfront
     entry_block = LowLevelILBasicBlock(0x243C5, 0)
@@ -159,7 +159,7 @@ def create_DOF_ON():
         RETURN()
     '''
 
-    function = LowLevelILFunction("DOF_ON", 0x1FFDB6)
+    function = LowLevelILFunction('DOF_ON', 0x1FFDB6)
 
     # Create all blocks upfront
     entry_block = LowLevelILBasicBlock(0x1FFDB6, 0)
@@ -285,41 +285,41 @@ def create_DOF_ON():
 
 
 def main():
-    print("🔧 LLIL Demo - Expression-based Architecture")
-    print("=" * 60)
-    print("Source: Real game functions from Kuro no Kiseki")
+    print('🔧 LLIL Demo - Expression-based Architecture')
+    print('=' * 60)
+    print('Source: Real game functions from Kuro no Kiseki')
     print()
-    print("Features:")
-    print("  ✓ Virtual stack tracks expressions")
-    print("  ✓ Operations hold operands: EQ(lhs, rhs)")
-    print("  ✓ Data flow visible for optimization")
-    print("  ✓ Individual methods for each operation type")
+    print('Features:')
+    print('  ✓ Virtual stack tracks expressions')
+    print('  ✓ Operations hold operands: EQ(lhs, rhs)')
+    print('  ✓ Data flow visible for optimization')
+    print('  ✓ Individual methods for each operation type')
 
     # Test 1: AV_04_0017 - Simple linear function
-    print("\n🧪 Test 1: AV_04_0017 - Simple Linear Function")
-    print("-" * 60)
-    print("Source: m4000.py (id: 0x0000 offset: 0x243C5)")
-    print("3 blocks, no branching, 2 function calls")
+    print('\n🧪 Test 1: AV_04_0017 - Simple Linear Function')
+    print('-' * 60)
+    print('Source: m4000.py (id: 0x0000 offset: 0x243C5)')
+    print('3 blocks, no branching, 2 function calls')
 
     func1 = create_AV_04_0017()
-    print("\n" + "\n".join(LLILFormatter.format_llil_function(func1)))
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
 
     # Test 2: DOF_ON - Complex control flow
-    print("\n🧪 Test 2: DOF_ON - Complex Control Flow")
-    print("-" * 60)
-    print("Source: c0000.py (id: 0x003F offset: 0x1FFDB6)")
-    print("7 blocks, conditional branching, merge points")
+    print('\n🧪 Test 2: DOF_ON - Complex Control Flow')
+    print('-' * 60)
+    print('Source: c0000.py (id: 0x003F offset: 0x1FFDB6)')
+    print('7 blocks, conditional branching, merge points')
 
     func2 = create_DOF_ON()
-    print("\n" + "\n".join(LLILFormatter.format_llil_function(func2)))
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
 
-    print("\n✅ Demo completed successfully!")
-    print("\nKey features demonstrated:")
-    print("  ✅ Expression tracking: EQ(STACK[sp - 8], 0)")
-    print("  ✅ Operand visibility: MUL(STACK[sp - 16], 0.100000)")
-    print("  ✅ Data flow analysis ready")
-    print("  ✅ Stack state tracking: [sp = N] in each block")
+    print('\n✅ Demo completed successfully!')
+    print('\nKey features demonstrated:')
+    print('  ✅ Expression tracking: EQ(STACK[sp - 8], 0)')
+    print('  ✅ Operand visibility: MUL(STACK[sp - 16], 0.100000)')
+    print('  ✅ Data flow analysis ready')
+    print('  ✅ Stack state tracking: [sp = N] in each block')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

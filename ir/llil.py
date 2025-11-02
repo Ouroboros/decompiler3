@@ -67,7 +67,7 @@ class LowLevelILInstruction(ABC):
         pass
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}: {str(self)}>"
+        return f'<{self.__class__.__name__}: {str(self)}>'
 
 
 # === Instruction Categories (following BinaryNinja design) ===
@@ -94,11 +94,11 @@ class LowLevelILStackStore(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.offset == 0:
-            return f"STACK[sp] = {self.value}"
+            return f'STACK[sp] = {self.value}'
         elif self.offset > 0:
-            return f"STACK[sp + {self.offset}] = {self.value}"
+            return f'STACK[sp + {self.offset}] = {self.value}'
         else:
-            return f"STACK[sp - {-self.offset}] = {self.value}"
+            return f'STACK[sp - {-self.offset}] = {self.value}'
 
 
 class LowLevelILStackLoad(LowLevelILInstruction):
@@ -110,11 +110,11 @@ class LowLevelILStackLoad(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.offset == 0:
-            return "STACK[sp]"
+            return 'STACK[sp]'
         elif self.offset > 0:
-            return f"STACK[sp + {self.offset}]"
+            return f'STACK[sp + {self.offset}]'
         else:
-            return f"STACK[sp - {-self.offset}]"
+            return f'STACK[sp - {-self.offset}]'
 
 
 class LowLevelILSpAdd(LowLevelILInstruction):
@@ -126,13 +126,13 @@ class LowLevelILSpAdd(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.delta == 1:
-            return "sp++"
+            return 'sp++'
         elif self.delta == -1:
-            return "sp--"
+            return 'sp--'
         elif self.delta > 0:
-            return f"sp += {self.delta}"
+            return f'sp += {self.delta}'
         else:
-            return f"sp -= {-self.delta}"
+            return f'sp -= {-self.delta}'
 
 
 # Alias for compatibility
@@ -150,7 +150,7 @@ class LowLevelILRegStore(LowLevelILInstruction):
         self.value = value
 
     def __str__(self) -> str:
-        return f"REG[{self.reg_index}] = {self.value}"
+        return f'REG[{self.reg_index}] = {self.value}'
 
 
 class LowLevelILRegLoad(LowLevelILInstruction):
@@ -161,7 +161,7 @@ class LowLevelILRegLoad(LowLevelILInstruction):
         self.reg_index = reg_index
 
     def __str__(self) -> str:
-        return f"REG[{self.reg_index}]"
+        return f'REG[{self.reg_index}]'
 
 
 # === Arithmetic Operations ===
@@ -182,8 +182,8 @@ class LowLevelILAdd(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"ADD({self.lhs}, {self.rhs})"
-        return "ADD"
+            return f'ADD({self.lhs}, {self.rhs})'
+        return 'ADD'
 
 
 class LowLevelILMul(LowLevelILBinaryOp):
@@ -192,8 +192,8 @@ class LowLevelILMul(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"MUL({self.lhs}, {self.rhs})"
-        return "MUL"
+            return f'MUL({self.lhs}, {self.rhs})'
+        return 'MUL'
 
 
 class LowLevelILSub(LowLevelILBinaryOp):
@@ -202,8 +202,8 @@ class LowLevelILSub(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"SUB({self.lhs}, {self.rhs})"
-        return "SUB"
+            return f'SUB({self.lhs}, {self.rhs})'
+        return 'SUB'
 
 
 class LowLevelILDiv(LowLevelILBinaryOp):
@@ -212,8 +212,8 @@ class LowLevelILDiv(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"DIV({self.lhs}, {self.rhs})"
-        return "DIV"
+            return f'DIV({self.lhs}, {self.rhs})'
+        return 'DIV'
 
 
 class LowLevelILEq(LowLevelILBinaryOp):
@@ -222,8 +222,8 @@ class LowLevelILEq(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"EQ({self.lhs}, {self.rhs})"
-        return "EQ"
+            return f'EQ({self.lhs}, {self.rhs})'
+        return 'EQ'
 
 
 class LowLevelILNe(LowLevelILBinaryOp):
@@ -232,8 +232,8 @@ class LowLevelILNe(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"NE({self.lhs}, {self.rhs})"
-        return "NE"
+            return f'NE({self.lhs}, {self.rhs})'
+        return 'NE'
 
 
 class LowLevelILLt(LowLevelILBinaryOp):
@@ -242,8 +242,8 @@ class LowLevelILLt(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"LT({self.lhs}, {self.rhs})"
-        return "LT"
+            return f'LT({self.lhs}, {self.rhs})'
+        return 'LT'
 
 
 class LowLevelILLe(LowLevelILBinaryOp):
@@ -252,8 +252,8 @@ class LowLevelILLe(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"LE({self.lhs}, {self.rhs})"
-        return "LE"
+            return f'LE({self.lhs}, {self.rhs})'
+        return 'LE'
 
 
 class LowLevelILGt(LowLevelILBinaryOp):
@@ -262,8 +262,8 @@ class LowLevelILGt(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"GT({self.lhs}, {self.rhs})"
-        return "GT"
+            return f'GT({self.lhs}, {self.rhs})'
+        return 'GT'
 
 
 class LowLevelILGe(LowLevelILBinaryOp):
@@ -272,8 +272,8 @@ class LowLevelILGe(LowLevelILBinaryOp):
 
     def __str__(self) -> str:
         if self.lhs and self.rhs:
-            return f"GE({self.lhs}, {self.rhs})"
-        return "GE"
+            return f'GE({self.lhs}, {self.rhs})'
+        return 'GE'
 
 
 # === Control Flow ===
@@ -286,8 +286,8 @@ class LowLevelILGoto(Terminal):
         self.target = target
 
     def __str__(self) -> str:
-        target_name = self.target.label_name or f"block_{self.target.index}"
-        return f"goto {target_name}"
+        target_name = self.target.label_name or f'block_{self.target.index}'
+        return f'goto {target_name}'
 
 
 class LowLevelILJmp(LowLevelILGoto):
@@ -309,12 +309,12 @@ class LowLevelILIf(ControlFlow):
         self.false_target = false_target
 
     def __str__(self) -> str:
-        true_name = self.true_target.label_name or f"block_{self.true_target.index}"
+        true_name = self.true_target.label_name or f'block_{self.true_target.index}'
         if self.false_target:
-            false_name = self.false_target.label_name or f"block_{self.false_target.index}"
-            return f"if {self.condition} goto {true_name} else {false_name}"
+            false_name = self.false_target.label_name or f'block_{self.false_target.index}'
+            return f'if {self.condition} goto {true_name} else {false_name}'
         else:
-            return f"if {self.condition} goto {true_name}"
+            return f'if {self.condition} goto {true_name}'
 
 
 class LowLevelILBranch(LowLevelILIf):
@@ -324,8 +324,8 @@ class LowLevelILBranch(LowLevelILIf):
         super().__init__(condition, target, None)
 
     def __str__(self) -> str:
-        target_name = self.true_target.label_name or f"block_{self.true_target.index}"
-        return f"if {self.condition} goto {target_name}"
+        target_name = self.true_target.label_name or f'block_{self.true_target.index}'
+        return f'if {self.condition} goto {target_name}'
 
 
 class LowLevelILCall(ControlFlow):
@@ -336,7 +336,7 @@ class LowLevelILCall(ControlFlow):
         self.target = target
 
     def __str__(self) -> str:
-        return f"call {self.target}"
+        return f'call {self.target}'
 
 
 class LowLevelILRet(Terminal):
@@ -346,7 +346,7 @@ class LowLevelILRet(Terminal):
         super().__init__(LowLevelILOperation.LLIL_RET)
 
     def __str__(self) -> str:
-        return "return"
+        return 'return'
 
 
 # === Constants and Special ===
@@ -363,15 +363,15 @@ class LowLevelILConst(LowLevelILInstruction):
         if isinstance(self.value, str):
             return f'"{self.value}"'
         elif isinstance(self.value, float):
-            return f"{self.value:.6f}" if self.value != int(self.value) else f"{self.value:.1f}"
+            return f'{self.value:.6f}' if self.value != int(self.value) else f'{self.value:.1f}'
         elif isinstance(self.value, int):
             if self.is_hex:
                 # Hex display
                 if self.value < 0:
                     # Negative hex: -0xAB
-                    return f"-0x{-self.value:X}"
+                    return f'-0x{-self.value:X}'
                 else:
-                    return f"0x{self.value:X}"
+                    return f'0x{self.value:X}'
             else:
                 # Decimal display
                 return str(self.value)
@@ -387,7 +387,7 @@ class LowLevelILLabelInstr(LowLevelILInstruction):
         self.name = name
 
     def __str__(self) -> str:
-        return f"{self.name}:"
+        return f'{self.name}:'
 
 
 class LowLevelILDebug(LowLevelILInstruction):
@@ -399,7 +399,7 @@ class LowLevelILDebug(LowLevelILInstruction):
         self.value = value
 
     def __str__(self) -> str:
-        return f"DBG_{self.debug_type.upper()} {self.value}"
+        return f'DBG_{self.debug_type.upper()} {self.value}'
 
 
 # === VM Specific ===
@@ -414,7 +414,7 @@ class LowLevelILSyscall(LowLevelILInstruction):
         self.arg_count = arg_count
 
     def __str__(self) -> str:
-        return f"SYSCALL({self.catalog}, 0x{self.cmd:02x}, {self.arg_count})"
+        return f'SYSCALL({self.catalog}, 0x{self.cmd:02x}, {self.arg_count})'
 
 
 # === Container Classes ===
@@ -461,12 +461,12 @@ class LowLevelILBasicBlock:
         return None
 
     def __str__(self) -> str:
-        result = f"block_{self.index} @ {hex(self.start)}: [sp={self.sp_in}]\n"
+        result = f'block_{self.index} @ {hex(self.start)}: [sp={self.sp_in}]\n'
         for i, instr in enumerate(self.instructions):
-            result += f"  {instr}\n"
+            result += f'  {instr}\n'
         if self.outgoing_edges:
-            targets = [f"block_{b.index}" for b in self.outgoing_edges]
-            result += f"  -> {', '.join(targets)}\n"
+            targets = [f'block_{b.index}' for b in self.outgoing_edges]
+            result += f'  -> {', '.join(targets)}\n'
         return result
 
 
@@ -519,7 +519,7 @@ class LowLevelILFunction:
                     block.add_outgoing_edge(self.basic_blocks[next_idx])
 
     def __str__(self) -> str:
-        result = f"; ---------- {self.name} ----------\n"
+        result = f'; ---------- {self.name} ----------\n'
         for block in self.basic_blocks:
             result += str(block)
         return result

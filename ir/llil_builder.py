@@ -51,7 +51,7 @@ class LowLevelILBuilder:
     def add_instruction(self, instr: LowLevelILInstruction):
         '''Add instruction to current block and update stack pointer tracking'''
         if self.current_block is None:
-            raise RuntimeError("No current basic block set")
+            raise RuntimeError('No current basic block set')
         self.current_block.add_instruction(instr)
 
         # Update stack pointer based on instruction type
@@ -71,7 +71,7 @@ class LowLevelILBuilder:
         elif isinstance(value, str):
             return self.const_str(value)
         else:
-            raise TypeError(f"Cannot convert {type(value)} to expression")
+            raise TypeError(f'Cannot convert {type(value)} to expression')
 
     def push(self, value: Union[LowLevelILInstruction, int, float, str], size: int = 4) -> LowLevelILInstruction:
         '''Push value onto virtual stack and emit instructions
@@ -173,7 +173,7 @@ class LowLevelILBuilder:
             lhs = self._to_expr(lhs)
             rhs = self._to_expr(rhs)
         else:
-            raise ValueError("Binary operation requires both operands or neither (lhs and rhs must both be None or both be provided)")
+            raise ValueError('Binary operation requires both operands or neither (lhs and rhs must both be None or both be provided)')
 
         # Create operation with operands
         op = op_class(lhs, rhs, size)
@@ -242,7 +242,7 @@ class LowLevelILBuilder:
         if isinstance(target, str):
             target_block = self.get_block_by_label(target)
             if target_block is None:
-                raise ValueError(f"Undefined label: {target}")
+                raise ValueError(f'Undefined label: {target}')
             target = target_block
         self.add_instruction(LowLevelILJmp(target))
 
@@ -251,7 +251,7 @@ class LowLevelILBuilder:
         if isinstance(target, str):
             target_block = self.get_block_by_label(target)
             if target_block is None:
-                raise ValueError(f"Undefined label: {target}")
+                raise ValueError(f'Undefined label: {target}')
             target = target_block
         self.add_instruction(LowLevelILBranch(condition, target))
 
@@ -277,13 +277,13 @@ class LowLevelILBuilder:
     def label(self, name: str):
         '''Label - marks current block with this label name'''
         if self.current_block is None:
-            raise RuntimeError("No current block to label")
+            raise RuntimeError('No current block to label')
         self.mark_label(name, self.current_block)
         self.add_instruction(LowLevelILLabelInstr(name))
 
     def debug_line(self, line_no: int):
         '''Debug line number'''
-        self.add_instruction(LowLevelILDebug("line", line_no))
+        self.add_instruction(LowLevelILDebug('line', line_no))
 
     def syscall(self, catalog: int, cmd: int, arg_count: int):
         '''System call'''
@@ -337,25 +337,25 @@ class LLILFormatter:
             # Map operation types to their expression strings
             # Using the operation type instead of string matching
             op_expr_map = {
-                LowLevelILOperation.LLIL_ADD: "lhs + rhs",
-                LowLevelILOperation.LLIL_SUB: "lhs - rhs",
-                LowLevelILOperation.LLIL_MUL: "lhs * rhs",
-                LowLevelILOperation.LLIL_DIV: "lhs / rhs",
-                LowLevelILOperation.LLIL_EQ: "(lhs == rhs) ? 1 : 0",
-                LowLevelILOperation.LLIL_NE: "(lhs != rhs) ? 1 : 0",
-                LowLevelILOperation.LLIL_LT: "(lhs < rhs) ? 1 : 0",
-                LowLevelILOperation.LLIL_LE: "(lhs <= rhs) ? 1 : 0",
-                LowLevelILOperation.LLIL_GT: "(lhs > rhs) ? 1 : 0",
-                LowLevelILOperation.LLIL_GE: "(lhs >= rhs) ? 1 : 0",
+                LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
+                LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
+                LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
+                LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
+                LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
+                LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
             }
 
             expr = op_expr_map[instr.operation]
 
             return [
-                f"; {op_name}()",
-                "rhs = STACK[--sp]",
-                "lhs = STACK[--sp]",
-                f"STACK[sp++] = {expr}"
+                f'; {op_name}()',
+                'rhs = STACK[--sp]',
+                'lhs = STACK[--sp]',
+                f'STACK[sp++] = {expr}'
             ]
 
         # For non-binary operations, return single line
@@ -378,7 +378,7 @@ class LLILFormatter:
         if (isinstance(instr, LowLevelILStackStore) and instr.offset == 0 and
             isinstance(next_instr, LowLevelILSpAdd) and next_instr.delta == 1):
             return PatternMatch(
-                lines=[f"STACK[sp++] = {instr.value}"],
+                lines=[f'STACK[sp++] = {instr.value}'],
                 skip_count=2
             )
 
@@ -401,19 +401,19 @@ class LLILFormatter:
         if (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
             isinstance(next_instr, LowLevelILStackLoad) and next_instr.offset == 0):
             return PatternMatch(
-                lines=["STACK[--sp]"],
+                lines=['STACK[--sp]'],
                 skip_count=2
             )
 
         return None
 
     @staticmethod
-    def format_instruction_sequence(instructions: List[LowLevelILInstruction], indent: str = "  ") -> list[str]:
+    def format_instruction_sequence(instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
         '''Format sequence with pattern recognition - returns list of lines
 
         Args:
             instructions: List of instructions to format
-            indent: Indentation string to prepend to each line (default: "  ")
+            indent: Indentation string to prepend to each line (default: '  ')
 
         Returns:
             List of formatted lines with indentation
@@ -446,7 +446,7 @@ class LLILFormatter:
                 result.extend(LLILFormatter.indent_lines(expanded, indent))
             else:
                 # Single line instruction
-                result.append(f"{indent}{expanded[0]}")
+                result.append(f'{indent}{expanded[0]}')
             i += 1
 
         return result
@@ -455,14 +455,14 @@ class LLILFormatter:
     def format_llil_function(func: LowLevelILFunction) -> list[str]:
         '''Format entire LLIL function with beautiful output - returns list of lines'''
         result = [
-            f"; ---------- {func.name} ----------",
+            f'; ---------- {func.name} ----------',
         ]
 
         for block in func.basic_blocks:
             # Block header: {block_N}  label_name: [sp = 0]
 
             block_info = [
-                f"block_{block.index}",
+                f'block_{block.index}',
             ]
 
             if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
@@ -472,13 +472,13 @@ class LLILFormatter:
             else:
                 instructions_to_format = block.instructions
 
-            block_info.append(f"[sp = {block.sp_in}]")
+            block_info.append(f'[sp = {block.sp_in}]')
 
-            result.append(", ".join(block_info))
+            result.append(', '.join(block_info))
 
             # Format instructions - now returns list
             indent = '  '
             result.extend(LLILFormatter.format_instruction_sequence(instructions_to_format, indent))
-            result.append("")
+            result.append('')
 
         return result
