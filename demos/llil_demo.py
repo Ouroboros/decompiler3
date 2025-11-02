@@ -12,28 +12,95 @@ from ir.llil_builder import LLILFormatter
 from falcom import FalcomVMBuilder
 
 
-def create_real_falcom_function():
-    """Create LLIL based on real Falcom bytecode"""
+def create_AV_04_0017():
+    """
+    AV_04_0017 - Strict 1:1 translation from real game bytecode
+    Source: m4000.py from Kuro no Kiseki
+
+    Original bytecode:
+    # id: 0x0000 offset: 0x243C5
+    @scena.Code('AV_04_0017')
+    def AV_04_0017():
+        DEBUG_SET_LINENO(2519)
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_243E3')
+        PUSH_INT(0)
+        PUSH_STR('AV_04_0017')
+        CALL(map_event_box_set_enable)
+
+        label('loc_243E3')
+        DEBUG_SET_LINENO(2520)
+        PUSH_CURRENT_FUNC_ID()
+        PUSH_RET_ADDR('loc_243FB')
+        PUSH_INT(427)
+        CALL(avoice_play)
+
+        label('loc_243FB')
+        DEBUG_SET_LINENO(2521)
+        PUSH(0x00000000)
+        SET_REG(0)
+        RETURN()
+    """
 
     function = LowLevelILFunction("AV_04_0017", 0x243C5)
-    block = LowLevelILBasicBlock(0x243C5)
-    block.vsp_in = 0
-    function.add_basic_block(block)
+
+    # Create all blocks upfront
+    entry_block = LowLevelILBasicBlock(0x243C5, 0)
+    loc_243E3 = LowLevelILBasicBlock(0x243E3, 1)
+    loc_243FB = LowLevelILBasicBlock(0x243FB, 2)
+
+    function.add_basic_block(entry_block)
+    function.add_basic_block(loc_243E3)
+    function.add_basic_block(loc_243FB)
 
     builder = FalcomVMBuilder(function)
-    builder.set_current_block(block)
 
-    # Real Falcom pattern
+    # === BLOCK 0: Entry - map_event_box_set_enable call ===
+    builder.set_current_block(entry_block)
     builder.label('AV_04_0017')
+
+    # DEBUG_SET_LINENO(2519)
     builder.debug_line(2519)
-    builder.falcom_call_simple('map_event_box_set_enable', [0, 'AV_04_0017'], 'loc_243E3')
-
-    builder.debug_line(2520)
-    builder.falcom_call_simple('avoice_play', [427], 'loc_243FB')
-
-    builder.debug_line(2521)
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_243E3')
+    builder.push_ret_addr('loc_243E3')
+    # PUSH_INT(0)
     builder.push_int(0)
+    # PUSH_STR('AV_04_0017')
+    builder.push_str('AV_04_0017')
+    # CALL(map_event_box_set_enable)
+    builder.call('map_event_box_set_enable')
+    # Falls through to BLOCK 1
+
+    # === BLOCK 1: loc_243E3 - avoice_play call ===
+    builder.set_current_block(loc_243E3)
+    builder.label('loc_243E3')
+
+    # DEBUG_SET_LINENO(2520)
+    builder.debug_line(2520)
+    # PUSH_CURRENT_FUNC_ID()
+    builder.push_func_id()
+    # PUSH_RET_ADDR('loc_243FB')
+    builder.push_ret_addr('loc_243FB')
+    # PUSH_INT(427)
+    builder.push_int(427)
+    # CALL(avoice_play)
+    builder.call('avoice_play')
+    # Falls through to BLOCK 2
+
+    # === BLOCK 2: loc_243FB - Return ===
+    builder.set_current_block(loc_243FB)
+    builder.label('loc_243FB')
+
+    # DEBUG_SET_LINENO(2521)
+    builder.debug_line(2521)
+    # PUSH(0x00000000)
+    builder.push_int(0)
+    # SET_REG(0)
     builder.set_reg(0)
+    # RETURN()
+    # Terminator, no successors
     builder.ret()
 
     return function
@@ -249,6 +316,7 @@ def create_dof_on_example():
 def main():
     print("🔧 Final LLIL Demo - Falcom Stack VM")
     print("=" * 50)
+    print("Source: m4000.py from Kuro no Kiseki")
 
     print("\n📋 Features:")
     print("  🔹 Optimized stack syntax: S[vsp++], S[--vsp]")
@@ -257,26 +325,29 @@ def main():
     print("  🔹 Pattern recognition")
     print("  🔹 Beautiful formatting")
 
-    # Test 1: Real Falcom function
-    print("\n🧪 Test 1: Real Falcom Function")
-    print("-" * 30)
+    # Test 1: AV_04_0017 - Simple linear function
+    print("\n🧪 Test 1: AV_04_0017 - Simple Linear Function")
+    print("-" * 60)
+    print("3 blocks, no branching, 2 function calls")
 
-    func1 = create_real_falcom_function()
+    func1 = create_AV_04_0017()
     print("\n".join(LLILFormatter.format_function(func1)))
 
-    # Test 2: Real Falcom function (DOF_ON)
-    print("🧪 Test 2: Real Game Function - DOF_ON")
-    print("-" * 30)
+    # Test 2: DOF_ON - Complex control flow
+    print("\n🧪 Test 2: DOF_ON - Complex Control Flow")
+    print("-" * 60)
+    print("7 blocks, conditional branching, merge points")
 
     func2 = create_dof_on_example()
     print("\n".join(LLILFormatter.format_function(func2)))
 
-    print("✅ LLIL Demo completed successfully!")
+    print("\n✅ LLIL Demo completed successfully!")
     print("\nKey improvements:")
     print("  ✅ 4x more concise than verbose IR")
     print("  ✅ Direct VM semantics mapping")
     print("  ✅ Clean, readable output")
     print("  ✅ Proper func_id naming")
+    print("  ✅ Label names in control flow")
 
 
 if __name__ == "__main__":
