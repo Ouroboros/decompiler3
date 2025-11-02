@@ -157,22 +157,22 @@ class LLILFormatter:
         while i < len(instructions):
             instr = instructions[i]
 
-            # Pattern: S[vsp] = value; vsp++ → S[vsp++] = value
+            # Pattern: STACK[vsp] = value; vsp++ → STACK[vsp++] = value
             if (isinstance(instr, LowLevelILStackStore) and instr.offset == 0 and
                 i + 1 < len(instructions) and
                 isinstance(instructions[i + 1], LowLevelILVspAdd) and
                 instructions[i + 1].delta == 1):
 
-                result.append(f"  S[vsp++] = {instr.value}")
+                result.append(f"  STACK[vsp++] = {instr.value}")
                 i += 2  # Skip both instructions
 
-            # Pattern: vsp--; S[vsp] → S[--vsp]
+            # Pattern: vsp--; STACK[vsp] → STACK[--vsp]
             elif (isinstance(instr, LowLevelILVspAdd) and instr.delta == -1 and
                   i + 1 < len(instructions) and
                   isinstance(instructions[i + 1], LowLevelILStackLoad) and
                   instructions[i + 1].offset == 0):
 
-                result.append("  S[--vsp]")
+                result.append("  STACK[--vsp]")
                 i += 2  # Skip both instructions
 
             else:

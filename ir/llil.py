@@ -85,7 +85,7 @@ class Terminal(ControlFlow):
 # === Atomic Stack Operations ===
 
 class LowLevelILStackStore(LowLevelILInstruction):
-    """S[vsp + offset] = value"""
+    """STACK[vsp + offset] = value"""
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_STORE, size)
@@ -94,15 +94,15 @@ class LowLevelILStackStore(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.offset == 0:
-            return f"S[vsp] = {self.value}"
+            return f"STACK[vsp] = {self.value}"
         elif self.offset > 0:
-            return f"S[vsp + {self.offset}] = {self.value}"
+            return f"STACK[vsp + {self.offset}] = {self.value}"
         else:
-            return f"S[vsp - {-self.offset}] = {self.value}"
+            return f"STACK[vsp - {-self.offset}] = {self.value}"
 
 
 class LowLevelILStackLoad(LowLevelILInstruction):
-    """load S[vsp + offset]"""
+    """load STACK[vsp + offset]"""
 
     def __init__(self, offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_LOAD, size)
@@ -110,11 +110,11 @@ class LowLevelILStackLoad(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.offset == 0:
-            return "S[vsp]"
+            return "STACK[vsp]"
         elif self.offset > 0:
-            return f"S[vsp + {self.offset}]"
+            return f"STACK[vsp + {self.offset}]"
         else:
-            return f"S[vsp - {-self.offset}]"
+            return f"STACK[vsp - {-self.offset}]"
 
 
 class LowLevelILVspAdd(LowLevelILInstruction):
@@ -138,7 +138,7 @@ class LowLevelILVspAdd(LowLevelILInstruction):
 # === Register Operations ===
 
 class LowLevelILRegStore(LowLevelILInstruction):
-    """R[index] = value"""
+    """REG[index] = value"""
 
     def __init__(self, reg_index: int, value: Union['LowLevelILInstruction', int], size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_REG_STORE, size)
@@ -146,18 +146,18 @@ class LowLevelILRegStore(LowLevelILInstruction):
         self.value = value
 
     def __str__(self) -> str:
-        return f"R[{self.reg_index}] = {self.value}"
+        return f"REG[{self.reg_index}] = {self.value}"
 
 
 class LowLevelILRegLoad(LowLevelILInstruction):
-    """load R[index]"""
+    """load REG[index]"""
 
     def __init__(self, reg_index: int, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_REG_LOAD, size)
         self.reg_index = reg_index
 
     def __str__(self) -> str:
-        return f"R[{self.reg_index}]"
+        return f"REG[{self.reg_index}]"
 
 
 # === Arithmetic Operations ===

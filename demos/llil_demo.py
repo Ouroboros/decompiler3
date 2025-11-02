@@ -319,7 +319,8 @@ def main():
     print("Source: m4000.py from Kuro no Kiseki")
 
     print("\n📋 Features:")
-    print("  🔹 Optimized stack syntax: S[vsp++], S[--vsp]")
+    print("  🔹 Optimized stack syntax: STACK[vsp++], STACK[--vsp]")
+    print("  🔹 Full names: STACK, REG (not S, R)")
     print("  🔹 func_id instead of CFID")
     print("  🔹 Layered architecture")
     print("  🔹 Pattern recognition")
