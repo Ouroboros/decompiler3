@@ -13,14 +13,14 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def __init__(self, function):
         super().__init__(function)
-        self._sp_before_call = None  # Track sp before call for automatic cleanup
+        self.sp_before_call = None  # Track sp before call for automatic cleanup
 
     # === Falcom Specific Constants ===
 
     def push_func_id(self):
         """Push current function ID - marks the start of call setup"""
         # Save sp before we start pushing for the call
-        self._sp_before_call = self._current_sp
+        self.sp_before_call = self.current_sp
         self.stack_push(FalcomConstants.current_func_id())
 
     def push_ret_addr(self, label: str):
@@ -31,9 +31,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
         """Falcom VM call - automatically cleans up stack (callee cleanup convention)"""
         super().call(target)
         # Falcom VM: callee cleans up all arguments, ret_addr, and func_id
-        if self._sp_before_call is not None:
-            self._current_sp = self._sp_before_call
-            self._sp_before_call = None
+        if self.sp_before_call is not None:
+            self.current_sp = self.sp_before_call
+            self.sp_before_call = None
 
     # === Falcom Call Patterns ===
 

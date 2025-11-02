@@ -18,9 +18,9 @@ class LowLevelILBuilder:
     def __init__(self, function: LowLevelILFunction):
         self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
-        self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label name -> block
-        self._current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
-        self._vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
+        self.label_map: dict[str, LowLevelILBasicBlock] = {}  # label name -> block
+        self.current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
+        self.vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
 
     def set_current_block(self, block: LowLevelILBasicBlock, sp: Optional[int] = None):
         """Set the current basic block for instruction insertion
@@ -31,22 +31,22 @@ class LowLevelILBuilder:
         """
         # Save previous block's sp_out if we have a current block
         if self.current_block is not None:
-            self.current_block.sp_out = self._current_sp
+            self.current_block.sp_out = self.current_sp
 
         self.current_block = block
 
         # Set new block's sp_in and current sp
         if sp is not None:
-            self._current_sp = sp
-        block.sp_in = self._current_sp
+            self.current_sp = sp
+        block.sp_in = self.current_sp
 
     def mark_label(self, name: str, block: LowLevelILBasicBlock):
         """Associate a label name with a block"""
-        self._label_map[name] = block
+        self.label_map[name] = block
 
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         """Get block by label name"""
-        return self._label_map.get(label)
+        return self.label_map.get(label)
 
     def add_instruction(self, instr: LowLevelILInstruction):
         """Add instruction to current block and update stack pointer tracking"""
@@ -56,7 +56,7 @@ class LowLevelILBuilder:
 
         # Update stack pointer based on instruction type
         if isinstance(instr, LowLevelILSpAdd):
-            self._current_sp += instr.delta
+            self.current_sp += instr.delta
 
     # === Virtual Stack Management ===
 
@@ -81,7 +81,7 @@ class LowLevelILBuilder:
         expr = self._to_expr(value)
         self.add_instruction(LowLevelILStackStore(expr, 0, size))
         self.add_instruction(LowLevelILSpAdd(1))
-        self._vstack.append(expr)
+        self.vstack.append(expr)
         return expr
 
     def pop(self, size: int = 4) -> LowLevelILInstruction:
@@ -91,8 +91,8 @@ class LowLevelILBuilder:
         the caller decides what to do with it)
         """
         # Pop from virtual stack
-        if self._vstack:
-            expr = self._vstack.pop()
+        if self.vstack:
+            expr = self.vstack.pop()
         else:
             # If vstack is empty, return a load expression
             # This will be emitted by the caller if needed
@@ -181,7 +181,7 @@ class LowLevelILBuilder:
 
         # Optionally push result
         if push:
-            self._vstack.append(op)
+            self.vstack.append(op)
 
         return op
 
@@ -266,7 +266,7 @@ class LowLevelILBuilder:
         self.add_instruction(LowLevelILCall(target))
         # In Falcom VM, callee cleans up the stack (including func_id, ret_addr, and arguments)
         if stack_cleanup is not None:
-            self._current_sp -= stack_cleanup
+            self.current_sp -= stack_cleanup
 
     def ret(self):
         """Return"""
