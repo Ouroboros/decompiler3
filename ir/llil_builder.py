@@ -99,7 +99,7 @@ class LowLevelILBuilder:
 
     def label(self, name: str):
         """Label"""
-        self.add_instruction(LowLevelILLabel(name))
+        self.add_instruction(LowLevelILLabelInstr(name))
 
     def debug_line(self, line_no: int):
         """Debug line number"""
@@ -153,7 +153,7 @@ class LLILFormatter:
 
         for block in func.basic_blocks:
             # Block header
-            if block.instructions and isinstance(block.instructions[0], LowLevelILLabel):
+            if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
                 result += f"{block.instructions[0].name}: [vsp={block.vsp_in}]\n"
                 instructions_to_format = block.instructions[1:]
             else:

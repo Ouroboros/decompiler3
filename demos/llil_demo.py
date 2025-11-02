@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 from ir.llil import *
 from ir.llil_builder import LLILFormatter
-from ir.falcom import FalcomVMBuilder
+from falcom import FalcomVMBuilder
 
 
 def create_real_falcom_function():

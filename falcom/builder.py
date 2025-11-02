@@ -3,8 +3,8 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 """
 
 from typing import Union, List
-from ..llil import FalcomConstants, LowLevelILVspAdd, LowLevelILStackLoad, LowLevelILBranch
-from ..llil_builder import LowLevelILBuilder
+from ir.llil import FalcomConstants, LowLevelILVspAdd, LowLevelILStackLoad, LowLevelILBranch
+from ir.llil_builder import LowLevelILBuilder
 
 
 class FalcomVMBuilder(LowLevelILBuilder):

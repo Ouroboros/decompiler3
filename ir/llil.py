@@ -4,9 +4,15 @@ Following the confirmed VM semantics with layered architecture
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, TYPE_CHECKING
 from enum import IntEnum
 import uuid
+
+if TYPE_CHECKING:
+    from typing import NewType
+    InstructionIndex = NewType('InstructionIndex', int)
+else:
+    InstructionIndex = int
 
 
 class LowLevelILOperation(IntEnum):
@@ -64,6 +70,18 @@ class LowLevelILInstruction(ABC):
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {str(self)}>"
+
+
+# === Instruction Categories (following BinaryNinja design) ===
+
+class ControlFlow(LowLevelILInstruction):
+    """Base class for control flow instructions"""
+    pass
+
+
+class Terminal(ControlFlow):
+    """Base class for terminal control flow instructions (goto, ret, etc)"""
+    pass
 
 
 # === Atomic Stack Operations ===
@@ -169,32 +187,66 @@ class LowLevelILEq(LowLevelILBinaryOp):
         return "EQ"
 
 
+# === Label for control flow ===
+
+class LowLevelILLabel:
+    """Label for control flow targets (similar to BinaryNinja's design)"""
+
+    def __init__(self):
+        self.resolved = False
+        self.ref = False
+        self.operand: Optional[InstructionIndex] = None
+
+    def __str__(self) -> str:
+        if self.operand is not None:
+            return f"@{self.operand}"
+        return "@unresolved"
+
+
 # === Control Flow ===
 
-class LowLevelILJmp(LowLevelILInstruction):
-    """Unconditional jump"""
+class LowLevelILGoto(Terminal):
+    """Unconditional jump (following BN naming)"""
 
-    def __init__(self, target: Union[str, int]):
+    def __init__(self, target: Union['LowLevelILLabel', InstructionIndex]):
         super().__init__(LowLevelILOperation.LLIL_JMP)
         self.target = target
 
     def __str__(self) -> str:
-        return f"JMP {self.target}"
+        return f"goto {self.target}"
 
 
-class LowLevelILBranch(LowLevelILInstruction):
+class LowLevelILJmp(LowLevelILGoto):
+    """Alias for LowLevelILGoto for convenience"""
+    pass
+
+
+class LowLevelILIf(ControlFlow):
     """Conditional branch based on stack top"""
 
-    def __init__(self, condition: str, target: Union[str, int]):
+    def __init__(self, condition: str, true_target: Union['LowLevelILLabel', InstructionIndex],
+                 false_target: Union['LowLevelILLabel', InstructionIndex]):
         super().__init__(LowLevelILOperation.LLIL_BRANCH)
         self.condition = condition  # "zero", "nonzero", etc.
-        self.target = target
+        self.true_target = true_target
+        self.false_target = false_target
 
     def __str__(self) -> str:
-        return f"BRANCH_{self.condition.upper()} {self.target}"
+        return f"if {self.condition} then {self.true_target} else {self.false_target}"
 
 
-class LowLevelILCall(LowLevelILInstruction):
+class LowLevelILBranch(LowLevelILIf):
+    """Simplified branch with only one target (falls through otherwise)"""
+
+    def __init__(self, condition: str, target: Union['LowLevelILLabel', InstructionIndex]):
+        # For single target branch, we don't set false_target
+        super().__init__(condition, target, None)  # type: ignore
+
+    def __str__(self) -> str:
+        return f"if {self.condition} goto {self.true_target}"
+
+
+class LowLevelILCall(ControlFlow):
     """Function call"""
 
     def __init__(self, target: Union[str, 'LowLevelILInstruction']):
@@ -202,17 +254,17 @@ class LowLevelILCall(LowLevelILInstruction):
         self.target = target
 
     def __str__(self) -> str:
-        return f"CALL {self.target}"
+        return f"call {self.target}"
 
 
-class LowLevelILRet(LowLevelILInstruction):
-    """Return"""
+class LowLevelILRet(Terminal):
+    """Return from function"""
 
     def __init__(self):
         super().__init__(LowLevelILOperation.LLIL_RET)
 
     def __str__(self) -> str:
-        return "RETURN"
+        return "return"
 
 
 # === Constants and Special ===
@@ -236,8 +288,8 @@ class LowLevelILConst(LowLevelILInstruction):
             return str(self.value)
 
 
-class LowLevelILLabel(LowLevelILInstruction):
-    """Label"""
+class LowLevelILLabelInstr(LowLevelILInstruction):
+    """Label instruction (for marking positions in code)"""
 
     def __init__(self, name: str):
         super().__init__(LowLevelILOperation.LLIL_LABEL)
@@ -277,38 +329,101 @@ class LowLevelILSyscall(LowLevelILInstruction):
 # === Container Classes ===
 
 class LowLevelILBasicBlock:
-    """Basic block containing LLIL instructions"""
+    """Basic block containing LLIL instructions (following BN design)"""
 
-    def __init__(self, start: int):
+    def __init__(self, start: int, index: int = 0):
         self.start = start
         self.end = start
+        self.index = index  # Block index in function
         self.instructions: List[LowLevelILInstruction] = []
         self.vsp_in = 0   # vsp state at block entry
         self.vsp_out = 0  # vsp state at block exit
+
+        # Control flow edges (following BN design)
+        self.outgoing_edges: List['LowLevelILBasicBlock'] = []
+        self.incoming_edges: List['LowLevelILBasicBlock'] = []
 
     def add_instruction(self, instr: LowLevelILInstruction):
         """Add instruction to this block"""
         instr.instr_index = len(self.instructions)
         self.instructions.append(instr)
 
+    def add_outgoing_edge(self, target: 'LowLevelILBasicBlock'):
+        """Add outgoing edge to another block"""
+        if target not in self.outgoing_edges:
+            self.outgoing_edges.append(target)
+        if self not in target.incoming_edges:
+            target.incoming_edges.append(self)
+
+    @property
+    def has_terminal(self) -> bool:
+        """Check if block ends with a terminal instruction"""
+        if not self.instructions:
+            return False
+        return isinstance(self.instructions[-1], Terminal)
+
     def __str__(self) -> str:
-        result = f"{hex(self.start)}: [vsp={self.vsp_in}]\n"
+        result = f"block_{self.index} @ {hex(self.start)}: [vsp={self.vsp_in}]\n"
         for i, instr in enumerate(self.instructions):
             result += f"  {instr}\n"
+        if self.outgoing_edges:
+            targets = [f"block_{b.index}" for b in self.outgoing_edges]
+            result += f"  -> {', '.join(targets)}\n"
         return result
 
 
 class LowLevelILFunction:
-    """Function containing LLIL basic blocks"""
+    """Function containing LLIL basic blocks (following BN design)"""
 
     def __init__(self, name: str, start_addr: int = 0):
         self.name = name
         self.start_addr = start_addr
         self.basic_blocks: List[LowLevelILBasicBlock] = []
+        self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
         """Add basic block to function"""
+        block.index = len(self.basic_blocks)
         self.basic_blocks.append(block)
+        self._block_map[block.start] = block
+
+    def get_basic_block_at(self, addr: int) -> Optional[LowLevelILBasicBlock]:
+        """Get basic block at address"""
+        return self._block_map.get(addr)
+
+    def build_cfg(self):
+        """Build control flow graph from terminal instructions"""
+        for block in self.basic_blocks:
+            if not block.instructions:
+                continue
+
+            last_instr = block.instructions[-1]
+
+            # Handle different terminal types
+            if isinstance(last_instr, LowLevelILGoto):
+                # Unconditional jump
+                if isinstance(last_instr.target, int):
+                    target_block = self.get_basic_block_at(last_instr.target)
+                    if target_block:
+                        block.add_outgoing_edge(target_block)
+
+            elif isinstance(last_instr, LowLevelILIf):
+                # Conditional branch
+                if isinstance(last_instr.true_target, int):
+                    true_block = self.get_basic_block_at(last_instr.true_target)
+                    if true_block:
+                        block.add_outgoing_edge(true_block)
+
+                if last_instr.false_target and isinstance(last_instr.false_target, int):
+                    false_block = self.get_basic_block_at(last_instr.false_target)
+                    if false_block:
+                        block.add_outgoing_edge(false_block)
+
+            elif not isinstance(last_instr, Terminal):
+                # Falls through to next block
+                next_idx = block.index + 1
+                if next_idx < len(self.basic_blocks):
+                    block.add_outgoing_edge(self.basic_blocks[next_idx])
 
     def __str__(self) -> str:
         result = f"; ---------- {self.name} ----------\n"
