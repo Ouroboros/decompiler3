@@ -254,15 +254,17 @@ class LowLevelILRet(Terminal):
 # === Constants and Special ===
 
 class LowLevelILConst(LowLevelILInstruction):
-    """Constant value"""
+    """Constant value (int, float, or string)"""
 
-    def __init__(self, value: Union[int, str], size: int = 4):
+    def __init__(self, value: Union[int, float, str], size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_CONST, size)
         self.value = value
 
     def __str__(self) -> str:
         if isinstance(self.value, str):
             return f'"{self.value}"'
+        elif isinstance(self.value, float):
+            return f"{self.value:.6f}" if self.value != int(self.value) else f"{self.value:.1f}"
         elif isinstance(self.value, int):
             if self.value < 0:
                 return str(self.value)

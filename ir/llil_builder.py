@@ -68,6 +68,10 @@ class LowLevelILBuilder:
         """Integer constant"""
         return LowLevelILConst(value, size)
 
+    def const_float(self, value: float, size: int = 4) -> LowLevelILConst:
+        """Float constant (size: 4 for float, 8 for double)"""
+        return LowLevelILConst(value, size)
+
     def const_str(self, value: str) -> LowLevelILConst:
         """String constant"""
         return LowLevelILConst(value, 0)
