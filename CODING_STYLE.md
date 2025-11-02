@@ -3,6 +3,10 @@
 ## Spacing
 - ALL `=` must have spaces: `param = None`, `func(key = value)`, `x = 10`
 
+## Strings
+- Use single quotes `'` by default: `'string'`
+- Use double quotes `"` only when necessary (e.g., string contains single quote)
+
 ## Naming
 - Use full names: `STACK` not `S`, `REG` not `R`, `sp` not `vsp`
 - Use specific methods: `eq()`, `ne()`, `add()` - NOT generic `compare(op_type: str)`
