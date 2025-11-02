@@ -198,105 +198,62 @@ class LowLevelILBinaryOp(LowLevelILInstruction):
         self.lhs = lhs  # Left operand expression
         self.rhs = rhs  # Right operand expression
 
+    def __str__(self) -> str:
+        # Get operation name from enum (e.g., 'LLIL_ADD' -> 'ADD')
+        op_name = self.operation.name.replace('LLIL_', '')
+        if self.lhs and self.rhs:
+            return f'{op_name}({self.lhs}, {self.rhs})'
+        return op_name
+
 
 class LowLevelILAdd(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_ADD, lhs, rhs, size)
-
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'ADD({self.lhs}, {self.rhs})'
-        return 'ADD'
 
 
 class LowLevelILMul(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_MUL, lhs, rhs, size)
 
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'MUL({self.lhs}, {self.rhs})'
-        return 'MUL'
-
 
 class LowLevelILSub(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_SUB, lhs, rhs, size)
-
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'SUB({self.lhs}, {self.rhs})'
-        return 'SUB'
 
 
 class LowLevelILDiv(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_DIV, lhs, rhs, size)
 
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'DIV({self.lhs}, {self.rhs})'
-        return 'DIV'
-
 
 class LowLevelILEq(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_EQ, lhs, rhs, size)
-
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'EQ({self.lhs}, {self.rhs})'
-        return 'EQ'
 
 
 class LowLevelILNe(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_NE, lhs, rhs, size)
 
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'NE({self.lhs}, {self.rhs})'
-        return 'NE'
-
 
 class LowLevelILLt(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_LT, lhs, rhs, size)
-
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'LT({self.lhs}, {self.rhs})'
-        return 'LT'
 
 
 class LowLevelILLe(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_LE, lhs, rhs, size)
 
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'LE({self.lhs}, {self.rhs})'
-        return 'LE'
-
 
 class LowLevelILGt(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_GT, lhs, rhs, size)
 
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'GT({self.lhs}, {self.rhs})'
-        return 'GT'
-
 
 class LowLevelILGe(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_GE, lhs, rhs, size)
-
-    def __str__(self) -> str:
-        if self.lhs and self.rhs:
-            return f'GE({self.lhs}, {self.rhs})'
-        return 'GE'
 
 
 # === Control Flow ===
