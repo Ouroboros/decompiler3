@@ -164,11 +164,11 @@ class LowLevelILFrameLoad(LowLevelILInstruction):
         # Convert byte offset to word offset for display
         word_offset = self.offset // WORD_SIZE
         if word_offset == 0:
-            return 'STACK[f]'
+            return 'STACK[fp]'
         elif word_offset > 0:
-            return f'STACK[f + {word_offset}]'
+            return f'STACK[fp + {word_offset}]'
         else:
-            return f'STACK[f - {-word_offset}]'
+            return f'STACK[fp - {-word_offset}]'
 
 
 class LowLevelILFrameStore(LowLevelILInstruction):
@@ -189,11 +189,11 @@ class LowLevelILFrameStore(LowLevelILInstruction):
         # Convert byte offset to word offset for display
         word_offset = self.offset // WORD_SIZE
         if word_offset == 0:
-            return f'STACK[f] = {self.value}'
+            return f'STACK[fp] = {self.value}'
         elif word_offset > 0:
-            return f'STACK[f + {word_offset}] = {self.value}'
+            return f'STACK[fp + {word_offset}] = {self.value}'
         else:
-            return f'STACK[f - {-word_offset}] = {self.value}'
+            return f'STACK[fp - {-word_offset}] = {self.value}'
 
 
 class LowLevelILSpAdd(LowLevelILInstruction):
