@@ -305,7 +305,7 @@ def create_dof_on_example():
     # SET_REG(0)
     builder.set_reg(0)
     # POP(8) - pops 8 bytes from stack
-    builder.add_instruction(LowLevelILVspAdd(-2))  # 8 bytes = 2 words
+    builder.add_instruction(LowLevelILSpAdd(-2))  # 8 bytes = 2 words
     # RETURN()
     # Terminator, no successors
     builder.ret()
@@ -319,8 +319,8 @@ def main():
     print("Source: m4000.py from Kuro no Kiseki")
 
     print("\n📋 Features:")
-    print("  🔹 Optimized stack syntax: STACK[vsp++], STACK[--vsp]")
-    print("  🔹 Full names: STACK, REG (not S, R)")
+    print("  🔹 Optimized stack syntax: STACK[sp++], STACK[--sp]")
+    print("  🔹 Full names: STACK, REG, sp (not S, R, vsp)")
     print("  🔹 func_id instead of CFID")
     print("  🔹 Layered architecture")
     print("  🔹 Pattern recognition")

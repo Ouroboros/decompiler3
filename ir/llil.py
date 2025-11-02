@@ -17,9 +17,9 @@ class LowLevelILOperation(IntEnum):
     """Atomic LLIL operations"""
 
     # Stack operations (atomic)
-    LLIL_STACK_STORE = 0        # S[vsp + offset] = value
-    LLIL_STACK_LOAD = 1         # load S[vsp + offset]
-    LLIL_VSP_ADD = 2            # vsp = vsp + delta
+    LLIL_STACK_STORE = 0        # STACK[sp + offset] = value
+    LLIL_STACK_LOAD = 1         # load STACK[sp + offset]
+    LLIL_SP_ADD = 2             # sp = sp + delta
 
     # Register operations
     LLIL_REG_STORE = 10         # R[index] = value
@@ -85,7 +85,7 @@ class Terminal(ControlFlow):
 # === Atomic Stack Operations ===
 
 class LowLevelILStackStore(LowLevelILInstruction):
-    """STACK[vsp + offset] = value"""
+    """STACK[sp + offset] = value"""
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_STORE, size)
@@ -94,15 +94,15 @@ class LowLevelILStackStore(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.offset == 0:
-            return f"STACK[vsp] = {self.value}"
+            return f"STACK[sp] = {self.value}"
         elif self.offset > 0:
-            return f"STACK[vsp + {self.offset}] = {self.value}"
+            return f"STACK[sp + {self.offset}] = {self.value}"
         else:
-            return f"STACK[vsp - {-self.offset}] = {self.value}"
+            return f"STACK[sp - {-self.offset}] = {self.value}"
 
 
 class LowLevelILStackLoad(LowLevelILInstruction):
-    """load STACK[vsp + offset]"""
+    """load STACK[sp + offset]"""
 
     def __init__(self, offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_LOAD, size)
@@ -110,29 +110,33 @@ class LowLevelILStackLoad(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if self.offset == 0:
-            return "STACK[vsp]"
+            return "STACK[sp]"
         elif self.offset > 0:
-            return f"STACK[vsp + {self.offset}]"
+            return f"STACK[sp + {self.offset}]"
         else:
-            return f"STACK[vsp - {-self.offset}]"
+            return f"STACK[sp - {-self.offset}]"
 
 
-class LowLevelILVspAdd(LowLevelILInstruction):
-    """vsp = vsp + delta"""
+class LowLevelILSpAdd(LowLevelILInstruction):
+    """sp = sp + delta"""
 
     def __init__(self, delta: int):
-        super().__init__(LowLevelILOperation.LLIL_VSP_ADD, 0)
+        super().__init__(LowLevelILOperation.LLIL_SP_ADD, 0)
         self.delta = delta
 
     def __str__(self) -> str:
         if self.delta == 1:
-            return "vsp++"
+            return "sp++"
         elif self.delta == -1:
-            return "vsp--"
+            return "sp--"
         elif self.delta > 0:
-            return f"vsp += {self.delta}"
+            return f"sp += {self.delta}"
         else:
-            return f"vsp -= {-self.delta}"
+            return f"sp -= {-self.delta}"
+
+
+# Alias for compatibility
+LowLevelILVspAdd = LowLevelILSpAdd
 
 
 # === Register Operations ===
@@ -334,8 +338,8 @@ class LowLevelILBasicBlock:
         self.end = start
         self.index = index  # Block index in function
         self.instructions: List[LowLevelILInstruction] = []
-        self.vsp_in = 0   # vsp state at block entry
-        self.vsp_out = 0  # vsp state at block exit
+        self.sp_in = 0   # sp state at block entry
+        self.sp_out = 0  # sp state at block exit
 
         # Control flow edges (following BN design)
         self.outgoing_edges: List['LowLevelILBasicBlock'] = []
@@ -368,7 +372,7 @@ class LowLevelILBasicBlock:
         return None
 
     def __str__(self) -> str:
-        result = f"block_{self.index} @ {hex(self.start)}: [vsp={self.vsp_in}]\n"
+        result = f"block_{self.index} @ {hex(self.start)}: [sp={self.sp_in}]\n"
         for i, instr in enumerate(self.instructions):
             result += f"  {instr}\n"
         if self.outgoing_edges:

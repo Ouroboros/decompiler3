@@ -3,7 +3,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 """
 
 from typing import Union, List
-from ir.llil import LowLevelILVspAdd, LowLevelILStackLoad, LowLevelILBranch
+from ir.llil import LowLevelILSpAdd, LowLevelILStackLoad, LowLevelILBranch
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
 
@@ -71,12 +71,12 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def pop_jmp_zero(self, target):
         """POP_JMP_ZERO operation"""
-        self.add_instruction(LowLevelILVspAdd(-1))  # Pop
+        self.add_instruction(LowLevelILSpAdd(-1))  # Pop
         cond = LowLevelILStackLoad(0)  # Get condition
         self.branch_zero(target)
 
     def pop_jmp_not_zero(self, target):
         """POP_JMP_NOT_ZERO operation"""
-        self.add_instruction(LowLevelILVspAdd(-1))  # Pop
+        self.add_instruction(LowLevelILSpAdd(-1))  # Pop
         cond = LowLevelILStackLoad(0)  # Get condition
         self.branch_nonzero(target)

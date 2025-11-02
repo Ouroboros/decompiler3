@@ -35,21 +35,21 @@ class LowLevelILBuilder:
     # === Stack Operations (convenience methods) ===
 
     def stack_push(self, value: Union[LowLevelILInstruction, int, str], size: int = 4):
-        """S[vsp++] = value"""
+        """STACK[sp++] = value"""
         self.add_instruction(LowLevelILStackStore(value, 0, size))
-        self.add_instruction(LowLevelILVspAdd(1))
+        self.add_instruction(LowLevelILSpAdd(1))
 
     def stack_pop(self, size: int = 4) -> LowLevelILStackLoad:
-        """S[--vsp]"""
-        self.add_instruction(LowLevelILVspAdd(-1))
+        """STACK[--sp]"""
+        self.add_instruction(LowLevelILSpAdd(-1))
         return LowLevelILStackLoad(0, size)
 
     def stack_load(self, offset: int, size: int = 4) -> LowLevelILStackLoad:
-        """S[vsp + offset] (no vsp change)"""
+        """STACK[sp + offset] (no sp change)"""
         return LowLevelILStackLoad(offset, size)
 
     def stack_store(self, value: Union[LowLevelILInstruction, int, str], offset: int, size: int = 4):
-        """S[vsp + offset] = value (no vsp change)"""
+        """STACK[sp + offset] = value (no sp change)"""
         self.add_instruction(LowLevelILStackStore(value, offset, size))
 
     # === Register Operations ===
@@ -157,22 +157,22 @@ class LLILFormatter:
         while i < len(instructions):
             instr = instructions[i]
 
-            # Pattern: STACK[vsp] = value; vsp++ → STACK[vsp++] = value
+            # Pattern: STACK[sp] = value; sp++ → STACK[sp++] = value
             if (isinstance(instr, LowLevelILStackStore) and instr.offset == 0 and
                 i + 1 < len(instructions) and
-                isinstance(instructions[i + 1], LowLevelILVspAdd) and
+                isinstance(instructions[i + 1], LowLevelILSpAdd) and
                 instructions[i + 1].delta == 1):
 
-                result.append(f"  STACK[vsp++] = {instr.value}")
+                result.append(f"  STACK[sp++] = {instr.value}")
                 i += 2  # Skip both instructions
 
-            # Pattern: vsp--; STACK[vsp] → STACK[--vsp]
-            elif (isinstance(instr, LowLevelILVspAdd) and instr.delta == -1 and
+            # Pattern: sp--; STACK[sp] → STACK[--sp]
+            elif (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
                   i + 1 < len(instructions) and
                   isinstance(instructions[i + 1], LowLevelILStackLoad) and
                   instructions[i + 1].offset == 0):
 
-                result.append("  STACK[--vsp]")
+                result.append("  STACK[--sp]")
                 i += 2  # Skip both instructions
 
             else:
@@ -191,10 +191,10 @@ class LLILFormatter:
         for block in func.basic_blocks:
             # Block header
             if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
-                result.append(f"{block.instructions[0].name}: [vsp={block.vsp_in}]")
+                result.append(f"{block.instructions[0].name}: [sp={block.sp_in}]")
                 instructions_to_format = block.instructions[1:]
             else:
-                result.append(f"bb_{hex(block.start)}: [vsp={block.vsp_in}]")
+                result.append(f"bb_{hex(block.start)}: [sp={block.sp_in}]")
                 instructions_to_format = block.instructions
 
             # Format instructions - now returns list
