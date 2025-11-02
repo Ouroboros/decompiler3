@@ -453,6 +453,8 @@ class LLILFormatter:
 
     @staticmethod
     def format_llil_function(func: LowLevelILFunction) -> list[str]:
+        assert isinstance(func, LowLevelILFunction)
+
         '''Format entire LLIL function with beautiful output - returns list of lines'''
         result = [
             f'; ---------- {func.name} ----------',
@@ -462,7 +464,7 @@ class LLILFormatter:
             # Block header: {block_N}  label_name: [sp = 0]
 
             block_info = [
-                f'block_{block.index}',
+                f'block_{block.index}(0x{block.start:04X})',
             ]
 
             if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):

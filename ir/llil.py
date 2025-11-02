@@ -112,9 +112,9 @@ class LowLevelILStackLoad(LowLevelILInstruction):
         if self.offset == 0:
             return 'STACK[sp]'
         elif self.offset > 0:
-            return f'STACK[sp + {self.offset}]'
+            return f'STACK[sp + 0x{self.offset:04X}]'
         else:
-            return f'STACK[sp - {-self.offset}]'
+            return f'STACK[sp - 0x{-self.offset:04X}]'
 
 
 class LowLevelILSpAdd(LowLevelILInstruction):

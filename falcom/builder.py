@@ -80,7 +80,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''
-        stack_val = self.stack_pop()
+        # Pop from stack: sp--, then read STACK[sp]
+        self.add_instruction(LowLevelILSpAdd(-1))
+        stack_val = LowLevelILStackLoad(0)
         self.reg_store(reg_index, stack_val)
 
     def get_reg(self, reg_index: int):
