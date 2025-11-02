@@ -533,6 +533,7 @@ class LowLevelILFunction:
         self.start_addr = start_addr
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
+        self.frame_base_sp: Optional[int] = None  # Frame pointer (sp at function entry)
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
         '''Add basic block to function'''

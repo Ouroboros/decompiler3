@@ -44,6 +44,7 @@ class LowLevelILBuilder:
         # Save frame base sp on first block (function entry)
         if self.frame_base_sp is None and sp is not None:
             self.frame_base_sp = sp
+            self.function.frame_base_sp = sp  # Also save to function
 
     def mark_label(self, name: str, block: LowLevelILBasicBlock):
         '''Associate a label name with a block'''
@@ -451,7 +452,11 @@ class LLILFormatter:
             else:
                 instructions_to_format = block.instructions
 
-            block_info.append(f'[sp = {block.sp_in}]')
+            # Show sp and fp (fp only on first block)
+            if block.index == 0 and func.frame_base_sp is not None:
+                block_info.append(f'[sp = {block.sp_in}, fp = {func.frame_base_sp}]')
+            else:
+                block_info.append(f'[sp = {block.sp_in}]')
 
             result.append(', '.join(block_info))
 
