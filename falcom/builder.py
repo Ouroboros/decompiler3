@@ -44,39 +44,39 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Return label
         self.label(ret_label)
 
-    # === Common VM Operations ===
+    # === VM Operations ===
 
-    def vm_push_int(self, value: int):
-        """VM PUSH_INT operation"""
+    def push_int(self, value: int):
+        """PUSH_INT operation"""
         self.stack_push(self.const_int(value))
 
-    def vm_push_str(self, value: str):
-        """VM PUSH_STR operation"""
+    def push_str(self, value: str):
+        """PUSH_STR operation"""
         self.stack_push(self.const_str(value))
 
-    def vm_load_stack(self, offset: int):
-        """VM LOAD_STACK operation"""
+    def load_stack(self, offset: int):
+        """LOAD_STACK operation"""
         stack_val = self.stack_load(offset)
         self.stack_push(stack_val)
 
-    def vm_set_reg(self, reg_index: int):
-        """VM SET_REG operation"""
+    def set_reg(self, reg_index: int):
+        """SET_REG operation"""
         stack_val = self.stack_pop()
         self.reg_store(reg_index, stack_val)
 
-    def vm_get_reg(self, reg_index: int):
-        """VM GET_REG operation"""
+    def get_reg(self, reg_index: int):
+        """GET_REG operation"""
         reg_val = self.reg_load(reg_index)
         self.stack_push(reg_val)
 
-    def vm_pop_jmp_zero(self, target):
-        """VM POP_JMP_ZERO operation"""
+    def pop_jmp_zero(self, target):
+        """POP_JMP_ZERO operation"""
         self.add_instruction(LowLevelILVspAdd(-1))  # Pop
         cond = LowLevelILStackLoad(0)  # Get condition
-        self.branch_zero(target)  # Use parent's branch_zero which handles label lookup
+        self.branch_zero(target)
 
-    def vm_pop_jmp_not_zero(self, target):
-        """VM POP_JMP_NOT_ZERO operation"""
+    def pop_jmp_not_zero(self, target):
+        """POP_JMP_NOT_ZERO operation"""
         self.add_instruction(LowLevelILVspAdd(-1))  # Pop
         cond = LowLevelILStackLoad(0)  # Get condition
-        self.branch_nonzero(target)  # Use parent's branch_nonzero which handles label lookup
+        self.branch_nonzero(target)

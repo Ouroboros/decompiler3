@@ -32,8 +32,8 @@ def create_real_falcom_function():
     builder.falcom_call_simple('avoice_play', [427], 'loc_243FB')
 
     builder.debug_line(2521)
-    builder.vm_push_int(0)
-    builder.vm_set_reg(0)
+    builder.push_int(0)
+    builder.set_reg(0)
     builder.ret()
 
     return function
@@ -69,23 +69,23 @@ def create_conditional_example():
     # Entry: check condition
     builder.set_current_block(entry)
     builder.label('conditional_demo')
-    builder.vm_get_reg(0)
-    builder.vm_pop_jmp_zero(else_block)  # Use block reference directly
+    builder.get_reg(0)
+    builder.pop_jmp_zero(else_block)  # Use block reference directly
 
     # If branch
     builder.set_current_block(if_block)
-    builder.vm_push_int(100)
+    builder.push_int(100)
     builder.jmp(end_block)  # Use block reference directly
 
     # Else branch
     builder.set_current_block(else_block)
     builder.label('else_branch')
-    builder.vm_push_int(200)
+    builder.push_int(200)
 
     # End
     builder.set_current_block(end_block)
     builder.label('end')
-    builder.vm_set_reg(0)
+    builder.set_reg(0)
     builder.ret()
 
     return function
