@@ -310,29 +310,6 @@ class LowLevelILSyscall(LowLevelILInstruction):
         return f"SYSCALL({self.catalog}, 0x{self.cmd:02x}, {self.arg_count})"
 
 
-# === Falcom VM Specific Constants ===
-
-class LowLevelILConstFuncId(LowLevelILInstruction):
-    """Falcom VM function ID constant"""
-
-    def __init__(self):
-        super().__init__(LowLevelILOperation.LLIL_CONST, 4)
-
-    def __str__(self) -> str:
-        return "<func_id>"
-
-
-class LowLevelILConstRetAddr(LowLevelILInstruction):
-    """Falcom VM return address constant"""
-
-    def __init__(self, label: str):
-        super().__init__(LowLevelILOperation.LLIL_CONST, 8)
-        self.label = label
-
-    def __str__(self) -> str:
-        return f"<&{self.label}>"
-
-
 # === Container Classes ===
 
 class LowLevelILBasicBlock:
@@ -432,17 +409,3 @@ class LowLevelILFunction:
         for block in self.basic_blocks:
             result += str(block)
         return result
-
-
-# === Special Constants ===
-
-class FalcomConstants:
-    """Falcom VM specific constants"""
-
-    @staticmethod
-    def current_func_id():
-        return LowLevelILConstFuncId()
-
-    @staticmethod
-    def ret_addr(label: str):
-        return LowLevelILConstRetAddr(label)
