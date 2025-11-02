@@ -150,7 +150,7 @@ class LowLevelILBuilder:
 
     # === Binary Operations ===
 
-    def _binary_op(self, op_class, lhs=None, rhs=None, *, push: bool = True, size: int = 4) -> LowLevelILInstruction:
+    def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, size: int = 4) -> LowLevelILInstruction:
         """Generic binary operation handler
 
         Args:
@@ -185,52 +185,52 @@ class LowLevelILBuilder:
 
         return op
 
-    def add(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def add(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """ADD operation"""
         return self._binary_op(LowLevelILAdd, lhs, rhs, push = push, size = size)
 
-    def sub(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def sub(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """SUB operation"""
         from ir.llil import LowLevelILSub
         return self._binary_op(LowLevelILSub, lhs, rhs, push = push, size = size)
 
-    def mul(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def mul(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """MUL operation"""
         return self._binary_op(LowLevelILMul, lhs, rhs, push = push, size = size)
 
-    def div(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def div(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """DIV operation"""
         from ir.llil import LowLevelILDiv
         return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size)
 
     # === Comparison Operations ===
 
-    def eq(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def eq(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """EQ operation (==)"""
         from ir.llil import LowLevelILEq
         return self._binary_op(LowLevelILEq, lhs, rhs, push = push, size = size)
 
-    def ne(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def ne(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """NE operation (!=)"""
         from ir.llil import LowLevelILNe
         return self._binary_op(LowLevelILNe, lhs, rhs, push = push, size = size)
 
-    def lt(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def lt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """LT operation (<)"""
         from ir.llil import LowLevelILLt
         return self._binary_op(LowLevelILLt, lhs, rhs, push = push, size = size)
 
-    def le(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def le(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """LE operation (<=)"""
         from ir.llil import LowLevelILLe
         return self._binary_op(LowLevelILLe, lhs, rhs, push = push, size = size)
 
-    def gt(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def gt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """GT operation (>)"""
         from ir.llil import LowLevelILGt
         return self._binary_op(LowLevelILGt, lhs, rhs, push = push, size = size)
 
-    def ge(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
+    def ge(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
         """GE operation (>=)"""
         from ir.llil import LowLevelILGe
         return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size)
