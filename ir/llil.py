@@ -292,8 +292,8 @@ class LowLevelILConst(LowLevelILInstruction):
                 # Force hex output
                 return f"0x{self.value:X}"
             else:
-                # Default: decimal for small values, hex for large values
-                return f"0x{self.value:08x}" if self.value > 255 else str(self.value)
+                # Default: decimal (is_hex=False)
+                return str(self.value)
         else:
             return str(self.value)
 
