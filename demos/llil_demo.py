@@ -70,12 +70,12 @@ def create_conditional_example():
     builder.set_current_block(entry)
     builder.label('conditional_demo')
     builder.vm_get_reg(0)
-    builder.vm_pop_jmp_zero('else_branch')
+    builder.vm_pop_jmp_zero(else_block)  # Use block reference directly
 
     # If branch
     builder.set_current_block(if_block)
     builder.vm_push_int(100)
-    builder.jmp('end')
+    builder.jmp(end_block)  # Use block reference directly
 
     # Else branch
     builder.set_current_block(else_block)

@@ -68,14 +68,14 @@ class FalcomVMBuilder(LowLevelILBuilder):
         reg_val = self.reg_load(reg_index)
         self.stack_push(reg_val)
 
-    def vm_pop_jmp_zero(self, target: Union[str, int]):
+    def vm_pop_jmp_zero(self, target):
         """VM POP_JMP_ZERO operation"""
         self.add_instruction(LowLevelILVspAdd(-1))  # Pop
         cond = LowLevelILStackLoad(0)  # Get condition
-        self.add_instruction(LowLevelILBranch("zero", target))
+        self.branch_zero(target)  # Use parent's branch_zero which handles label lookup
 
-    def vm_pop_jmp_not_zero(self, target: Union[str, int]):
+    def vm_pop_jmp_not_zero(self, target):
         """VM POP_JMP_NOT_ZERO operation"""
         self.add_instruction(LowLevelILVspAdd(-1))  # Pop
         cond = LowLevelILStackLoad(0)  # Get condition
-        self.add_instruction(LowLevelILBranch("nonzero", target))
+        self.branch_nonzero(target)  # Use parent's branch_nonzero which handles label lookup

@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from ir.llil import (
     LowLevelILFunction, LowLevelILBasicBlock,
     LowLevelILGoto, LowLevelILIf, LowLevelILRet,
-    LowLevelILLabel, LowLevelILStackStore, LowLevelILConst,
+    LowLevelILStackStore, LowLevelILConst,
     Terminal, ControlFlow
 )
 
@@ -22,9 +22,13 @@ def test_terminal_inheritance():
     print("🧪 Testing Terminal Inheritance")
     print("-" * 50)
 
+    # Create dummy blocks for testing
+    block1 = LowLevelILBasicBlock(0x1000, 0)
+    block2 = LowLevelILBasicBlock(0x2000, 1)
+
     # Create instances
-    goto_instr = LowLevelILGoto(0x1000)
-    if_instr = LowLevelILIf("zero", 0x1000, 0x2000)
+    goto_instr = LowLevelILGoto(block1)
+    if_instr = LowLevelILIf("zero", block1, block2)
     ret_instr = LowLevelILRet()
 
     # Test inheritance
@@ -83,28 +87,31 @@ def create_cfg_example():
 
     func = LowLevelILFunction("cfg_test", 0x1000)
 
-    # Block 0: Entry
+    # Create all blocks first
     block0 = LowLevelILBasicBlock(0x1000, 0)
-    block0.add_instruction(LowLevelILStackStore(LowLevelILConst(42), 0))
-    block0.add_instruction(LowLevelILIf("zero", 0x1010, 0x1020))
+    block1 = LowLevelILBasicBlock(0x1010, 1)
+    block2 = LowLevelILBasicBlock(0x1020, 2)
+    block3 = LowLevelILBasicBlock(0x1030, 3)
+
+    # Add blocks to function
     func.add_basic_block(block0)
+    func.add_basic_block(block1)
+    func.add_basic_block(block2)
+    func.add_basic_block(block3)
+
+    # Block 0: Entry - now with block references
+    block0.add_instruction(LowLevelILStackStore(LowLevelILConst(42), 0))
+    block0.add_instruction(LowLevelILIf("zero", block1, block2))
 
     # Block 1: True branch
-    block1 = LowLevelILBasicBlock(0x1010, 1)
     block1.add_instruction(LowLevelILStackStore(LowLevelILConst(100), 0))
-    block1.add_instruction(LowLevelILGoto(0x1030))
-    func.add_basic_block(block1)
+    block1.add_instruction(LowLevelILGoto(block3))
 
-    # Block 2: False branch
-    block2 = LowLevelILBasicBlock(0x1020, 2)
+    # Block 2: False branch (falls through to block3)
     block2.add_instruction(LowLevelILStackStore(LowLevelILConst(200), 0))
-    # Falls through to block3
-    func.add_basic_block(block2)
 
     # Block 3: Merge point
-    block3 = LowLevelILBasicBlock(0x1030, 3)
     block3.add_instruction(LowLevelILRet())
-    func.add_basic_block(block3)
 
     # Build CFG
     func.build_cfg()
@@ -127,34 +134,15 @@ def create_cfg_example():
     print("\n✅ CFG construction working correctly!\n")
 
 
-def test_label_usage():
-    """Test LowLevelILLabel (BN-style)"""
-
-    print("🧪 Testing LowLevelILLabel")
-    print("-" * 50)
-
-    label1 = LowLevelILLabel()
-    print(f"Unresolved label: {label1}")
-    print(f"Is resolved: {label1.resolved}")
-
-    label1.operand = 42
-    label1.resolved = True
-    print(f"Resolved label: {label1}")
-    print(f"Is resolved: {label1.resolved}")
-
-    print("\n✅ LowLevelILLabel working correctly!\n")
-
-
 def main():
     print("=" * 60)
-    print("🔧 CFG Demo - BinaryNinja-style Control Flow")
+    print("🔧 CFG Demo - Block-based Control Flow")
     print("=" * 60)
     print()
 
     # Run tests
     test_terminal_inheritance()
     test_basic_block_edges()
-    test_label_usage()
     create_cfg_example()
 
     print("=" * 60)
@@ -163,7 +151,7 @@ def main():
     print("\nKey features validated:")
     print("  ✅ Terminal base class inheritance (like BN)")
     print("  ✅ ControlFlow base class for all control flow")
-    print("  ✅ LowLevelILLabel for jump targets")
+    print("  ✅ Direct BasicBlock references (not labels/indexes)")
     print("  ✅ BasicBlock edge tracking (incoming/outgoing)")
     print("  ✅ Automatic CFG construction from terminators")
     print("  ✅ Terminal detection in blocks")

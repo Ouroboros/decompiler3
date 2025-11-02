@@ -9,10 +9,8 @@ from enum import IntEnum
 import uuid
 
 if TYPE_CHECKING:
-    from typing import NewType
-    InstructionIndex = NewType('InstructionIndex', int)
-else:
-    InstructionIndex = int
+    # Forward declaration for type hints
+    pass
 
 
 class LowLevelILOperation(IntEnum):
@@ -187,33 +185,17 @@ class LowLevelILEq(LowLevelILBinaryOp):
         return "EQ"
 
 
-# === Label for control flow ===
-
-class LowLevelILLabel:
-    """Label for control flow targets (similar to BinaryNinja's design)"""
-
-    def __init__(self):
-        self.resolved = False
-        self.ref = False
-        self.operand: Optional[InstructionIndex] = None
-
-    def __str__(self) -> str:
-        if self.operand is not None:
-            return f"@{self.operand}"
-        return "@unresolved"
-
-
 # === Control Flow ===
 
 class LowLevelILGoto(Terminal):
-    """Unconditional jump (following BN naming)"""
+    """Unconditional jump - target must be a BasicBlock"""
 
-    def __init__(self, target: Union['LowLevelILLabel', InstructionIndex]):
+    def __init__(self, target: 'LowLevelILBasicBlock'):
         super().__init__(LowLevelILOperation.LLIL_JMP)
         self.target = target
 
     def __str__(self) -> str:
-        return f"goto {self.target}"
+        return f"goto block_{self.target.index}"
 
 
 class LowLevelILJmp(LowLevelILGoto):
@@ -222,28 +204,30 @@ class LowLevelILJmp(LowLevelILGoto):
 
 
 class LowLevelILIf(ControlFlow):
-    """Conditional branch based on stack top"""
+    """Conditional branch - targets must be BasicBlocks"""
 
-    def __init__(self, condition: str, true_target: Union['LowLevelILLabel', InstructionIndex],
-                 false_target: Union['LowLevelILLabel', InstructionIndex]):
+    def __init__(self, condition: str, true_target: 'LowLevelILBasicBlock',
+                 false_target: Optional['LowLevelILBasicBlock'] = None):
         super().__init__(LowLevelILOperation.LLIL_BRANCH)
         self.condition = condition  # "zero", "nonzero", etc.
         self.true_target = true_target
         self.false_target = false_target
 
     def __str__(self) -> str:
-        return f"if {self.condition} then {self.true_target} else {self.false_target}"
+        if self.false_target:
+            return f"if {self.condition} goto block_{self.true_target.index} else block_{self.false_target.index}"
+        else:
+            return f"if {self.condition} goto block_{self.true_target.index}"
 
 
 class LowLevelILBranch(LowLevelILIf):
     """Simplified branch with only one target (falls through otherwise)"""
 
-    def __init__(self, condition: str, target: Union['LowLevelILLabel', InstructionIndex]):
-        # For single target branch, we don't set false_target
-        super().__init__(condition, target, None)  # type: ignore
+    def __init__(self, condition: str, target: 'LowLevelILBasicBlock'):
+        super().__init__(condition, target, None)
 
     def __str__(self) -> str:
-        return f"if {self.condition} goto {self.true_target}"
+        return f"if {self.condition} goto block_{self.true_target.index}"
 
 
 class LowLevelILCall(ControlFlow):
@@ -335,7 +319,7 @@ class LowLevelILConstFuncId(LowLevelILInstruction):
         super().__init__(LowLevelILOperation.LLIL_CONST, 4)
 
     def __str__(self) -> str:
-        return "func_id"
+        return "<func_id>"
 
 
 class LowLevelILConstRetAddr(LowLevelILInstruction):
@@ -346,7 +330,7 @@ class LowLevelILConstRetAddr(LowLevelILInstruction):
         self.label = label
 
     def __str__(self) -> str:
-        return f"&{self.label}"
+        return f"<&{self.label}>"
 
 
 # === Container Classes ===
@@ -415,32 +399,27 @@ class LowLevelILFunction:
         return self._block_map.get(addr)
 
     def build_cfg(self):
-        """Build control flow graph from terminal instructions"""
+        """Build control flow graph from terminal instructions
+
+        Note: With block-based targets, edges are created when instructions
+        are added. This method handles fall-through edges for non-terminal blocks.
+        """
         for block in self.basic_blocks:
             if not block.instructions:
                 continue
 
             last_instr = block.instructions[-1]
 
-            # Handle different terminal types
+            # Terminal instructions already have their edges set via block references
             if isinstance(last_instr, LowLevelILGoto):
-                # Unconditional jump
-                if isinstance(last_instr.target, int):
-                    target_block = self.get_basic_block_at(last_instr.target)
-                    if target_block:
-                        block.add_outgoing_edge(target_block)
+                # Edge already created: block -> target
+                block.add_outgoing_edge(last_instr.target)
 
             elif isinstance(last_instr, LowLevelILIf):
-                # Conditional branch
-                if isinstance(last_instr.true_target, int):
-                    true_block = self.get_basic_block_at(last_instr.true_target)
-                    if true_block:
-                        block.add_outgoing_edge(true_block)
-
-                if last_instr.false_target and isinstance(last_instr.false_target, int):
-                    false_block = self.get_basic_block_at(last_instr.false_target)
-                    if false_block:
-                        block.add_outgoing_edge(false_block)
+                # Edges already created via block references
+                block.add_outgoing_edge(last_instr.true_target)
+                if last_instr.false_target:
+                    block.add_outgoing_edge(last_instr.false_target)
 
             elif not isinstance(last_instr, Terminal):
                 # Falls through to next block

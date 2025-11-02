@@ -12,10 +12,19 @@ class LowLevelILBuilder:
     def __init__(self, function: LowLevelILFunction):
         self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
+        self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label name -> block
 
     def set_current_block(self, block: LowLevelILBasicBlock):
         """Set the current basic block for instruction insertion"""
         self.current_block = block
+
+    def mark_label(self, name: str, block: LowLevelILBasicBlock):
+        """Associate a label name with a block"""
+        self._label_map[name] = block
+
+    def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
+        """Get block by label name"""
+        return self._label_map.get(label)
 
     def add_instruction(self, instr: LowLevelILInstruction):
         """Add instruction to current block"""
@@ -75,16 +84,31 @@ class LowLevelILBuilder:
 
     # === Control Flow ===
 
-    def jmp(self, target: Union[str, int]):
-        """Unconditional jump"""
+    def jmp(self, target: Union[str, LowLevelILBasicBlock]):
+        """Unconditional jump - target can be label or block"""
+        if isinstance(target, str):
+            target_block = self.get_block_by_label(target)
+            if target_block is None:
+                raise ValueError(f"Undefined label: {target}")
+            target = target_block
         self.add_instruction(LowLevelILJmp(target))
 
-    def branch_zero(self, target: Union[str, int]):
-        """Branch if stack top is zero"""
+    def branch_zero(self, target: Union[str, LowLevelILBasicBlock]):
+        """Branch if stack top is zero - target can be label or block"""
+        if isinstance(target, str):
+            target_block = self.get_block_by_label(target)
+            if target_block is None:
+                raise ValueError(f"Undefined label: {target}")
+            target = target_block
         self.add_instruction(LowLevelILBranch("zero", target))
 
-    def branch_nonzero(self, target: Union[str, int]):
-        """Branch if stack top is nonzero"""
+    def branch_nonzero(self, target: Union[str, LowLevelILBasicBlock]):
+        """Branch if stack top is nonzero - target can be label or block"""
+        if isinstance(target, str):
+            target_block = self.get_block_by_label(target)
+            if target_block is None:
+                raise ValueError(f"Undefined label: {target}")
+            target = target_block
         self.add_instruction(LowLevelILBranch("nonzero", target))
 
     def call(self, target: Union[str, LowLevelILInstruction]):
@@ -98,7 +122,10 @@ class LowLevelILBuilder:
     # === Special ===
 
     def label(self, name: str):
-        """Label"""
+        """Label - marks current block with this label name"""
+        if self.current_block is None:
+            raise RuntimeError("No current block to label")
+        self.mark_label(name, self.current_block)
         self.add_instruction(LowLevelILLabelInstr(name))
 
     def debug_line(self, line_no: int):
