@@ -89,13 +89,16 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(reg_val)
 
     def pop_jmp_zero(self, target):
-        '''POP_JMP_ZERO operation'''
+        '''POP_JMP_ZERO operation - branch if popped value is zero'''
         # Pop from stack using StackPop expression
         cond = self.pop()
-        # Branch if condition == 0 (need to create comparison)
+        # Create EQ(cond, 0) without adding as instruction
+        # This is just used as the branch condition expression
+        from ir.llil import LowLevelILEq, LowLevelILBranch
         zero = self.const_int(0)
-        is_zero = self.eq(cond, zero, push = False)
-        self.branch_if(is_zero, target)
+        is_zero = LowLevelILEq(cond, zero)
+        # Branch if is_zero is true
+        self.add_instruction(LowLevelILBranch(is_zero, target))
 
     def pop_jmp_not_zero(self, target):
         '''POP_JMP_NOT_ZERO operation'''
