@@ -286,13 +286,15 @@ class LowLevelILConst(LowLevelILInstruction):
         elif isinstance(self.value, float):
             return f"{self.value:.6f}" if self.value != int(self.value) else f"{self.value:.1f}"
         elif isinstance(self.value, int):
-            if self.value < 0:
-                return str(self.value)
-            elif self.is_hex:
-                # Force hex output
-                return f"0x{self.value:X}"
+            if self.is_hex:
+                # Hex display
+                if self.value < 0:
+                    # Negative hex: -0xAB
+                    return f"-0x{-self.value:X}"
+                else:
+                    return f"0x{self.value:X}"
             else:
-                # Default: decimal (is_hex=False)
+                # Decimal display
                 return str(self.value)
         else:
             return str(self.value)
