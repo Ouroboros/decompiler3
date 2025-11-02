@@ -290,10 +290,10 @@ def main():
     print('Source: Real game functions from Kuro no Kiseki')
     print()
     print('Features:')
+    print('  ✓ First-class PUSH/POP instructions (no pattern matching)')
     print('  ✓ Virtual stack tracks expressions')
     print('  ✓ Operations hold operands: EQ(lhs, rhs)')
     print('  ✓ Data flow visible for optimization')
-    print('  ✓ Individual methods for each operation type')
 
     # Test 1: AV_04_0017 - Simple linear function
     print('\n🧪 Test 1: AV_04_0017 - Simple Linear Function')
@@ -315,9 +315,10 @@ def main():
 
     print('\n✅ Demo completed successfully!')
     print('\nKey features demonstrated:')
-    print('  ✅ Expression tracking: EQ(STACK[sp - 8], 0)')
-    print('  ✅ Operand visibility: MUL(STACK[sp - 16], 0.100000)')
-    print('  ✅ Data flow analysis ready')
+    print('  ✅ First-class PUSH/POP: STACK[sp++] = value, STACK[--sp]')
+    print('  ✅ No pattern matching fragility')
+    print('  ✅ Expression tracking in operands: EQ(STACK[--sp], STACK[--sp])')
+    print('  ✅ Clean separation: Push/Pop vs Load/Store')
     print('  ✅ Stack state tracking: [sp = N] in each block')
 
 
