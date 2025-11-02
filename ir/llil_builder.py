@@ -182,23 +182,27 @@ class LLILFormatter:
         return result
 
     @staticmethod
-    def format_function(func: LowLevelILFunction) -> list[str]:
-        """Format entire function with beautiful output - returns list of lines"""
+    def format_llil_function(func: LowLevelILFunction) -> list[str]:
+        """Format entire LLIL function with beautiful output - returns list of lines"""
         result = [
             f"; ---------- {func.name} ----------",
         ]
 
         for block in func.basic_blocks:
             # Block header: {block_N}  label_name: [sp=0]
-            block_info = f"block_{block.index}"
+
+            block_info = [
+                f"block_{block.index}",
+            ]
 
             if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
                 label_name = block.instructions[0].name
-                result.append(f"{block_info}  {label_name}: [sp={block.sp_in}]")
+                block_info.append(label_name)
                 instructions_to_format = block.instructions[1:]
-            else:
-                result.append(f"{block_info}: [sp={block.sp_in}]")
-                instructions_to_format = block.instructions
+
+            block_info.append(f"[sp = {block.sp_in}]")
+
+            result.append(", ".join(block_info))
 
             # Format instructions - now returns list
             result.extend(LLILFormatter.format_instruction_sequence(instructions_to_format))

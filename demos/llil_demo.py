@@ -332,7 +332,7 @@ def main():
     print("3 blocks, no branching, 2 function calls")
 
     func1 = create_AV_04_0017()
-    print("\n".join(LLILFormatter.format_function(func1)))
+    print("\n".join(LLILFormatter.format_llil_function(func1)))
 
     # Test 2: DOF_ON - Complex control flow
     print("\n🧪 Test 2: DOF_ON - Complex Control Flow")
@@ -340,7 +340,7 @@ def main():
     print("7 blocks, conditional branching, merge points")
 
     func2 = create_dof_on_example()
-    print("\n".join(LLILFormatter.format_function(func2)))
+    print("\n".join(LLILFormatter.format_llil_function(func2)))
 
     print("\n✅ LLIL Demo completed successfully!")
     print("\nKey improvements:")
