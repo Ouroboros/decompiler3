@@ -202,60 +202,37 @@ class LowLevelILBuilder:
         from ir.llil import LowLevelILDiv
         return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size)
 
-    def compare(self, op_type: str, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """Unified comparison operation
-
-        Args:
-            op_type: Comparison type ("eq", "ne", "lt", "le", "gt", "ge")
-            lhs: Left operand (None = pop from vstack)
-            rhs: Right operand (None = pop from vstack)
-            push: Whether to push result back to vstack
-            size: Operation size
-
-        Returns:
-            The comparison expression
-        """
-        from ir.llil import (LowLevelILEq, LowLevelILNe, LowLevelILLt,
-                            LowLevelILLe, LowLevelILGt, LowLevelILGe)
-
-        op_map = {
-            "eq": LowLevelILEq,
-            "ne": LowLevelILNe,
-            "lt": LowLevelILLt,
-            "le": LowLevelILLe,
-            "gt": LowLevelILGt,
-            "ge": LowLevelILGe,
-        }
-
-        op_class = op_map.get(op_type.lower())
-        if op_class is None:
-            raise ValueError(f"Unknown comparison type: {op_type}")
-
-        return self._binary_op(op_class, lhs, rhs, push = push, size = size)
+    # === Comparison Operations ===
 
     def eq(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """EQ operation"""
-        return self.compare("eq", lhs, rhs, push = push, size = size)
+        """EQ operation (==)"""
+        from ir.llil import LowLevelILEq
+        return self._binary_op(LowLevelILEq, lhs, rhs, push = push, size = size)
 
     def ne(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """NE operation"""
-        return self.compare("ne", lhs, rhs, push = push, size = size)
+        """NE operation (!=)"""
+        from ir.llil import LowLevelILNe
+        return self._binary_op(LowLevelILNe, lhs, rhs, push = push, size = size)
 
     def lt(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """LT operation"""
-        return self.compare("lt", lhs, rhs, push = push, size = size)
+        """LT operation (<)"""
+        from ir.llil import LowLevelILLt
+        return self._binary_op(LowLevelILLt, lhs, rhs, push = push, size = size)
 
     def le(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """LE operation"""
-        return self.compare("le", lhs, rhs, push = push, size = size)
+        """LE operation (<=)"""
+        from ir.llil import LowLevelILLe
+        return self._binary_op(LowLevelILLe, lhs, rhs, push = push, size = size)
 
     def gt(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """GT operation"""
-        return self.compare("gt", lhs, rhs, push = push, size = size)
+        """GT operation (>)"""
+        from ir.llil import LowLevelILGt
+        return self._binary_op(LowLevelILGt, lhs, rhs, push = push, size = size)
 
     def ge(self, lhs=None, rhs=None, *, push: bool = True, size: int = 4):
-        """GE operation"""
-        return self.compare("ge", lhs, rhs, push = push, size = size)
+        """GE operation (>=)"""
+        from ir.llil import LowLevelILGe
+        return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size)
 
     # === Control Flow ===
 

@@ -292,7 +292,7 @@ def main():
     print("  ✓ Virtual stack tracks expressions")
     print("  ✓ Operations hold operands: EQ(lhs, rhs)")
     print("  ✓ Data flow visible for optimization")
-    print("  ✓ Unified compare() method")
+    print("  ✓ Individual methods for each operation type")
 
     # Test 1: AV_04_0017 - Simple linear function
     print("\n🧪 Test 1: AV_04_0017 - Simple Linear Function")
