@@ -20,6 +20,8 @@ class LowLevelILOperation(IntEnum):
     LLIL_STACK_STORE = 0        # STACK[sp + offset] = value
     LLIL_STACK_LOAD = 1         # load STACK[sp + offset]
     LLIL_SP_ADD = 2             # sp = sp + delta
+    LLIL_STACK_PUSH = 3         # STACK[sp] = value; sp++ (statement)
+    LLIL_STACK_POP = 4          # sp--; return STACK[sp] (value expression with side effect)
 
     # Register operations
     LLIL_REG_STORE = 10         # R[index] = value
@@ -133,6 +135,27 @@ class LowLevelILSpAdd(LowLevelILInstruction):
             return f'sp += {self.delta}'
         else:
             return f'sp -= {-self.delta}'
+
+
+class LowLevelILStackPush(LowLevelILInstruction):
+    '''STACK[sp] = value; sp++ (statement, does not return value)'''
+
+    def __init__(self, value: Union['LowLevelILInstruction', int, str], size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_STACK_PUSH, size)
+        self.value = value
+
+    def __str__(self) -> str:
+        return f'STACK[sp++] = {self.value}'
+
+
+class LowLevelILStackPop(LowLevelILInstruction):
+    '''sp--; return STACK[sp] (value expression with side effect)'''
+
+    def __init__(self, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_STACK_POP, size)
+
+    def __str__(self) -> str:
+        return 'STACK[--sp]'
 
 
 # Alias for compatibility

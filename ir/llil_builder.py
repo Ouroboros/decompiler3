@@ -2,14 +2,8 @@
 LLIL v2 Builder - Layered architecture for convenience
 '''
 
-from typing import Union, Optional, List, NamedTuple
+from typing import Union, Optional, List
 from .llil import *
-
-
-class PatternMatch(NamedTuple):
-    '''Result of a pattern matching attempt'''
-    lines: List[str]      # Formatted output lines
-    skip_count: int       # Number of instructions to skip
 
 
 class LowLevelILBuilder:
@@ -74,31 +68,37 @@ class LowLevelILBuilder:
             raise TypeError(f'Cannot convert {type(value)} to expression')
 
     def push(self, value: Union[LowLevelILInstruction, int, float, str], size: int = 4) -> LowLevelILInstruction:
-        '''Push value onto virtual stack and emit instructions
+        '''Push value onto stack using StackPush instruction
 
-        Returns the expression that was pushed
+        Generates LowLevelILStackPush and maintains sp.
+        Returns the expression that was pushed.
         '''
         expr = self._to_expr(value)
-        self.add_instruction(LowLevelILStackStore(expr, 0, size))
-        self.add_instruction(LowLevelILSpAdd(1))
+        # Generate StackPush instruction (semantic: STACK[sp] = value; sp++)
+        push_instr = LowLevelILStackPush(expr, size)
+        self.add_instruction(push_instr)
+        # Maintain sp in builder (sp maintained here, not in add_instruction)
+        self.current_sp += 1
+        # Track on vstack for expression tracking
         self.vstack.append(expr)
         return expr
 
     def pop(self, size: int = 4) -> LowLevelILInstruction:
-        '''Pop value from virtual stack
+        '''Pop value from stack using StackPop expression
 
-        Returns the expression that was popped (does NOT emit instructions here,
-        the caller decides what to do with it)
+        Returns LowLevelILStackPop expression (value expression with side effect).
+        Maintains sp in builder (sp maintained here, not in add_instruction).
         '''
-        # Pop from virtual stack
+        # Pop from virtual stack for tracking
         if self.vstack:
-            expr = self.vstack.pop()
-        else:
-            # If vstack is empty, return a load expression
-            # This will be emitted by the caller if needed
-            expr = LowLevelILStackLoad(0, size)
+            self.vstack.pop()
 
-        return expr
+        # Create StackPop expression (semantic: sp--; return STACK[sp])
+        pop_expr = LowLevelILStackPop(size)
+        # Maintain sp in builder
+        self.current_sp -= 1
+
+        return pop_expr
 
     # === Legacy Stack Operations (kept for compatibility) ===
 
@@ -179,7 +179,7 @@ class LowLevelILBuilder:
         op = op_class(lhs, rhs, size)
         self.add_instruction(op)
 
-        # Optionally push result
+        # Optionally push result (binary operations implicitly push their result)
         if push:
             self.vstack.append(op)
 
@@ -362,80 +362,8 @@ class LLILFormatter:
         return [str(instr)]
 
     @staticmethod
-    def try_format_stack_push_pattern(instructions: List[LowLevelILInstruction], i: int) -> Optional[PatternMatch]:
-        '''Try to match and format: STACK[sp] = value; sp++ → STACK[sp++] = value
-
-        Returns:
-            PatternMatch if pattern matches, None otherwise
-            Lines are returned without indentation
-        '''
-        if i + 1 >= len(instructions):
-            return None
-
-        instr = instructions[i]
-        next_instr = instructions[i + 1]
-
-        if (isinstance(instr, LowLevelILStackStore) and instr.offset == 0 and
-            isinstance(next_instr, LowLevelILSpAdd) and next_instr.delta == 1):
-            return PatternMatch(
-                lines=[f'STACK[sp++] = {instr.value}'],
-                skip_count=2
-            )
-
-        return None
-
-    @staticmethod
-    def try_format_stack_pop_pattern(instructions: List[LowLevelILInstruction], i: int) -> Optional[PatternMatch]:
-        '''Try to match and format: sp--; STACK[sp] → STACK[--sp]
-
-        Returns:
-            PatternMatch if pattern matches, None otherwise
-            Lines are returned without indentation
-        '''
-        if i + 1 >= len(instructions):
-            return None
-
-        instr = instructions[i]
-        next_instr = instructions[i + 1]
-
-        if (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
-            isinstance(next_instr, LowLevelILStackLoad) and next_instr.offset == 0):
-            return PatternMatch(
-                lines=['STACK[--sp]'],
-                skip_count=2
-            )
-
-        return None
-
-    @staticmethod
-    def try_format_reg_store_pop_pattern(instructions: List[LowLevelILInstruction], i: int) -> Optional[PatternMatch]:
-        '''Try to match and format: sp--; REG[x] = STACK[sp] → REG[x] = STACK[--sp]
-
-        Returns:
-            PatternMatch if pattern matches, None otherwise
-            Lines are returned without indentation
-        '''
-        if i + 1 >= len(instructions):
-            return None
-
-        instr = instructions[i]
-        next_instr = instructions[i + 1]
-
-        # Check if it's sp-- followed by REG[x] = STACK[sp]
-        if (isinstance(instr, LowLevelILSpAdd) and instr.delta == -1 and
-            isinstance(next_instr, LowLevelILRegStore) and
-            isinstance(next_instr.value, LowLevelILStackLoad) and
-            next_instr.value.offset == 0):
-            return PatternMatch(
-                lines=[f'REG[{next_instr.reg_index}] = STACK[--sp]'],
-                skip_count=2
-            )
-
-        return None
-
-    @staticmethod
     def format_instruction_sequence(instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
-        '''Format sequence with pattern recognition - returns list of lines
+        '''Format sequence of instructions - returns list of lines
 
         Args:
             instructions: List of instructions to format
@@ -445,33 +373,8 @@ class LLILFormatter:
             List of formatted lines with indentation
         '''
         result = []
-        i = 0
 
-        while i < len(instructions):
-            instr = instructions[i]
-
-            # Try pattern: STACK[sp] = value; sp++ → STACK[sp++] = value
-            pattern = LLILFormatter.try_format_stack_push_pattern(instructions, i)
-            if pattern:
-                result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
-                i += pattern.skip_count
-                continue
-
-            # Try pattern: sp--; STACK[sp] → STACK[--sp]
-            pattern = LLILFormatter.try_format_stack_pop_pattern(instructions, i)
-            if pattern:
-                result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
-                i += pattern.skip_count
-                continue
-
-            # Try pattern: sp--; REG[x] = STACK[sp] → REG[x] = STACK[--sp]
-            pattern = LLILFormatter.try_format_reg_store_pop_pattern(instructions, i)
-            if pattern:
-                result.extend(LLILFormatter.indent_lines(pattern.lines, indent))
-                i += pattern.skip_count
-                continue
-
-            # No pattern matched, format single instruction
+        for instr in instructions:
             # Use expanded format for multi-line instructions
             expanded = LLILFormatter.format_instruction_expanded(instr)
             if len(expanded) > 1:
@@ -480,7 +383,6 @@ class LLILFormatter:
             else:
                 # Single line instruction
                 result.append(f'{indent}{expanded[0]}')
-            i += 1
 
         return result
 
