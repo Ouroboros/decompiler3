@@ -361,7 +361,7 @@ class LowLevelILConst(LowLevelILInstruction):
 
     def __str__(self) -> str:
         if isinstance(self.value, str):
-            return f'"{self.value}"'
+            return f"'{self.value}'"
         elif isinstance(self.value, float):
             return f'{self.value:.6f}' if self.value != int(self.value) else f'{self.value:.1f}'
         elif isinstance(self.value, int):
