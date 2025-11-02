@@ -101,23 +101,14 @@ class LowLevelILBuilder:
             target = target_block
         self.add_instruction(LowLevelILJmp(target))
 
-    def branch_zero(self, target: Union[str, LowLevelILBasicBlock]):
-        """Branch if stack top is zero - target can be label or block"""
+    def branch_if(self, condition: LowLevelILInstruction, target: Union[str, LowLevelILBasicBlock]):
+        """Branch if condition is true - target can be label or block"""
         if isinstance(target, str):
             target_block = self.get_block_by_label(target)
             if target_block is None:
                 raise ValueError(f"Undefined label: {target}")
             target = target_block
-        self.add_instruction(LowLevelILBranch("zero", target))
-
-    def branch_nonzero(self, target: Union[str, LowLevelILBasicBlock]):
-        """Branch if stack top is nonzero - target can be label or block"""
-        if isinstance(target, str):
-            target_block = self.get_block_by_label(target)
-            if target_block is None:
-                raise ValueError(f"Undefined label: {target}")
-            target = target_block
-        self.add_instruction(LowLevelILBranch("nonzero", target))
+        self.add_instruction(LowLevelILBranch(condition, target))
 
     def call(self, target: Union[str, LowLevelILInstruction]):
         """Function call"""

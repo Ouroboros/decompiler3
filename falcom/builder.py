@@ -71,12 +71,14 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def pop_jmp_zero(self, target):
         """POP_JMP_ZERO operation"""
-        self.add_instruction(LowLevelILSpAdd(-1))  # Pop
-        cond = LowLevelILStackLoad(0)  # Get condition
-        self.branch_zero(target)
+        self.add_instruction(LowLevelILSpAdd(-1))  # sp--
+        cond = LowLevelILStackLoad(0)  # STACK[sp] (popped value)
+        # Branch if condition == 0
+        self.branch_if(cond, target)
 
     def pop_jmp_not_zero(self, target):
         """POP_JMP_NOT_ZERO operation"""
-        self.add_instruction(LowLevelILSpAdd(-1))  # Pop
-        cond = LowLevelILStackLoad(0)  # Get condition
-        self.branch_nonzero(target)
+        self.add_instruction(LowLevelILSpAdd(-1))  # sp--
+        cond = LowLevelILStackLoad(0)  # STACK[sp] (popped value)
+        # Branch if condition != 0
+        self.branch_if(cond, target)

@@ -217,12 +217,15 @@ class LowLevelILJmp(LowLevelILGoto):
 
 
 class LowLevelILIf(ControlFlow):
-    """Conditional branch - targets must be BasicBlocks"""
+    """Conditional branch - targets must be BasicBlocks
 
-    def __init__(self, condition: str, true_target: 'LowLevelILBasicBlock',
+    condition: LowLevelILInstruction that evaluates to true/false
+    """
+
+    def __init__(self, condition: 'LowLevelILInstruction', true_target: 'LowLevelILBasicBlock',
                  false_target: Optional['LowLevelILBasicBlock'] = None):
         super().__init__(LowLevelILOperation.LLIL_BRANCH)
-        self.condition = condition  # "zero", "nonzero", etc.
+        self.condition = condition  # An instruction that produces a boolean value
         self.true_target = true_target
         self.false_target = false_target
 
@@ -238,7 +241,7 @@ class LowLevelILIf(ControlFlow):
 class LowLevelILBranch(LowLevelILIf):
     """Simplified branch with only one target (falls through otherwise)"""
 
-    def __init__(self, condition: str, target: 'LowLevelILBasicBlock'):
+    def __init__(self, condition: 'LowLevelILInstruction', target: 'LowLevelILBasicBlock'):
         super().__init__(condition, target, None)
 
     def __str__(self) -> str:
