@@ -391,7 +391,7 @@ class LLILFormatter:
         expr = expr_map[binary_op.operation]
 
         return [
-            f'; {binary_op.operation_name}',
+            f'; expand {binary_op.operation_name}',
             'rhs = STACK[--sp]',
             'lhs = STACK[--sp]',
             f'STACK[sp++] = {expr}'
