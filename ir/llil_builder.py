@@ -332,24 +332,21 @@ class LLILFormatter:
 
         # Binary operations: pop 2, compute, push 1
         if isinstance(instr, LowLevelILBinaryOp):
-            op_name = str(instr)
-
-            # Map operation types to their expression strings
-            # Using the operation type instead of string matching
-            op_expr_map = {
-                LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
-                LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
-                LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
-                LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
-                LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
-                LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
+            # Map operation types to their names and expression strings
+            op_info_map = {
+                LowLevelILOperation.LLIL_ADD: ('ADD', 'lhs + rhs'),
+                LowLevelILOperation.LLIL_SUB: ('SUB', 'lhs - rhs'),
+                LowLevelILOperation.LLIL_MUL: ('MUL', 'lhs * rhs'),
+                LowLevelILOperation.LLIL_DIV: ('DIV', 'lhs / rhs'),
+                LowLevelILOperation.LLIL_EQ: ('EQ', '(lhs == rhs) ? 1 : 0'),
+                LowLevelILOperation.LLIL_NE: ('NE', '(lhs != rhs) ? 1 : 0'),
+                LowLevelILOperation.LLIL_LT: ('LT', '(lhs < rhs) ? 1 : 0'),
+                LowLevelILOperation.LLIL_LE: ('LE', '(lhs <= rhs) ? 1 : 0'),
+                LowLevelILOperation.LLIL_GT: ('GT', '(lhs > rhs) ? 1 : 0'),
+                LowLevelILOperation.LLIL_GE: ('GE', '(lhs >= rhs) ? 1 : 0'),
             }
 
-            expr = op_expr_map[instr.operation]
+            op_name, expr = op_info_map[instr.operation]
 
             return [
                 f'; {op_name}()',
