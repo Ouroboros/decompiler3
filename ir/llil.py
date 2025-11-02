@@ -142,52 +142,42 @@ class LowLevelILStackLoad(LowLevelILInstruction):
 
 
 class LowLevelILFrameLoad(LowLevelILInstruction):
-    '''load STACK[frame + offset]
+    '''load STACK[index] - Absolute stack index load
 
-    Frame-relative load for function parameters and local variables.
-    'frame' refers to the stack pointer at function entry.
+    Used for function parameters and local variables.
+    Stores absolute stack index (not relative to sp).
 
-    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
+    Note: offset is in bytes, converted to word index for display
     '''
 
     def __init__(self, offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_FRAME_LOAD, size)
-        self.offset = offset  # Byte offset relative to frame base
+        self.offset = offset  # Byte offset, but represents absolute stack index
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
-        word_offset = self.offset // WORD_SIZE
-        if word_offset == 0:
-            return 'STACK[frame]'
-        elif word_offset > 0:
-            return f'STACK[frame + {word_offset}]'
-        else:
-            return f'STACK[frame - {-word_offset}]'
+        # offset is absolute stack index in bytes, convert to word index
+        word_index = self.offset // WORD_SIZE
+        return f'STACK[{word_index}]'
 
 
 class LowLevelILFrameStore(LowLevelILInstruction):
-    '''STACK[frame + offset] = value
+    '''STACK[index] = value - Absolute stack index store
 
-    Frame-relative store for function parameters and local variables.
-    'frame' refers to the stack pointer at function entry.
+    Used for function parameters and local variables.
+    Stores absolute stack index (not relative to sp).
 
-    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
+    Note: offset is in bytes, converted to word index for display
     '''
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_FRAME_STORE, size)
         self.value = value
-        self.offset = offset  # Byte offset relative to frame base
+        self.offset = offset  # Byte offset, but represents absolute stack index
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
-        word_offset = self.offset // WORD_SIZE
-        if word_offset == 0:
-            return f'STACK[frame] = {self.value}'
-        elif word_offset > 0:
-            return f'STACK[frame + {word_offset}] = {self.value}'
-        else:
-            return f'STACK[frame - {-word_offset}] = {self.value}'
+        # offset is absolute stack index in bytes, convert to word index
+        word_index = self.offset // WORD_SIZE
+        return f'STACK[{word_index}] = {self.value}'
 
 
 class LowLevelILSpAdd(LowLevelILInstruction):
