@@ -66,6 +66,33 @@ When documenting offsets or sizes, refer to constants:
 # offset is in bytes, converted to word index (offset // WORD_SIZE)
 ```
 
+### 4. Assignment Spacing
+
+**ALWAYS** add a space before and after the assignment operator `=`.
+
+#### ❌ WRONG:
+```python
+x=5
+result=calculate()
+self.value=None
+```
+
+#### ✅ CORRECT:
+```python
+x = 5
+result = calculate()
+self.value = None
+```
+
+This applies to:
+- Variable assignments: `var = value`
+- Default parameters: `def func(arg = 0)`
+- Keyword arguments: `func(key = value)`
+- Annotated assignments: `x: int = 5`
+
+**Exceptions:**
+- No spaces in keyword arguments when calling: `func(key=value)` (follows PEP 8)
+
 ## Enforcement
 
 All code must follow these rules. Any hardcoded magic numbers will be rejected.
@@ -75,3 +102,4 @@ All code must follow these rules. Any hardcoded magic numbers will be rejected.
 - [ ] No hardcoded numeric constants without names
 - [ ] All constants imported from appropriate modules
 - [ ] Comments reference constant names, not values
+- [ ] All assignments have spaces: `x = value` (not `x=value`)
