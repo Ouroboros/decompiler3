@@ -318,14 +318,14 @@ def create_sound_play_se():
     builder = FalcomVMBuilder(function)
 
     # === BLOCK 0: Entry - SYSCALL ===
-    # Function has 8 parameters, so sp starts at 8
+    # Function has 8 parameters, so sp starts at 8 (frame base = 8)
     builder.set_current_block(entry_block, sp = 8)
     builder.label('sound_play_se')
 
-    # LOAD_STACK(-32) x 8 - Load all 8 parameters
-    # -32 = -8 words offset (8 parameters * 4 bytes each)
-    for _ in range(8):
-        builder.load_stack(-32)
+    # LOAD_STACK(-32) x 8 - Load all 8 parameters using frame-relative addressing
+    # Parameters are at frame[0], frame[1], ..., frame[7]
+    for i in range(8):
+        builder.load_frame(i * 4)  # Load parameter i (byte offset = i * 4)
 
     # SYSCALL(6, 0x10, 0x08)
     builder.syscall(6, 0x10, 0x08)

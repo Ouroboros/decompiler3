@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     # Forward declaration for type hints
     pass
 
+# Constants
+WORD_SIZE = 4  # 4 bytes per word
+
 
 class LowLevelILOperation(IntEnum):
     '''Atomic LLIL operations'''
@@ -22,6 +25,10 @@ class LowLevelILOperation(IntEnum):
     LLIL_SP_ADD = 2             # sp = sp + delta
     LLIL_STACK_PUSH = 3         # STACK[sp] = value; sp++ (statement)
     LLIL_STACK_POP = 4          # sp--; return STACK[sp] (value expression with side effect)
+
+    # Frame operations (relative to frame base, for function parameters/locals)
+    LLIL_FRAME_LOAD = 5         # load STACK[frame + offset]
+    LLIL_FRAME_STORE = 6        # STACK[frame + offset] = value
 
     # Register operations
     LLIL_REG_STORE = 10         # R[index] = value
@@ -92,36 +99,95 @@ class Terminal(ControlFlow):
 # === Atomic Stack Operations ===
 
 class LowLevelILStackStore(LowLevelILInstruction):
-    '''STACK[sp + offset] = value'''
+    '''STACK[sp + offset] = value
+
+    Note: offset is in bytes, but displayed as word offset (offset // 4)
+    '''
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_STORE, size)
         self.value = value
-        self.offset = offset
+        self.offset = offset  # Byte offset
 
     def __str__(self) -> str:
-        if self.offset == 0:
+        # Convert byte offset to word offset for display
+        word_offset = self.offset // WORD_SIZE
+        if word_offset == 0:
             return f'STACK[sp] = {self.value}'
-        elif self.offset > 0:
-            return f'STACK[sp + {self.offset}] = {self.value}'
+        elif word_offset > 0:
+            return f'STACK[sp + {word_offset}] = {self.value}'
         else:
-            return f'STACK[sp - {-self.offset}] = {self.value}'
+            return f'STACK[sp - {-word_offset}] = {self.value}'
 
 
 class LowLevelILStackLoad(LowLevelILInstruction):
-    '''load STACK[sp + offset]'''
+    '''load STACK[sp + offset]
+
+    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
+    '''
 
     def __init__(self, offset: int = 0, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_LOAD, size)
-        self.offset = offset
+        self.offset = offset  # Byte offset
 
     def __str__(self) -> str:
-        if self.offset == 0:
+        # Convert byte offset to word offset for display
+        word_offset = self.offset // WORD_SIZE
+        if word_offset == 0:
             return 'STACK[sp]'
-        elif self.offset > 0:
-            return f'STACK[sp + 0x{self.offset:04X}]'
+        elif word_offset > 0:
+            return f'STACK[sp + {word_offset}]'
         else:
-            return f'STACK[sp - 0x{-self.offset:04X}]'
+            return f'STACK[sp - {-word_offset}]'
+
+
+class LowLevelILFrameLoad(LowLevelILInstruction):
+    '''load STACK[frame + offset]
+
+    Frame-relative load for function parameters and local variables.
+    'frame' refers to the stack pointer at function entry.
+
+    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
+    '''
+
+    def __init__(self, offset: int = 0, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_FRAME_LOAD, size)
+        self.offset = offset  # Byte offset relative to frame base
+
+    def __str__(self) -> str:
+        # Convert byte offset to word offset for display
+        word_offset = self.offset // WORD_SIZE
+        if word_offset == 0:
+            return 'STACK[frame]'
+        elif word_offset > 0:
+            return f'STACK[frame + {word_offset}]'
+        else:
+            return f'STACK[frame - {-word_offset}]'
+
+
+class LowLevelILFrameStore(LowLevelILInstruction):
+    '''STACK[frame + offset] = value
+
+    Frame-relative store for function parameters and local variables.
+    'frame' refers to the stack pointer at function entry.
+
+    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
+    '''
+
+    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_FRAME_STORE, size)
+        self.value = value
+        self.offset = offset  # Byte offset relative to frame base
+
+    def __str__(self) -> str:
+        # Convert byte offset to word offset for display
+        word_offset = self.offset // WORD_SIZE
+        if word_offset == 0:
+            return f'STACK[frame] = {self.value}'
+        elif word_offset > 0:
+            return f'STACK[frame + {word_offset}] = {self.value}'
+        else:
+            return f'STACK[frame - {-word_offset}] = {self.value}'
 
 
 class LowLevelILSpAdd(LowLevelILInstruction):

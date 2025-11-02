@@ -74,9 +74,17 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(self.const_str(value))
 
     def load_stack(self, offset: int):
-        '''LOAD_STACK operation'''
+        '''LOAD_STACK operation - loads from sp + offset and pushes result'''
         stack_val = self.stack_load(offset)
         self.stack_push(stack_val)
+
+    def load_frame(self, offset: int):
+        '''LOAD_FRAME operation - loads from frame + offset and pushes result
+
+        Use this for accessing function parameters (frame-relative addressing).
+        '''
+        frame_val = self.frame_load(offset)
+        self.stack_push(frame_val)
 
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''

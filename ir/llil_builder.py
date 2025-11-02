@@ -20,6 +20,7 @@ class LowLevelILBuilder:
         self.current_block: Optional[LowLevelILBasicBlock] = None
         self.label_map: dict[str, LowLevelILBasicBlock] = {}  # label name -> block
         self.current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
+        self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
         self.vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
 
     def set_current_block(self, block: LowLevelILBasicBlock, sp: Optional[int] = None):
@@ -39,6 +40,10 @@ class LowLevelILBuilder:
         if sp is not None:
             self.current_sp = sp
         block.sp_in = self.current_sp
+
+        # Save frame base sp on first block (function entry)
+        if self.frame_base_sp is None and sp is not None:
+            self.frame_base_sp = sp
 
     def mark_label(self, name: str, block: LowLevelILBasicBlock):
         '''Associate a label name with a block'''
@@ -123,6 +128,28 @@ class LowLevelILBuilder:
     def stack_store(self, value: Union[LowLevelILInstruction, int, str], offset: int, size: int = 4):
         '''STACK[sp + offset] = value (no sp change)'''
         self.add_instruction(LowLevelILStackStore(value, offset, size))
+
+    def frame_load(self, offset: int, size: int = 4) -> 'LowLevelILFrameLoad':
+        '''STACK[frame + offset] - Frame-relative load (for function parameters/locals)
+
+        Args:
+            offset: Byte offset relative to frame base (function entry sp)
+            size: Size in bytes (default 4)
+
+        Returns:
+            FrameLoad expression
+        '''
+        return LowLevelILFrameLoad(offset, size)
+
+    def frame_store(self, value: Union[LowLevelILInstruction, int, str], offset: int, size: int = 4):
+        '''STACK[frame + offset] = value - Frame-relative store (for function parameters/locals)
+
+        Args:
+            value: Value to store
+            offset: Byte offset relative to frame base (function entry sp)
+            size: Size in bytes (default 4)
+        '''
+        self.add_instruction(LowLevelILFrameStore(value, offset, size))
 
     # === Register Operations ===
 
