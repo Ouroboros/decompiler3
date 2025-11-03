@@ -339,8 +339,7 @@ class LowLevelILGoto(Terminal):
         self.target = target
 
     def __str__(self) -> str:
-        target_name = self.target.label_name or f'block_{self.target.index}'
-        return f'goto {target_name}'
+        return f'goto block_{self.target.index}'
 
 
 class LowLevelILJmp(LowLevelILGoto):
@@ -365,9 +364,9 @@ class LowLevelILIf(Terminal):
         self.false_target = false_target
 
     def __str__(self) -> str:
-        true_name = self.true_target.label_name or f'block_{self.true_target.index}'
+        true_name = f'block_{self.true_target.index}'
         if self.false_target:
-            false_name = self.false_target.label_name or f'block_{self.false_target.index}'
+            false_name = f'block_{self.false_target.index}'
             return f'if {self.condition} goto {true_name} else {false_name}'
         else:
             return f'if {self.condition} goto {true_name}'
