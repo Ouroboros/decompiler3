@@ -129,8 +129,12 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.sp_before_call = self.current_sp
         self.stack_push(FalcomConstants.current_func_id())
 
-    def push_ret_addr(self, label: str):
-        '''Push return address and remember it for call instruction'''
+    def push_ret_addr(self, target: Union[str, LowLevelILBasicBlock]):
+        '''Push return address and remember it for call instruction
+
+        Args:
+            target: Either a label string or a basic block reference
+        '''
         # Verify push_func_id was called first
         if self.sp_before_call is None:
             raise RuntimeError(
@@ -143,8 +147,15 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Previous return target {self.return_target_label} not consumed. '
                 f'Did you forget to call()?'
             )
-        self.return_target_label = label  # Remember for next call
-        self.stack_push(FalcomConstants.ret_addr(label))
+
+        # Handle both string label and block reference
+        if isinstance(target, str):
+            self.return_target_label = target  # Remember label for next call
+            self.stack_push(FalcomConstants.ret_addr(target))
+        else:
+            # target is a LowLevelILBasicBlock
+            self.return_target_label = target.label  # Remember label for next call
+            self.stack_push(FalcomConstants.ret_addr_block(target))
 
     def call(self, target):
         '''Falcom VM call - automatically cleans up stack (callee cleanup convention)'''
