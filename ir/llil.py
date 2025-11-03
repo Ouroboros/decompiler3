@@ -112,6 +112,19 @@ class LowLevelILStackStore(LowLevelILInstruction):
     def __str__(self) -> str:
         # Convert byte offset to word offset for display
         word_offset = self.offset // WORD_SIZE
+
+        # Special case: if value is StackPop, avoid ambiguous "STACK[sp-1] = STACK[--sp]"
+        # Instead show as two separate operations
+        if isinstance(self.value, LowLevelILStackPop):
+            # Show as: temp = STACK[--sp]; STACK[sp + offset] = temp
+            if word_offset == 0:
+                return f'temp = STACK[--sp]; STACK[sp] = temp'
+            elif word_offset > 0:
+                return f'temp = STACK[--sp]; STACK[sp + {word_offset}] = temp'
+            else:
+                return f'temp = STACK[--sp]; STACK[sp - {-word_offset}] = temp'
+
+        # Normal case
         if word_offset == 0:
             return f'STACK[sp] = {self.value}'
         elif word_offset > 0:
