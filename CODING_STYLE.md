@@ -41,16 +41,30 @@ size = value * WORD_SIZE
 2. **Readability**: `offset // WORD_SIZE` is clearer than `offset // 4`
 3. **Flexibility**: Easy to port to different architectures
 
-### 2. Import Constants at Function/Method Level
+### 2. Import at Module Top Level
 
-For frequently used constants like `WORD_SIZE`, import at the function level to avoid circular dependencies:
+**ALWAYS** import at the top of the file. **NEVER** import inside functions unless absolutely necessary to avoid circular dependencies.
 
+#### ✅ CORRECT:
 ```python
-def some_method(self):
-    from ir.llil import WORD_SIZE
-    
-    word_offset = offset // WORD_SIZE
+from ir.llil import WORD_SIZE, LowLevelILStackStore
+
+class MyBuilder:
+    def pop_to(self, offset: int):
+        val = self.pop()
+        self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
 ```
+
+#### ❌ WRONG:
+```python
+class MyBuilder:
+    def pop_to(self, offset: int):
+        from ir.llil import LowLevelILStackStore, WORD_SIZE  # Don't do this!
+        val = self.pop()
+        self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
+```
+
+**Exception**: Only import inside functions when there is a proven circular dependency issue. Document the reason with a comment.
 
 ### 3. Comment Documentation
 

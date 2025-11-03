@@ -8,7 +8,8 @@ from .llil import (
     LowLevelILBinaryOp, LowLevelILOperation,
     LowLevelILSub, LowLevelILDiv, LowLevelILEq, LowLevelILNe,
     LowLevelILLt, LowLevelILLe, LowLevelILGt, LowLevelILGe,
-    LowLevelILStackPush
+    LowLevelILStackPush, LowLevelILStackStore, LowLevelILStackPop,
+    WORD_SIZE
 )
 
 
@@ -186,8 +187,6 @@ class LowLevelILBuilder:
         Args:
             offset: Byte offset relative to current sp
         '''
-        from ir.llil import WORD_SIZE
-
         # Calculate word offset
         word_offset = offset // WORD_SIZE
         # Calculate absolute stack position
@@ -470,8 +469,6 @@ class LLILFormatter:
         - The actual operation
         - Push operation for result
         '''
-        from ir.llil import LowLevelILStackStore, LowLevelILStackPop, WORD_SIZE
-
         # StackPush containing a binary operation: expand the binary op
         if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr.value)

@@ -2,8 +2,11 @@
 Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
-from typing import Union, List
-from ir.llil import LowLevelILEq, LowLevelILIf, LowLevelILFunction, LowLevelILBasicBlock
+from typing import Union
+from ir.llil import (
+    LowLevelILEq, LowLevelILIf, LowLevelILFunction, LowLevelILBasicBlock,
+    LowLevelILStackStore, WORD_SIZE
+)
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
 
@@ -233,7 +236,6 @@ class FalcomVMBuilder(LowLevelILBuilder):
               to the new sp position. For example, POP_TO(-WORD_SIZE) stores the
               popped value to STACK[sp - 1] where sp is the post-pop value.
         '''
-        from ir.llil import LowLevelILStackStore, WORD_SIZE
         val = self.pop()
         self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
 

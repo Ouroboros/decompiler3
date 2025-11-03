@@ -313,7 +313,6 @@ def create_sound_play_se():
 
     # LOAD_STACK(-32) x 8 - Load all 8 parameters
     # Will auto-detect and use fp-relative: STACK[fp + 0..7]
-    from ir.llil import WORD_SIZE
     for i in range(8):
         builder.load_frame(i * WORD_SIZE)  # Load STACK[fp + i] = STACK[i]
 
