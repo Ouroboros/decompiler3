@@ -9,7 +9,7 @@ from .llil import (
     LowLevelILSub, LowLevelILDiv, LowLevelILEq, LowLevelILNe,
     LowLevelILLt, LowLevelILLe, LowLevelILGt, LowLevelILGe,
     LowLevelILStackPush, LowLevelILStackStore, LowLevelILStackPop,
-    LowLevelILStackAddr,
+    LowLevelILStackAddr, LowLevelILSpAdd,
     WORD_SIZE
 )
 
@@ -229,12 +229,18 @@ class LowLevelILBuilder:
     def sp_add(self, delta: int):
         '''Adjust stack pointer: sp += delta
 
+        Only for shrinking stack (delta < 0). Use push() to grow stack.
+
         Args:
-            delta: Number of words to add (positive = grow stack, negative = shrink stack)
+            delta: Number of words to add (must be negative)
         '''
-        from .llil import LowLevelILSpAdd
+        assert delta < 0, f'sp_add only for shrinking stack, got delta={delta}. Use push() to grow stack.'
         self.add_instruction(LowLevelILSpAdd(delta))
-        self.current_sp += delta
+
+        # Synchronize vstack: pop items when shrinking stack
+        for _ in range(-delta):
+            if self.vstack:
+                self.vstack.pop()
 
     # === Register Operations ===
 
@@ -304,12 +310,8 @@ class LowLevelILBuilder:
         # Binary operations are expressions, not statements
         # Only add as instruction if we're pushing (making it a statement via StackPush)
         if push:
-            # Generate StackPush instruction to push the result
-            # The StackPush contains the binary operation as its value
-            push_instr = LowLevelILStackPush(op, size)
-            self.add_instruction(push_instr)
-            self.current_sp += 1
-            self.vstack.append(op)
+            # Use push() to properly set slot_index and maintain sp
+            self.push(op, size)
         else:
             # If not pushing, add the operation itself (e.g., for comparisons in branches)
             self.add_instruction(op)

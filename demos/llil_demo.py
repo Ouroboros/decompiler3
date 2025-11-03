@@ -727,8 +727,8 @@ def create_EV_06_37_00():
     builder.push_int(10000)
     # EQ()
     builder.eq()
-    # POP(4)
-    builder.pop_n(4)
+    # POP(4)  - 4 bytes = 1 word
+    builder.pop_n(1)
 
     # GET_REG(0)
     builder.get_reg(0)
