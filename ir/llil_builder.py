@@ -241,8 +241,8 @@ class LowLevelILBuilder:
         '''Generic binary operation handler
 
         Stack operation order (for implicit mode):
-          rhs = stack_pop();   // 先弹出来的是右操作数（栈顶）
-          lhs = stack_pop();   // 再弹出来的是左操作数（下面那个）
+          rhs = stack_pop();   // First pop gets right operand (top of stack)
+          lhs = stack_pop();   // Second pop gets left operand (below it)
           result = (lhs OP rhs);
 
         Args:
@@ -258,8 +258,8 @@ class LowLevelILBuilder:
         # Get operands - both must be None or both must be provided
         if lhs is None and rhs is None:
             # Implicit mode: pop both from vstack
-            rhs = self.pop(size)  # 先弹出来的是右操作数（栈顶）
-            lhs = self.pop(size)  # 再弹出来的是左操作数（下面那个）
+            rhs = self.pop(size)  # First pop gets right operand (top of stack)
+            lhs = self.pop(size)  # Second pop gets left operand (below it)
         elif lhs is not None and rhs is not None:
             # Explicit mode: both provided
             lhs = self._to_expr(lhs)
@@ -443,8 +443,8 @@ class LLILFormatter:
         '''Format binary operation with expanded pseudo-code
 
         Stack operation order:
-          rhs = stack_pop();   // 先弹出来的是右操作数（栈顶）
-          lhs = stack_pop();   // 再弹出来的是左操作数（下面那个）
+          rhs = stack_pop();   // First pop gets right operand (top of stack)
+          lhs = stack_pop();   // Second pop gets left operand (below it)
           result = (lhs OP rhs);
           stack_push(result);
         '''
@@ -466,8 +466,8 @@ class LLILFormatter:
 
         return [
             f'; expand {binary_op.operation_name}',
-            'rhs = STACK[--sp]',  # 先弹出来的是右操作数（栈顶）
-            'lhs = STACK[--sp]',  # 再弹出来的是左操作数（下面那个）
+            'rhs = STACK[--sp]',  # First pop gets right operand (top of stack)
+            'lhs = STACK[--sp]',  # Second pop gets left operand (below it)
             f'STACK[sp++] = {expr}'
         ]
 
