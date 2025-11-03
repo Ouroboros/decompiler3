@@ -468,6 +468,20 @@ class LowLevelILSyscall(LowLevelILInstruction):
         return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'
 
 
+# === Helper Functions ===
+
+def default_label_for_addr(addr: int) -> str:
+    '''Generate default label name from address
+
+    Args:
+        addr: Block start address
+
+    Returns:
+        Label in format 'loc_{addr:X}' (e.g., 'loc_1FFDB6')
+    '''
+    return f'loc_{addr:X}'
+
+
 # === Container Classes ===
 
 class LowLevelILBasicBlock:
@@ -477,7 +491,7 @@ class LowLevelILBasicBlock:
         self.start = start
         self.end = start
         self.index = index  # Block index in function
-        self.label = label if label is not None else f'loc_{start:X}'  # Default label from address
+        self.label = label if label is not None else default_label_for_addr(start)
         self.instructions: List[LowLevelILInstruction] = []
         self.sp_in = 0   # sp state at block entry
         self.sp_out = 0  # sp state at block exit
