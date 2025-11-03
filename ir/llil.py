@@ -339,7 +339,7 @@ class LowLevelILGoto(Terminal):
         self.target = target
 
     def __str__(self) -> str:
-        return f'goto block_{self.target.index}'
+        return f'goto {self.target.block_name}'
 
 
 class LowLevelILJmp(LowLevelILGoto):
@@ -364,9 +364,9 @@ class LowLevelILIf(Terminal):
         self.false_target = false_target
 
     def __str__(self) -> str:
-        true_name = f'block_{self.true_target.index}'
+        true_name = self.true_target.block_name
         if self.false_target:
-            false_name = f'block_{self.false_target.index}'
+            false_name = self.false_target.block_name
             return f'if {self.condition} goto {true_name} else {false_name}'
         else:
             return f'if {self.condition} goto {true_name}'
@@ -486,7 +486,7 @@ class LowLevelILBasicBlock:
         '''
         if self.has_terminal:
             raise RuntimeError(
-                f'Cannot add instruction to block_{self.index}: '
+                f'Cannot add instruction to {self.block_name}: '
                 f'block already has terminal instruction {self.instructions[-1]}'
             )
         instr.instr_index = len(self.instructions)
@@ -507,6 +507,15 @@ class LowLevelILBasicBlock:
         return isinstance(self.instructions[-1], Terminal)
 
     @property
+    def block_name(self) -> str:
+        '''Get canonical block name for jump targets and references
+
+        Always returns "block_N" format for consistency.
+        Use label_name property to get the user-defined label if present.
+        '''
+        return f'block_{self.index}'
+
+    @property
     def label_name(self) -> Optional[str]:
         '''Get label name if this block starts with a label instruction'''
         if self.instructions and isinstance(self.instructions[0], LowLevelILLabelInstr):
@@ -514,11 +523,11 @@ class LowLevelILBasicBlock:
         return None
 
     def __str__(self) -> str:
-        result = f'block_{self.index} @ {hex(self.start)}: [sp={self.sp_in}]\n'
+        result = f'{self.block_name} @ {hex(self.start)}: [sp={self.sp_in}]\n'
         for i, instr in enumerate(self.instructions):
             result += f'  {instr}\n'
         if self.outgoing_edges:
-            targets = [f'block_{b.index}' for b in self.outgoing_edges]
+            targets = [b.block_name for b in self.outgoing_edges]
             result += f'  -> {', '.join(targets)}\n'
         return result
 
@@ -609,8 +618,8 @@ class LowLevelILFunction:
             label_parts = []
 
             # Block header
-            block_name = block.label_name or f'block_{block.index}'
-            header = f'{block_name} @ {hex(block.start)}\\l'
+            header_name = block.label_name or block.block_name
+            header = f'{header_name} @ {hex(block.start)}\\l'
             header += f'[sp = {block.sp_in}'
             if hasattr(self, 'frame_base_sp') and self.frame_base_sp is not None:
                 header += f', fp = {self.frame_base_sp}'
@@ -628,12 +637,12 @@ class LowLevelILFunction:
             # Node styling
             if block.index == 0:
                 # Entry block
-                lines.append(f'    block_{block.index} [label="{label}", style=filled, fillcolor=lightgreen];')
+                lines.append(f'    {block.block_name} [label="{label}", style=filled, fillcolor=lightgreen];')
             elif block.has_terminal and isinstance(block.instructions[-1], LowLevelILRet):
                 # Exit block
-                lines.append(f'    block_{block.index} [label="{label}", style=filled, fillcolor=lightblue];')
+                lines.append(f'    {block.block_name} [label="{label}", style=filled, fillcolor=lightblue];')
             else:
-                lines.append(f'    block_{block.index} [label="{label}"];')
+                lines.append(f'    {block.block_name} [label="{label}"];')
 
         lines.append('')
 
@@ -669,9 +678,9 @@ class LowLevelILFunction:
                     edge_style = ', style=dashed'
 
                 if edge_label:
-                    lines.append(f'    block_{block.index} -> block_{target.index} [label="{edge_label}"{edge_style}];')
+                    lines.append(f'    {block.block_name} -> {target.block_name} [label="{edge_label}"{edge_style}];')
                 else:
-                    lines.append(f'    block_{block.index} -> block_{target.index}{edge_style};')
+                    lines.append(f'    {block.block_name} -> {target.block_name}{edge_style};')
 
         lines.append('}')
         return '\n'.join(lines)
