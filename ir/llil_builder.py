@@ -470,6 +470,8 @@ class LLILFormatter:
         - The actual operation
         - Push operation for result
         '''
+        from ir.llil import LowLevelILStackStore, LowLevelILStackPop, WORD_SIZE
+
         # StackPush containing a binary operation: expand the binary op
         if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr.value)
@@ -477,6 +479,22 @@ class LLILFormatter:
         # Binary operations: pop 2, compute, push 1
         if isinstance(instr, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr)
+
+        # StackStore with StackPop: expand to avoid ambiguity
+        if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILStackPop):
+            word_offset = instr.offset // WORD_SIZE
+            if word_offset == 0:
+                target = 'STACK[sp]'
+            elif word_offset > 0:
+                target = f'STACK[sp + {word_offset}]'
+            else:
+                target = f'STACK[sp - {-word_offset}]'
+
+            return [
+                '; expand POP_TO',
+                'temp = STACK[--sp]',
+                f'{target} = temp'
+            ]
 
         # For non-binary operations, return single line
         return [str(instr)]

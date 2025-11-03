@@ -230,12 +230,12 @@ class FalcomVMBuilder(LowLevelILBuilder):
             offset: Byte offset relative to sp (after pop)
 
         Note: After pop, sp is decremented, so STACK[sp + offset] refers
-              to the new sp position. For example, POP_TO(-4) stores the
-              popped value to STACK[sp - 4] where sp is the post-pop value.
+              to the new sp position. For example, POP_TO(-WORD_SIZE) stores the
+              popped value to STACK[sp - 1] where sp is the post-pop value.
         '''
-        from ir.llil import LowLevelILStackStore
+        from ir.llil import LowLevelILStackStore, WORD_SIZE
         val = self.pop()
-        self.add_instruction(LowLevelILStackStore(val, offset, 4))
+        self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
 
     def pop_jmp_zero(self, true_target, false_target):
         '''POP_JMP_ZERO operation - branch if popped value is zero
