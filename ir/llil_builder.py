@@ -218,6 +218,16 @@ class LowLevelILBuilder:
         stack_addr = LowLevelILStackAddr(offset)
         self.stack_push(stack_addr)
 
+    def sp_add(self, delta: int):
+        '''Adjust stack pointer: sp += delta
+
+        Args:
+            delta: Number of words to add (positive = grow stack, negative = shrink stack)
+        '''
+        from .llil import LowLevelILSpAdd
+        self.add_instruction(LowLevelILSpAdd(delta))
+        self.current_sp += delta
+
     # === Register Operations ===
 
     def reg_store(self, reg_index: int, value: Union[LowLevelILInstruction, int], size: int = 4):

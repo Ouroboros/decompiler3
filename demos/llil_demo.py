@@ -741,8 +741,10 @@ def create_EV_06_37_00():
     builder.push_stack_addr(-32)
     builder.call('quest_get_lgc_level')
 
-    # === BLOCK 1: loc_16AC74 - Return ===
+    # === BLOCK 1: loc_16AC74 - Cleanup and Return ===
     builder.set_current_block(loc_16AC74)
+    # POP(16) - cleanup 4 local variables (4 * 4 bytes)
+    builder.pop(16)
     builder.ret()
 
     return builder.finalize()

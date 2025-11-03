@@ -218,7 +218,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''
         # Pop from stack using StackPop expression
-        stack_val = self.pop()
+        stack_val = super().pop()
         self.reg_store(reg_index, stack_val)
 
     def get_reg(self, reg_index: int):
@@ -236,7 +236,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
               to the new sp position. For example, POP_TO(-WORD_SIZE) stores the
               popped value to STACK[sp - 1] where sp is the post-pop value.
         '''
-        val = self.pop()
+        val = super().pop()
         self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
 
     def pop_jmp_zero(self, true_target, false_target):
@@ -247,7 +247,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             false_target: Block to jump to if value is not zero
         '''
         # Pop from stack using StackPop expression
-        cond = self.pop()
+        cond = super().pop()
         # Create EQ(cond, 0) without adding as instruction
         # This is just used as the branch condition expression
         zero = self.const_int(0)
@@ -263,6 +263,19 @@ class FalcomVMBuilder(LowLevelILBuilder):
             false_target: Block to jump to if value is zero
         '''
         # Pop from stack using StackPop expression
-        cond = self.pop()
+        cond = super().pop()
         # Create If with both targets explicitly specified
         self.add_instruction(LowLevelILIf(cond, true_target, false_target))
+
+    def pop(self, num_bytes: int):
+        '''POP operation - discard N bytes from stack
+
+        Args:
+            num_bytes: Number of bytes to pop (e.g., 16 to pop 4 words)
+        '''
+        # Convert bytes to words
+        num_words = num_bytes // WORD_SIZE
+        if num_bytes % WORD_SIZE != 0:
+            raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
+        # Use sp_add with negative delta to shrink stack
+        self.sp_add(-num_words)
