@@ -59,6 +59,10 @@ class LowLevelILBuilder:
             self.frame_base_sp = 0
             self.function.frame_base_sp = 0
 
+    def get_block_by_addr(self, addr: int) -> Optional[LowLevelILBasicBlock]:
+        '''Get block by start address'''
+        return self.function.get_block_by_addr(addr)
+
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         '''Get block by label name'''
         return self.function.get_block_by_label(label)
