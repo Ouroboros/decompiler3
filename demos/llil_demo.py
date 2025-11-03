@@ -337,6 +337,295 @@ def create_sound_play_se():
     return builder.finalize()
 
 
+def create_Dummy_m3010_talk0():
+    '''
+    Dummy_m3010_talk0 - Complex menu system with nested conditionals
+    Source: m3010.py from Kuro no Kiseki
+
+    Original bytecode: (see user's provided code)
+    This demonstrates:
+    - Complex control flow with multiple conditional branches
+    - Menu creation and selection handling
+    - Nested if-else-if chains
+    - Multiple merge points
+    '''
+
+    # Create builder and function
+    builder = FalcomVMBuilder()
+    builder.create_function('Dummy_m3010_talk0', 0x8ACC7, num_params=0)
+
+    # Create all blocks upfront
+    entry = builder.create_basic_block(0x8ACC7, 'Dummy_m3010_talk0')
+    loc_8ACE5 = builder.create_basic_block(0x8ACE5, 'loc_8ACE5')
+    loc_8AD0F = builder.create_basic_block(0x8AD0F, 'loc_8AD0F')
+    loc_8AD33 = builder.create_basic_block(0x8AD33, 'loc_8AD33')
+    loc_8AD57 = builder.create_basic_block(0x8AD57, 'loc_8AD57')
+    loc_8AD7B = builder.create_basic_block(0x8AD7B, 'loc_8AD7B')
+    loc_8ADA5 = builder.create_basic_block(0x8ADA5, 'loc_8ADA5')
+    loc_8ADC3 = builder.create_basic_block(0x8ADC3, 'loc_8ADC3')
+    loc_8ADE2 = builder.create_basic_block(0x8ADE2, 'loc_8ADE2')
+    check_selection = builder.create_basic_block(0x8ADF0, 'check_selection')  # After menu_close
+    loc_8AE20 = builder.create_basic_block(0x8AE20, 'loc_8AE20')
+    loc_8AE38 = builder.create_basic_block(0x8AE38, 'loc_8AE38')
+    check_case_0 = builder.create_basic_block(0x8AE48, 'check_case_0')
+    loc_8AE7C = builder.create_basic_block(0x8AE7C, 'loc_8AE7C')
+    loc_8AEB8 = builder.create_basic_block(0x8AEB8, 'loc_8AEB8')
+    loc_8AEBD = builder.create_basic_block(0x8AEBD, 'loc_8AEBD')
+    check_case_1 = builder.create_basic_block(0x8AEC7, 'check_case_1')
+    loc_8AF01 = builder.create_basic_block(0x8AF01, 'loc_8AF01')
+    loc_8AF3D = builder.create_basic_block(0x8AF3D, 'loc_8AF3D')
+    loc_8AF42 = builder.create_basic_block(0x8AF42, 'loc_8AF42')
+    check_case_2 = builder.create_basic_block(0x8AF4C, 'check_case_2')
+    loc_8AF86 = builder.create_basic_block(0x8AF86, 'loc_8AF86')
+    loc_8AFC2 = builder.create_basic_block(0x8AFC2, 'loc_8AFC2')  # Main merge point
+    loc_8AFD4 = builder.create_basic_block(0x8AFD4, 'loc_8AFD4')
+    check_fade_in = builder.create_basic_block(0x8AFE4, 'check_fade_in')
+    loc_8B012 = builder.create_basic_block(0x8B012, 'loc_8B012')  # Final block
+
+    # === BLOCK 0: Entry - TALK_BEGIN ===
+    builder.set_current_block(entry)
+    builder.debug_line(10792)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8ACE5')
+    builder.push(builder.const_float(4.0))
+    builder.push_int(0)
+    builder.call('TALK_BEGIN')
+
+    # === BLOCK 1: loc_8ACE5 - menu_create ===
+    builder.set_current_block(loc_8ACE5)
+    builder.debug_line(10795)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AD0F')
+    builder.push_int(24)
+    builder.push_int(0)
+    builder.push_int(0)
+    builder.push_int(0)
+    builder.call('menu_create')
+
+    # === BLOCK 2: loc_8AD0F - menu_additem (ボス戦前) ===
+    builder.set_current_block(loc_8AD0F)
+    builder.debug_line(10796)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AD33')
+    builder.push_int(2)
+    builder.push_str('ボス戦前')
+    builder.push_int(0)
+    builder.call('menu_additem')
+
+    # === BLOCK 3: loc_8AD33 - menu_additem (中間地点②) ===
+    builder.set_current_block(loc_8AD33)
+    builder.debug_line(10797)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AD57')
+    builder.push_int(1)
+    builder.push_str('中間地点②')
+    builder.push_int(0)
+    builder.call('menu_additem')
+
+    # === BLOCK 4: loc_8AD57 - menu_additem (中間地点①) ===
+    builder.set_current_block(loc_8AD57)
+    builder.debug_line(10798)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AD7B')
+    builder.push_int(0)
+    builder.push_str('中間地点①')
+    builder.push_int(0)
+    builder.call('menu_additem')
+
+    # === BLOCK 5: loc_8AD7B - menu_open ===
+    builder.set_current_block(loc_8AD7B)
+    builder.debug_line(10800)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8ADA5')
+    builder.push_int(1)
+    builder.push_int(-1)
+    builder.push_int(-1)
+    builder.push_int(0)
+    builder.call('menu_open')
+
+    # === BLOCK 6: loc_8ADA5 - menu_wait and store result ===
+    builder.set_current_block(loc_8ADA5)
+    builder.debug_line(10802)
+    builder.push_int(0)  # PUSH(0x00000000)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8ADC3')
+    builder.push_int(0)
+    builder.call('menu_wait')
+
+    # === BLOCK 7: loc_8ADC3 - GET_REG(0), POP_TO(-4), menu_close ===
+    builder.set_current_block(loc_8ADC3)
+    builder.get_reg(0)
+    # POP_TO(-4) means: pop value and store to STACK[sp-4]
+    # This is: STACK[sp-4] = STACK[--sp]
+    val = builder.pop()
+    builder.add_instruction(LowLevelILFrameStore(val, -4, 4))
+    builder.debug_line(10803)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8ADE2')
+    builder.push_int(0)
+    builder.call('menu_close')
+
+    # === BLOCK 8: loc_8ADE2 - Check if selection >= 0 ===
+    builder.set_current_block(loc_8ADE2)
+    builder.debug_line(10805)
+    builder.load_stack(-4)
+    builder.push_int(0)
+    builder.ge()  # GE() operation
+    # POP_JMP_ZERO: if result is zero, jump to loc_8AFC2, else continue to loc_8AE20
+    builder.pop_jmp_zero(loc_8AFC2, loc_8AE20)
+
+    # === BLOCK 9: loc_8AE20 - fade_out ===
+    builder.set_current_block(loc_8AE20)
+    builder.debug_line(10807)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AE38')
+    builder.push_int(0)
+    builder.push(builder.const_float(1.0))
+    builder.push_int(0)
+    builder.push(builder.const_float(0.5))
+    builder.call('fade_out')
+
+    # === BLOCK 10: loc_8AE38 - fade_wait ===
+    builder.set_current_block(loc_8AE38)
+    builder.debug_line(10808)
+    builder.push_func_id()
+    builder.push_ret_addr('check_case_0')
+    builder.push_int(0)
+    builder.call('fade_wait')
+
+    # === BLOCK 11: check_case_0 - Check if selection == 0 ===
+    builder.set_current_block(check_case_0)
+    builder.debug_line(10810)
+    builder.load_stack(-4)
+    builder.push_int(0)
+    builder.eq()
+    # POP_JMP_ZERO: if not equal, jump to loc_8AEBD, else continue to loc_8AE7C
+    builder.pop_jmp_zero(loc_8AEBD, loc_8AE7C)
+
+    # === BLOCK 12: loc_8AE7C - Case 0: chr_set_pos ===
+    builder.set_current_block(loc_8AE7C)
+    builder.debug_line(10811)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AEB8')
+    builder.push(builder.const_float(188.359))
+    builder.push(builder.const_float(122.862))
+    builder.push(builder.const_float(1.918))
+    builder.push(builder.const_float(-134.292))
+    builder.push_int(65000)
+    builder.call('chr_set_pos')
+
+    # === BLOCK 13: loc_8AEB8 - camera_rotate_chr ===
+    builder.set_current_block(loc_8AEB8)
+    builder.debug_line(10812)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AFC2')
+    builder.push_int(-1)
+    builder.push_int(3)
+    builder.push_int(0)
+    builder.push(builder.const_float(0.0))
+    builder.push(builder.const_float(0.0))
+    builder.push(builder.const_float(0.0))
+    builder.push_int(65000)
+    builder.call('camera_rotate_chr')
+    # Falls through to loc_8AFC2 (handled by call return target)
+
+    # === BLOCK 14: loc_8AEBD - Check if selection == 1 ===
+    builder.set_current_block(loc_8AEBD)
+    builder.debug_line(10814)
+    builder.load_stack(-4)
+    builder.push_int(1)
+    builder.eq()
+    # POP_JMP_ZERO: if not equal, jump to loc_8AF42, else continue to loc_8AF01
+    builder.pop_jmp_zero(loc_8AF42, loc_8AF01)
+
+    # === BLOCK 15: loc_8AF01 - Case 1: chr_set_pos ===
+    builder.set_current_block(loc_8AF01)
+    builder.debug_line(10815)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AF3D')
+    builder.push(builder.const_float(62.994))
+    builder.push(builder.const_float(-62.892))
+    builder.push(builder.const_float(-0.297))
+    builder.push(builder.const_float(-85.992))
+    builder.push_int(65000)
+    builder.call('chr_set_pos')
+
+    # === BLOCK 16: loc_8AF3D - camera_rotate_chr ===
+    builder.set_current_block(loc_8AF3D)
+    builder.debug_line(10816)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AFC2')
+    builder.push_int(-1)
+    builder.push_int(3)
+    builder.push_int(0)
+    builder.push(builder.const_float(0.0))
+    builder.push(builder.const_float(0.0))
+    builder.push(builder.const_float(0.0))
+    builder.push_int(65000)
+    builder.call('camera_rotate_chr')
+    # Falls through to loc_8AFC2
+
+    # === BLOCK 17: loc_8AF42 - Check if selection == 2 ===
+    builder.set_current_block(loc_8AF42)
+    builder.debug_line(10818)
+    builder.load_stack(-4)
+    builder.push_int(2)
+    builder.eq()
+    # POP_JMP_ZERO: if not equal, jump to loc_8AFC2, else continue to loc_8AF86
+    builder.pop_jmp_zero(loc_8AFC2, loc_8AF86)
+
+    # === BLOCK 18: loc_8AF86 - Case 2: chr_set_pos ===
+    builder.set_current_block(loc_8AF86)
+    builder.debug_line(10819)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AFC2')
+    builder.push(builder.const_float(112.963))
+    builder.push(builder.const_float(-157.72))
+    builder.push(builder.const_float(-0.283))
+    builder.push(builder.const_float(-5.976))
+    builder.push_int(65000)
+    builder.call('chr_set_pos')
+
+    # === BLOCK 19: loc_8AFC2 - TALK_END (merge point from all cases) ===
+    builder.set_current_block(loc_8AFC2)
+    builder.debug_line(10824)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AFD4')
+    builder.call('TALK_END')
+
+    # === BLOCK 20: loc_8AFD4 - Check if selection >= 0 for fade_in ===
+    builder.set_current_block(loc_8AFD4)
+    builder.debug_line(10826)
+    builder.load_stack(-4)
+    builder.push_int(0)
+    builder.ge()
+    # POP_JMP_ZERO: if result is zero, jump to loc_8B012, else continue to check_fade_in
+    builder.pop_jmp_zero(loc_8B012, check_fade_in)
+
+    # === BLOCK 21: check_fade_in - fade_in ===
+    builder.set_current_block(check_fade_in)
+    builder.debug_line(10827)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8B012')
+    builder.push_int(0)
+    builder.push(builder.const_float(0.0))
+    builder.push_int(0)
+    builder.push(builder.const_float(0.5))
+    builder.call('fade_in')
+
+    # === BLOCK 22: loc_8B012 - Return (final merge point) ===
+    builder.set_current_block(loc_8B012)
+    builder.debug_line(10830)
+    builder.push_int(0)
+    builder.set_reg(0)
+    # POP(4) - pop 4 bytes (1 word) from stack
+    builder.add_instruction(LowLevelILSpAdd(-1))
+    builder.ret()
+
+    # Finalize and return function
+    return builder.finalize()
+
+
 def main():
     print('🔧 LLIL Demo - Expression-based Architecture')
     print('=' * 60)
@@ -348,41 +637,59 @@ def main():
     print('  ✓ Operations hold operands: EQ(lhs, rhs)')
     print('  ✓ Data flow visible for optimization')
 
-    # Test 1: AV_04_0017 - Simple linear function
-    print('\n🧪 Test 1: AV_04_0017 - Simple Linear Function')
+    # # Test 1: AV_04_0017 - Simple linear function
+    # print('\n🧪 Test 1: AV_04_0017 - Simple Linear Function')
+    # print('-' * 60)
+    # print('Source: m4000.py (id: 0x0000 offset: 0x243C5)')
+    # print('3 blocks, no branching, 2 function calls')
+    #
+    # func1 = create_AV_04_0017()
+    # print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
+    #
+    # # Test 2: DOF_ON - Complex control flow
+    # print('\n🧪 Test 2: DOF_ON - Complex Control Flow')
+    # print('-' * 60)
+    # print('Source: c0000.py (id: 0x003F offset: 0x1FFDB6)')
+    # print('7 blocks, conditional branching, merge points')
+    #
+    # func2 = create_DOF_ON()
+    # print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
+    #
+    # # Generate CFG visualization
+    # func2.build_cfg()
+    # dot = func2.to_dot()
+    # with open('DOF_ON_cfg.dot', 'w') as f:
+    #     f.write(dot)
+    # print('\n📊 CFG saved to DOF_ON_cfg.dot')
+    # print('   View online: https://dreampuf.github.io/GraphvizOnline/')
+    # print('   Or render: dot -Tpng DOF_ON_cfg.dot -o DOF_ON_cfg.png')
+    #
+    # # Test 3: sound_play_se - SYSCALL with multiple parameters
+    # print('\n🧪 Test 3: sound_play_se - SYSCALL with Multiple Parameters')
+    # print('-' * 60)
+    # print('Source: c0000.py (id: 0x008F offset: 0x149B2)')
+    # print('8 parameters, 1 block, demonstrates SYSCALL and parameter loading')
+    #
+    # func3 = create_sound_play_se()
+    # print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
+
+    # Test 4: Dummy_m3010_talk0 - Complex control flow with multiple branches
+    print('\n🧪 Test 4: Dummy_m3010_talk0 - Complex Menu System')
     print('-' * 60)
-    print('Source: m4000.py (id: 0x0000 offset: 0x243C5)')
-    print('3 blocks, no branching, 2 function calls')
+    print('Source: m3010.py (id: 0x0005 offset: 0x8ACC7)')
+    print('Multiple conditional branches, menu system, nested if-else')
 
-    func1 = create_AV_04_0017()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
-
-    # Test 2: DOF_ON - Complex control flow
-    print('\n🧪 Test 2: DOF_ON - Complex Control Flow')
-    print('-' * 60)
-    print('Source: c0000.py (id: 0x003F offset: 0x1FFDB6)')
-    print('7 blocks, conditional branching, merge points')
-
-    func2 = create_DOF_ON()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
+    func4 = create_Dummy_m3010_talk0()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func4)))
 
     # Generate CFG visualization
-    func2.build_cfg()
-    dot = func2.to_dot()
-    with open('DOF_ON_cfg.dot', 'w') as f:
+    func4.build_cfg()
+    dot = func4.to_dot()
+    with open('Dummy_m3010_talk0_cfg.dot', 'w') as f:
         f.write(dot)
-    print('\n📊 CFG saved to DOF_ON_cfg.dot')
+    print('\n📊 CFG saved to Dummy_m3010_talk0_cfg.dot')
     print('   View online: https://dreampuf.github.io/GraphvizOnline/')
-    print('   Or render: dot -Tpng DOF_ON_cfg.dot -o DOF_ON_cfg.png')
-
-    # Test 3: sound_play_se - SYSCALL with multiple parameters
-    print('\n🧪 Test 3: sound_play_se - SYSCALL with Multiple Parameters')
-    print('-' * 60)
-    print('Source: c0000.py (id: 0x008F offset: 0x149B2)')
-    print('8 parameters, 1 block, demonstrates SYSCALL and parameter loading')
-
-    func3 = create_sound_play_se()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
+    print('   Or render: dot -Tpng Dummy_m3010_talk0_cfg.dot -o Dummy_m3010_talk0_cfg.png')
 
     print('\n✅ Demo completed successfully!')
     print('\nKey features demonstrated:')
