@@ -452,12 +452,12 @@ def create_Dummy_m3010_talk0():
     builder.push_int(0)
     builder.call('menu_wait')
 
-    # === BLOCK 7: loc_8ADC3 - GET_REG(0), POP_TO(-WORD_SIZE), menu_close ===
+    # === BLOCK 7: loc_8ADC3 - GET_REG(0), POP_TO(-4), menu_close ===
     builder.set_current_block(loc_8ADC3)
     builder.get_reg(0)
-    # POP_TO(-WORD_SIZE) means: stack[sp + opr] = pop()
-    # After pop, sp is already decremented, so stack[sp + (-WORD_SIZE)] = popped_value
-    builder.pop_to(-WORD_SIZE)
+    # POP_TO(-4) means: stack[sp + opr] = pop()
+    # After pop, sp is already decremented, so stack[sp + (-4)] = popped_value
+    builder.pop_to(-4)
     builder.debug_line(10803)
     builder.push_func_id()
     builder.push_ret_addr('loc_8ADE2')
@@ -467,7 +467,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 8: loc_8ADE2 - Check if selection >= 0 ===
     builder.set_current_block(loc_8ADE2)
     builder.debug_line(10805)
-    builder.load_stack(-WORD_SIZE)
+    builder.load_stack(-4)
     builder.push_int(0)
     builder.ge()  # GE() operation
     # POP_JMP_ZERO: if result is zero, jump to loc_8AFC2, else continue to fade_out_block
@@ -495,7 +495,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 11: loc_8AE38 - Check if selection == 0 ===
     builder.set_current_block(loc_8AE38)
     builder.debug_line(10810)
-    builder.load_stack(-WORD_SIZE)
+    builder.load_stack(-4)
     builder.push_int(0)
     builder.eq()
     # POP_JMP_ZERO: if not equal, jump to loc_8AEBD, else continue to case_0_chr_set_pos
@@ -534,7 +534,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 15: loc_8AEBD - Check if selection == 1 ===
     builder.set_current_block(loc_8AEBD)
     builder.debug_line(10814)
-    builder.load_stack(-WORD_SIZE)
+    builder.load_stack(-4)
     builder.push_int(1)
     builder.eq()
     # POP_JMP_ZERO: if not equal, jump to loc_8AF42, else continue to case_1_chr_set_pos
@@ -573,7 +573,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 18: loc_8AF42 - Check if selection == 2, then chr_set_pos ===
     builder.set_current_block(loc_8AF42)
     builder.debug_line(10818)
-    builder.load_stack(-WORD_SIZE)
+    builder.load_stack(-4)
     builder.push_int(2)
     builder.eq()
     # POP_JMP_ZERO: if not equal, jump to loc_8AFC2, else continue with chr_set_pos
@@ -615,7 +615,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 21: loc_8AFD4 - Check if selection >= 0 for fade_in ===
     builder.set_current_block(loc_8AFD4)
     builder.debug_line(10826)
-    builder.load_stack(-WORD_SIZE)
+    builder.load_stack(-4)
     builder.push_int(0)
     builder.ge()
     # POP_JMP_ZERO: if result is zero, jump to loc_8B012, else continue to check_fade_in
