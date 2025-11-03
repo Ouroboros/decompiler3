@@ -3,7 +3,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
 from typing import Union, List
-from ir.llil import LowLevelILEq
+from ir.llil import LowLevelILEq, LowLevelILIf
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
 
@@ -98,7 +98,6 @@ class FalcomVMBuilder(LowLevelILBuilder):
         zero = self.const_int(0)
         is_zero = LowLevelILEq(cond, zero)
         # Create If with both targets explicitly specified
-        from ir.llil import LowLevelILIf
         self.add_instruction(LowLevelILIf(is_zero, true_target, false_target))
 
     def pop_jmp_not_zero(self, true_target, false_target):
@@ -111,5 +110,4 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Pop from stack using StackPop expression
         cond = self.pop()
         # Create If with both targets explicitly specified
-        from ir.llil import LowLevelILIf
         self.add_instruction(LowLevelILIf(cond, true_target, false_target))
