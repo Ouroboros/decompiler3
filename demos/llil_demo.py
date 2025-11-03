@@ -763,6 +763,11 @@ def test_EV_06_37_00():
     func5 = create_EV_06_37_00()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
 
+    func5.build_cfg()
+    dot = LLILFormatter.to_dot(func5)
+    with open('EV_06_37_00_cfg.dot', 'w') as f:
+        f.write(dot)
+
 
 def main():
     print('🔧 LLIL Demo - Expression-based Architecture')
