@@ -455,10 +455,9 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 7: loc_8ADC3 - GET_REG(0), POP_TO(-4), menu_close ===
     builder.set_current_block(loc_8ADC3)
     builder.get_reg(0)
-    # POP_TO(-4) means: pop value and store to STACK[sp-4]
-    # This is: STACK[sp-4] = STACK[--sp]
-    val = builder.pop()
-    builder.add_instruction(LowLevelILFrameStore(val, -4, 4))
+    # POP_TO(-4) means: stack[sp + opr] = pop()
+    # After pop, sp is already decremented, so stack[sp-4] = popped_value
+    builder.pop_to(-4)
     builder.debug_line(10803)
     builder.push_func_id()
     builder.push_ret_addr('loc_8ADE2')
