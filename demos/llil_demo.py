@@ -708,43 +708,34 @@ def test_Dummy_m3010_talk0():
 
 
 def create_EV_06_37_00():
-    '''EV_06_37_00 - Simple function with stack frame and quest_get_lgc_level call'''
+    '''EV_06_37_00 - Test LOAD_GLOBAL and SET_GLOBAL operations'''
     builder = FalcomVMBuilder()
     builder.create_function('EV_06_37_00', 0x16AC50, num_params=0)
 
-    # Create blocks
+    # Create block
     entry = builder.create_basic_block(0x16AC50, 'EV_06_37_00')
-    loc_16AC74 = builder.create_basic_block(0x16AC74, 'loc_16AC74')
 
-    # === BLOCK 0: Entry - Setup stack frame and call quest_get_lgc_level ===
+    # === BLOCK 0: Entry ===
     builder.set_current_block(entry)
 
-    # PUSH(0x00000000) - 4 times to allocate stack frame
-    builder.push_int(0, is_hex=True)
-    builder.push_int(0, is_hex=True)
-    builder.push_int(0, is_hex=True)
-    builder.push_int(0, is_hex=True)
+    # DEBUG_SET_LINENO(11697)
+    builder.debug_line(11697)
 
-    # PUSH_INT(0)
-    builder.push_int(0)
-    # POP_TO(-4)
-    builder.pop_to(-4)
+    # LOAD_GLOBAL(0)
+    builder.load_global(0)
+    # PUSH_INT(10000)
+    builder.push_int(10000)
+    # EQ()
+    builder.eq()
+    # POP(4)
+    builder.pop_n(4)
 
-    # Call quest_get_lgc_level
-    builder.push_func_id()
-    builder.push_ret_addr('loc_16AC74')
-    # PUSH_STACK_OFFSET(-16) - push address of stack location
-    builder.push_stack_addr(-16)
-    # PUSH_STACK_OFFSET(-24)
-    builder.push_stack_addr(-24)
-    # PUSH_STACK_OFFSET(-32)
-    builder.push_stack_addr(-32)
-    builder.call('quest_get_lgc_level')
+    # GET_REG(0)
+    builder.get_reg(0)
+    # SET_GLOBAL(0)
+    builder.set_global(0)
 
-    # === BLOCK 1: loc_16AC74 - Cleanup and Return ===
-    builder.set_current_block(loc_16AC74)
-    # POP(16) - cleanup 4 local variables (4 * 4 bytes)
-    builder.pop(16)
+    # RETURN()
     builder.ret()
 
     return builder.finalize()
@@ -752,12 +743,12 @@ def create_EV_06_37_00():
 
 def test_EV_06_37_00():
     '''Test EV_06_37_00 function'''
-    print('\n🧪 Test 5: EV_06_37_00 - Stack Frame and Quest Call')
+    print('\n🧪 Test 5: EV_06_37_00 - Global Variables')
     print('-' * 60)
-    print('Simple function demonstrating:')
-    print('- Stack frame allocation (4 x PUSH 0)')
-    print('- POP_TO to initialize frame variable')
-    print('- PUSH_STACK_OFFSET to pass addresses (not values) as arguments')
+    print('Function demonstrating:')
+    print('- LOAD_GLOBAL: read from global variable array')
+    print('- SET_GLOBAL: write to global variable array')
+    print('- Global variables are Falcom-specific extensions')
     print()
 
     func5 = create_EV_06_37_00()

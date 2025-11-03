@@ -9,6 +9,7 @@ from ir.llil import (
 )
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
+from .llil_ext import LowLevelILGlobalLoad, LowLevelILGlobalStore
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
@@ -267,7 +268,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Create If with both targets explicitly specified
         self.add_instruction(LowLevelILIf(cond, true_target, false_target))
 
-    def pop(self, num_bytes: int):
+    def pop_n(self, num_bytes: int):
         '''POP operation - discard N bytes from stack
 
         Args:
@@ -279,3 +280,21 @@ class FalcomVMBuilder(LowLevelILBuilder):
             raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
         # Use sp_add with negative delta to shrink stack
         self.sp_add(-num_words)
+
+    def load_global(self, index: int):
+        '''LOAD_GLOBAL operation - push global variable onto stack
+
+        Args:
+            index: Global variable array index
+        '''
+        global_val = LowLevelILGlobalLoad(index)
+        self.stack_push(global_val)
+
+    def set_global(self, index: int):
+        '''SET_GLOBAL operation - pop from stack and store to global
+
+        Args:
+            index: Global variable array index
+        '''
+        val = self.pop()
+        self.add_instruction(LowLevelILGlobalStore(index, val))
