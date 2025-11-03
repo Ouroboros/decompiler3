@@ -374,6 +374,7 @@ def create_Dummy_m3010_talk0():
     loc_8AF3D = builder.create_basic_block(0x8AF3D, 'loc_8AF3D')
     loc_8AF42 = builder.create_basic_block(0x8AF42, 'loc_8AF42')
     loc_8AF86 = builder.create_basic_block(0x8AF86, 'loc_8AF86')
+    loc_8AFAA = builder.create_basic_block(0x8AFAA, 'loc_8AFAA')  # After chr_set_pos in case 2
     loc_8AFC2 = builder.create_basic_block(0x8AFC2, 'loc_8AFC2')  # Main merge point
     loc_8AFD4 = builder.create_basic_block(0x8AFD4, 'loc_8AFD4')
     check_fade_in = builder.create_basic_block(0x8AFE4, 'check_fade_in')
@@ -574,7 +575,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AF86)
     builder.debug_line(10819)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AFC2')
+    builder.push_ret_addr('loc_8AFAA')  # Return to next block for second call
     builder.push(builder.const_float(112.963))
     builder.push(builder.const_float(-157.72))
     builder.push(builder.const_float(-0.283))
@@ -582,14 +583,28 @@ def create_Dummy_m3010_talk0():
     builder.push_int(65000)
     builder.call('chr_set_pos')
 
-    # === BLOCK 19: loc_8AFC2 - TALK_END (merge point from all cases) ===
+    # === BLOCK 19: loc_8AFAA - Case 2: camera_rotate_chr ===
+    builder.set_current_block(loc_8AFAA)
+    builder.debug_line(10820)
+    builder.push_func_id()
+    builder.push_ret_addr('loc_8AFC2')
+    builder.push_int(-1)
+    builder.push_int(3)
+    builder.push_int(0)
+    builder.push(builder.const_float(0.0))
+    builder.push(builder.const_float(0.0))
+    builder.push(builder.const_float(0.0))
+    builder.push_int(65000)
+    builder.call('camera_rotate_chr')
+
+    # === BLOCK 20: loc_8AFC2 - TALK_END (merge point from all cases) ===
     builder.set_current_block(loc_8AFC2)
     builder.debug_line(10824)
     builder.push_func_id()
     builder.push_ret_addr('loc_8AFD4')
     builder.call('TALK_END')
 
-    # === BLOCK 20: loc_8AFD4 - Check if selection >= 0 for fade_in ===
+    # === BLOCK 21: loc_8AFD4 - Check if selection >= 0 for fade_in ===
     builder.set_current_block(loc_8AFD4)
     builder.debug_line(10826)
     builder.load_stack(-WORD_SIZE)
@@ -598,7 +613,7 @@ def create_Dummy_m3010_talk0():
     # POP_JMP_ZERO: if result is zero, jump to loc_8B012, else continue to check_fade_in
     builder.pop_jmp_zero(loc_8B012, check_fade_in)
 
-    # === BLOCK 21: check_fade_in - fade_in ===
+    # === BLOCK 22: check_fade_in - fade_in ===
     builder.set_current_block(check_fade_in)
     builder.debug_line(10827)
     builder.push_func_id()
@@ -609,7 +624,7 @@ def create_Dummy_m3010_talk0():
     builder.push(builder.const_float(0.5))
     builder.call('fade_in')
 
-    # === BLOCK 22: loc_8B012 - Return (final merge point) ===
+    # === BLOCK 23: loc_8B012 - Return (final merge point) ===
     builder.set_current_block(loc_8B012)
     builder.debug_line(10830)
     builder.push_int(0)
