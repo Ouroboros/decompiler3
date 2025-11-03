@@ -313,8 +313,9 @@ def create_sound_play_se():
 
     # LOAD_STACK(-32) x 8 - Load all 8 parameters
     # Will auto-detect and use fp-relative: STACK[fp + 0..7]
+    from ir.llil import WORD_SIZE
     for i in range(8):
-        builder.load_frame(i * 4)  # Load STACK[fp + i] = STACK[i]
+        builder.load_frame(i * WORD_SIZE)  # Load STACK[fp + i] = STACK[i]
 
     # SYSCALL(6, 0x10, 0x08)
     builder.syscall(6, 0x10, 0x08)
@@ -452,12 +453,12 @@ def create_Dummy_m3010_talk0():
     builder.push_int(0)
     builder.call('menu_wait')
 
-    # === BLOCK 7: loc_8ADC3 - GET_REG(0), POP_TO(-4), menu_close ===
+    # === BLOCK 7: loc_8ADC3 - GET_REG(0), POP_TO(-WORD_SIZE), menu_close ===
     builder.set_current_block(loc_8ADC3)
     builder.get_reg(0)
-    # POP_TO(-4) means: stack[sp + opr] = pop()
-    # After pop, sp is already decremented, so stack[sp-4] = popped_value
-    builder.pop_to(-4)
+    # POP_TO(-WORD_SIZE) means: stack[sp + opr] = pop()
+    # After pop, sp is already decremented, so stack[sp + (-WORD_SIZE)] = popped_value
+    builder.pop_to(-WORD_SIZE)
     builder.debug_line(10803)
     builder.push_func_id()
     builder.push_ret_addr('loc_8ADE2')
@@ -467,7 +468,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 8: loc_8ADE2 - Check if selection >= 0 ===
     builder.set_current_block(loc_8ADE2)
     builder.debug_line(10805)
-    builder.load_stack(-4)
+    builder.load_stack(-WORD_SIZE)
     builder.push_int(0)
     builder.ge()  # GE() operation
     # POP_JMP_ZERO: if result is zero, jump to loc_8AFC2, else continue to loc_8AE20
@@ -495,7 +496,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 11: check_case_0 - Check if selection == 0 ===
     builder.set_current_block(check_case_0)
     builder.debug_line(10810)
-    builder.load_stack(-4)
+    builder.load_stack(-WORD_SIZE)
     builder.push_int(0)
     builder.eq()
     # POP_JMP_ZERO: if not equal, jump to loc_8AEBD, else continue to loc_8AE7C
@@ -531,7 +532,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 14: loc_8AEBD - Check if selection == 1 ===
     builder.set_current_block(loc_8AEBD)
     builder.debug_line(10814)
-    builder.load_stack(-4)
+    builder.load_stack(-WORD_SIZE)
     builder.push_int(1)
     builder.eq()
     # POP_JMP_ZERO: if not equal, jump to loc_8AF42, else continue to loc_8AF01
@@ -567,7 +568,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 17: loc_8AF42 - Check if selection == 2 ===
     builder.set_current_block(loc_8AF42)
     builder.debug_line(10818)
-    builder.load_stack(-4)
+    builder.load_stack(-WORD_SIZE)
     builder.push_int(2)
     builder.eq()
     # POP_JMP_ZERO: if not equal, jump to loc_8AFC2, else continue to loc_8AF86
@@ -595,7 +596,7 @@ def create_Dummy_m3010_talk0():
     # === BLOCK 20: loc_8AFD4 - Check if selection >= 0 for fade_in ===
     builder.set_current_block(loc_8AFD4)
     builder.debug_line(10826)
-    builder.load_stack(-4)
+    builder.load_stack(-WORD_SIZE)
     builder.push_int(0)
     builder.ge()
     # POP_JMP_ZERO: if result is zero, jump to loc_8B012, else continue to check_fade_in

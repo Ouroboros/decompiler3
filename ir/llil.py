@@ -101,7 +101,7 @@ class Terminal(ControlFlow):
 class LowLevelILStackStore(LowLevelILInstruction):
     '''STACK[sp + offset] = value
 
-    Note: offset is in bytes, but displayed as word offset (offset // 4)
+    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
