@@ -56,6 +56,10 @@ def create_AV_04_0017():
 
     builder = FalcomVMBuilder(function)
 
+    # Pre-register labels for all blocks (required before call)
+    builder.mark_label('loc_243E3', loc_243E3)
+    builder.mark_label('loc_243FB', loc_243FB)
+
     # === BLOCK 0: Entry - map_event_box_set_enable call ===
     # sp auto-set to num_params (0), fp = 0
     builder.set_current_block(entry_block)
@@ -103,6 +107,9 @@ def create_AV_04_0017():
     builder.set_reg(0)
     # RETURN()
     builder.ret()
+
+    # Verify no pending call sequences
+    builder.finalize()
 
     return function
 
@@ -180,6 +187,13 @@ def create_DOF_ON():
     function.add_basic_block(loc_1FFE35)
 
     builder = FalcomVMBuilder(function)
+
+    # Pre-register labels for all blocks (required before call)
+    builder.mark_label('loc_1FFDCB', loc_1FFDCB)
+    builder.mark_label('loc_1FFE02', loc_1FFE02)
+    builder.mark_label('loc_1FFE07', loc_1FFE07)
+    builder.mark_label('loc_1FFE20', loc_1FFE20)
+    builder.mark_label('loc_1FFE35', loc_1FFE35)
 
     # === BLOCK 0: Entry - Enable DOF ===
     # DOF_ON has 2 parameters (arg1, arg2)
@@ -285,6 +299,9 @@ def create_DOF_ON():
     # RETURN()
     builder.ret()
 
+    # Verify no pending call sequences
+    builder.finalize()
+
     return function
 
 
@@ -349,6 +366,9 @@ def create_sound_play_se():
 
     # RETURN()
     builder.ret()
+
+    # Verify no pending call sequences
+    builder.finalize()
 
     return function
 

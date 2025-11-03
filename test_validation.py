@@ -140,11 +140,130 @@ def test_correct_sequence():
         builder.push_func_id()
         builder.push_ret_addr('loc_ret')
         builder.call('some_func')
+        builder.finalize()
         print('✅ PASSED: Correct sequence works')
         return True
     except Exception as e:
         print(f'❌ FAILED: Correct sequence raised error - {e}')
         return False
+
+
+def test_undefined_label():
+    '''Test: call with undefined return label'''
+    func = LowLevelILFunction('test', num_params = 0)
+    builder = FalcomVMBuilder(func)
+
+    entry = LowLevelILBasicBlock(0, 'entry')
+    func.add_basic_block(entry)
+
+    builder.set_current_block(entry)
+
+    try:
+        builder.push_func_id()
+        builder.push_ret_addr('undefined_label')  # Label not registered
+        builder.call('some_func')
+        print('❌ FAILED: Should have raised RuntimeError for undefined label')
+        return False
+    except RuntimeError as e:
+        if 'cannot be resolved' in str(e):
+            print(f'✅ PASSED: Caught undefined label - {e}')
+            return True
+        else:
+            print(f'❌ FAILED: Wrong error message - {e}')
+            return False
+
+
+def test_sp_mismatch():
+    '''Test: sp mismatch when return block already built'''
+    func = LowLevelILFunction('test', num_params = 0)
+    builder = FalcomVMBuilder(func)
+
+    entry = LowLevelILBasicBlock(0, 'entry')
+    ret_block = LowLevelILBasicBlock(0, 'ret_block')
+    func.add_basic_block(entry)
+    func.add_basic_block(ret_block)
+
+    builder.mark_label('loc_ret', ret_block)
+
+    # Build entry block
+    builder.set_current_block(entry)
+    builder.push_func_id()  # sp_before_call = 0
+    builder.push_ret_addr('loc_ret')
+    # Don't call yet
+
+    # Build return block first with different sp
+    builder.set_current_block(ret_block, sp = 5)  # sp = 5, not 0!
+    builder.push_int(0)
+
+    # Now try to call from entry
+    builder.set_current_block(entry)
+    try:
+        builder.call('some_func')  # Tries to restore sp to 0, but ret_block has sp_in=5
+        print('❌ FAILED: Should have raised RuntimeError for sp mismatch')
+        return False
+    except RuntimeError as e:
+        if 'Stack pointer mismatch' in str(e):
+            print(f'✅ PASSED: Caught sp mismatch - {e}')
+            return True
+        else:
+            print(f'❌ FAILED: Wrong error message - {e}')
+            return False
+
+
+def test_pending_func_id():
+    '''Test: function ends with pending push_func_id'''
+    func = LowLevelILFunction('test', num_params = 0)
+    builder = FalcomVMBuilder(func)
+
+    entry = LowLevelILBasicBlock(0, 'entry')
+    func.add_basic_block(entry)
+
+    builder.set_current_block(entry)
+    builder.push_func_id()
+    # Don't complete the call
+
+    try:
+        builder.finalize()
+        print('❌ FAILED: Should have raised RuntimeError for pending func_id')
+        return False
+    except RuntimeError as e:
+        if 'pending call setup' in str(e):
+            print(f'✅ PASSED: Caught pending func_id - {e}')
+            return True
+        else:
+            print(f'❌ FAILED: Wrong error message - {e}')
+            return False
+
+
+def test_pending_ret_addr():
+    '''Test: function ends with pending push_ret_addr'''
+    func = LowLevelILFunction('test', num_params = 0)
+    builder = FalcomVMBuilder(func)
+
+    entry = LowLevelILBasicBlock(0, 'entry')
+    ret_block = LowLevelILBasicBlock(0, 'ret_block')
+    func.add_basic_block(entry)
+    func.add_basic_block(ret_block)
+
+    builder.set_current_block(entry)
+    builder.mark_label('loc_ret', ret_block)
+
+    builder.push_func_id()
+    builder.push_ret_addr('loc_ret')
+    # Don't call
+
+    try:
+        builder.finalize()
+        print('❌ FAILED: Should have raised RuntimeError for pending state')
+        return False
+    except RuntimeError as e:
+        # Either error is fine - both states are pending
+        if 'pending call setup' in str(e) or 'pending return target' in str(e):
+            print(f'✅ PASSED: Caught pending state - {e}')
+            return True
+        else:
+            print(f'❌ FAILED: Wrong error message - {e}')
+            return False
 
 
 if __name__ == '__main__':
@@ -158,6 +277,10 @@ if __name__ == '__main__':
         test_double_push_ret_addr,
         test_call_without_push_func_id,
         test_correct_sequence,
+        test_undefined_label,
+        test_sp_mismatch,
+        test_pending_func_id,
+        test_pending_ret_addr,
     ]
 
     results = []

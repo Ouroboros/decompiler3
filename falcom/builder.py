@@ -16,6 +16,28 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.sp_before_call = None  # Track sp before call for automatic cleanup
         self.return_target_label = None  # Track return address label for next call
 
+    def finalize(self):
+        '''Finalize function and verify no pending call sequences
+
+        Call this after all instructions have been added to verify the
+        builder state is clean (no incomplete call sequences).
+        '''
+        # Check for pending call setup
+        if self.sp_before_call is not None:
+            raise RuntimeError(
+                f'Function ended with pending call setup at sp={self.sp_before_call}. '
+                f'Incomplete call sequence detected (push_func_id without call).'
+            )
+        if self.return_target_label is not None:
+            raise RuntimeError(
+                f'Function ended with pending return target "{self.return_target_label}". '
+                f'Incomplete call sequence detected (push_ret_addr without call).'
+            )
+
+        # Call parent finalization if it exists
+        if hasattr(super(), 'finalize'):
+            super().finalize()
+
     # === Falcom Specific Constants ===
 
     def push_func_id(self):
@@ -58,6 +80,26 @@ class FalcomVMBuilder(LowLevelILBuilder):
             raise RuntimeError(
                 'No call setup found. Did you forget to call push_func_id()?'
             )
+
+        # Verify return target label can be resolved to a basic block
+        return_block = self.get_block_by_label(self.return_target_label)
+        if return_block is None:
+            raise RuntimeError(
+                f'Return target label "{self.return_target_label}" cannot be resolved to a basic block. '
+                f'Make sure to call mark_label() before call().'
+            )
+
+        # Verify sp alignment: restored sp must match target block's entry sp
+        # Only check if block has been visited (has instructions or sp_in was explicitly set)
+        restored_sp = self.sp_before_call
+        if return_block.instructions:
+            # Block has been built, verify sp matches
+            if return_block.sp_in != restored_sp:
+                raise RuntimeError(
+                    f'Stack pointer mismatch when connecting to {return_block.block_name}: '
+                    f'call restores sp to {restored_sp}, but target block has sp_in={return_block.sp_in}. '
+                    f'This indicates inconsistent stack management.'
+                )
 
         # Call with return target
         super().call(target, return_target = self.return_target_label)
