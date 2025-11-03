@@ -18,7 +18,6 @@ class LowLevelILBuilder:
     def __init__(self, function: LowLevelILFunction):
         self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
-        self.label_map: dict[str, LowLevelILBasicBlock] = {}  # label name -> block
         self.current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
         self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
         self.vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
@@ -62,11 +61,11 @@ class LowLevelILBuilder:
 
     def mark_label(self, name: str, block: LowLevelILBasicBlock):
         '''Associate a label name with a block'''
-        self.label_map[name] = block
+        self.function.mark_label(name, block)
 
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         '''Get block by label name'''
-        return self.label_map.get(label)
+        return self.function.get_block_by_label(label)
 
     def add_instruction(self, instr: LowLevelILInstruction):
         '''Add instruction to current block and update stack pointer tracking'''

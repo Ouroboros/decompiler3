@@ -548,6 +548,7 @@ class LowLevelILFunction:
         self.num_params = num_params  # Number of parameters
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
+        self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label -> block
         self.frame_base_sp: Optional[int] = None  # Frame pointer (sp at function entry)
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
@@ -559,6 +560,27 @@ class LowLevelILFunction:
     def get_basic_block_at(self, addr: int) -> Optional[LowLevelILBasicBlock]:
         '''Get basic block at address'''
         return self._block_map.get(addr)
+
+    def mark_label(self, name: str, block: LowLevelILBasicBlock):
+        '''Associate a label name with a block'''
+        self._label_map[name] = block
+
+    def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
+        '''Get block by label name
+
+        First tries the label map, then falls back to searching blocks
+        by their label_name property (set via LowLevelILLabelInstr).
+        '''
+        # Try label map first (explicit marks)
+        if label in self._label_map:
+            return self._label_map[label]
+
+        # Fall back to searching by label_name property
+        for block in self.basic_blocks:
+            if block.label_name == label:
+                return block
+
+        return None
 
     def build_cfg(self):
         '''Build control flow graph from terminal instructions
@@ -593,13 +615,9 @@ class LowLevelILFunction:
                     return_block = last_instr.return_target
                     # Resolve label if needed
                     if isinstance(return_block, str):
-                        # Find block by label
-                        for b in self.basic_blocks:
-                            if b.label_name == return_block:
-                                return_block = b
-                                break
-                        else:
-                            raise RuntimeError(f'Undefined return label: {return_block}')
+                        return_block = self.get_block_by_label(return_block)
+                        if return_block is None:
+                            raise RuntimeError(f'Undefined return label: {last_instr.return_target}')
                     block.add_outgoing_edge(return_block)
                 # If no return target specified, fall through (for compatibility)
                 else:
