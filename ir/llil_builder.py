@@ -240,6 +240,11 @@ class LowLevelILBuilder:
     def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, size: int = 4) -> LowLevelILInstruction:
         '''Generic binary operation handler
 
+        Stack operation order (for implicit mode):
+          rhs = stack_pop();   // 先弹出来的是右操作数（栈顶）
+          lhs = stack_pop();   // 再弹出来的是左操作数（下面那个）
+          result = (lhs OP rhs);
+
         Args:
             op_class: The operation class (e.g., LowLevelILAdd)
             lhs: Left operand (None = pop from vstack)
@@ -253,8 +258,8 @@ class LowLevelILBuilder:
         # Get operands - both must be None or both must be provided
         if lhs is None and rhs is None:
             # Implicit mode: pop both from vstack
-            rhs = self.pop(size)
-            lhs = self.pop(size)
+            rhs = self.pop(size)  # 先弹出来的是右操作数（栈顶）
+            lhs = self.pop(size)  # 再弹出来的是左操作数（下面那个）
         elif lhs is not None and rhs is not None:
             # Explicit mode: both provided
             lhs = self._to_expr(lhs)
@@ -281,45 +286,45 @@ class LowLevelILBuilder:
         return op
 
     def add(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''ADD operation'''
+        '''ADD operation - computes lhs + rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILAdd, lhs, rhs, push = push, size = size)
 
     def sub(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''SUB operation'''
+        '''SUB operation - computes lhs - rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILSub, lhs, rhs, push = push, size = size)
 
     def mul(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''MUL operation'''
+        '''MUL operation - computes lhs * rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILMul, lhs, rhs, push = push, size = size)
 
     def div(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''DIV operation'''
+        '''DIV operation - computes lhs / rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size)
 
     # === Comparison Operations ===
 
     def eq(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''EQ operation (==)'''
+        '''EQ operation - computes lhs == rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILEq, lhs, rhs, push = push, size = size)
 
     def ne(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''NE operation (!=)'''
+        '''NE operation - computes lhs != rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILNe, lhs, rhs, push = push, size = size)
 
     def lt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''LT operation (<)'''
+        '''LT operation - computes lhs < rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILLt, lhs, rhs, push = push, size = size)
 
     def le(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''LE operation (<=)'''
+        '''LE operation - computes lhs <= rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILLe, lhs, rhs, push = push, size = size)
 
     def gt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''GT operation (>)'''
+        '''GT operation - computes lhs > rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILGt, lhs, rhs, push = push, size = size)
 
     def ge(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
-        '''GE operation (>=)'''
+        '''GE operation - computes lhs >= rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size)
 
     # === Control Flow ===
