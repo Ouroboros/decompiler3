@@ -43,22 +43,18 @@ def create_AV_04_0017():
         RETURN()
     '''
 
-    # Create function and builder together
-    function, builder = FalcomVMBuilder.create_function('AV_04_0017', 0x243C5, num_params = 0)
+    # Create builder and function
+    builder = FalcomVMBuilder()
+    builder.create_function('AV_04_0017', 0x243C5, num_params = 0)
 
-    # Create all blocks upfront with labels
-    entry_block = LowLevelILBasicBlock(0x243C5, 0, label = 'AV_04_0017')
-    loc_243E3 = LowLevelILBasicBlock(0x243E3, 1, label = 'loc_243E3')
-    loc_243FB = LowLevelILBasicBlock(0x243FB, 2, label = 'loc_243FB')
-
-    function.add_basic_block(entry_block)
-    function.add_basic_block(loc_243E3)
-    function.add_basic_block(loc_243FB)
+    # Create all blocks upfront with labels (automatically added to function)
+    entry_block = builder.create_basic_block(0x243C5, 'AV_04_0017')
+    loc_243E3 = builder.create_basic_block(0x243E3, 'loc_243E3')
+    loc_243FB = builder.create_basic_block(0x243FB, 'loc_243FB')
 
     # === BLOCK 0: Entry - map_event_box_set_enable call ===
     # sp auto-set to num_params (0), fp = 0
     builder.set_current_block(entry_block)
-    builder.label('AV_04_0017')
 
     # DEBUG_SET_LINENO(2519)
     builder.debug_line(2519)
@@ -76,7 +72,6 @@ def create_AV_04_0017():
 
     # === BLOCK 1: loc_243E3 - avoice_play call ===
     builder.set_current_block(loc_243E3)
-    builder.label('loc_243E3')
 
     # DEBUG_SET_LINENO(2520)
     builder.debug_line(2520)
@@ -92,7 +87,6 @@ def create_AV_04_0017():
 
     # === BLOCK 2: loc_243FB - Return ===
     builder.set_current_block(loc_243FB)
-    builder.label('loc_243FB')
 
     # DEBUG_SET_LINENO(2521)
     builder.debug_line(2521)
@@ -103,10 +97,8 @@ def create_AV_04_0017():
     # RETURN()
     builder.ret()
 
-    # Verify no pending call sequences
-    builder.finalize()
-
-    return function
+    # Finalize and return function
+    return builder.finalize()
 
 
 def create_DOF_ON():
@@ -162,24 +154,18 @@ def create_DOF_ON():
         RETURN()
     '''
 
-    function, builder = FalcomVMBuilder.create_function('DOF_ON', 0x1FFDB6, num_params = 2)
+    # Create builder and function
+    builder = FalcomVMBuilder()
+    builder.create_function('DOF_ON', 0x1FFDB6, num_params = 2)
 
-    # Create all blocks upfront with labels
-    entry_block = LowLevelILBasicBlock(0x1FFDB6, 0, label = 'DOF_ON')
-    loc_1FFDCB = LowLevelILBasicBlock(0x1FFDCB, 1, label = 'loc_1FFDCB')
-    nonzero_path = LowLevelILBasicBlock(0x1FFDD8, 2)  # Uses default label loc_1FFDD8
-    loc_1FFE02 = LowLevelILBasicBlock(0x1FFE02, 3, label = 'loc_1FFE02')
-    loc_1FFE07 = LowLevelILBasicBlock(0x1FFE07, 4, label = 'loc_1FFE07')
-    loc_1FFE20 = LowLevelILBasicBlock(0x1FFE20, 5, label = 'loc_1FFE20')
-    loc_1FFE35 = LowLevelILBasicBlock(0x1FFE35, 6, label = 'loc_1FFE35')
-
-    function.add_basic_block(entry_block)
-    function.add_basic_block(loc_1FFDCB)
-    function.add_basic_block(nonzero_path)
-    function.add_basic_block(loc_1FFE02)
-    function.add_basic_block(loc_1FFE07)
-    function.add_basic_block(loc_1FFE20)
-    function.add_basic_block(loc_1FFE35)
+    # Create all blocks upfront with labels (automatically added to function)
+    entry_block = builder.create_basic_block(0x1FFDB6, 'DOF_ON')
+    loc_1FFDCB = builder.create_basic_block(0x1FFDCB, 'loc_1FFDCB')
+    nonzero_path = builder.create_basic_block(0x1FFDD8)  # Uses default label loc_1FFDD8
+    loc_1FFE02 = builder.create_basic_block(0x1FFE02, 'loc_1FFE02')
+    loc_1FFE07 = builder.create_basic_block(0x1FFE07, 'loc_1FFE07')
+    loc_1FFE20 = builder.create_basic_block(0x1FFE20, 'loc_1FFE20')
+    loc_1FFE35 = builder.create_basic_block(0x1FFE35, 'loc_1FFE35')
 
 
 
@@ -188,7 +174,6 @@ def create_DOF_ON():
     # sp auto-set to num_params (2), fp = 0
     # Parameters: STACK[fp + 0] = STACK[0] = arg1, STACK[fp + 1] = STACK[1] = arg2
     builder.set_current_block(entry_block)
-    builder.label('DOF_ON')
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
@@ -202,7 +187,6 @@ def create_DOF_ON():
 
     # === BLOCK 1: loc_1FFDCB - Check arg2 == 0 ===
     builder.set_current_block(loc_1FFDCB)
-    builder.label('loc_1FFDCB')
 
     # LOAD_STACK(-8)
     builder.load_stack(-8)
@@ -239,14 +223,12 @@ def create_DOF_ON():
 
     # === BLOCK 3: loc_1FFE02 - Jump to merge point ===
     builder.set_current_block(loc_1FFE02)
-    builder.label('loc_1FFE02')
 
     # JMP('loc_1FFE20')
     builder.jmp(loc_1FFE20)
 
     # === BLOCK 4: loc_1FFE07 - Zero path, simple focus range ===
     builder.set_current_block(loc_1FFE07)
-    builder.label('loc_1FFE07')
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
@@ -262,7 +244,6 @@ def create_DOF_ON():
 
     # === BLOCK 5: loc_1FFE20 - Merge point, set blur level ===
     builder.set_current_block(loc_1FFE20)
-    builder.label('loc_1FFE20')
 
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
@@ -276,7 +257,6 @@ def create_DOF_ON():
 
     # === BLOCK 6: loc_1FFE35 - Return ===
     builder.set_current_block(loc_1FFE35)
-    builder.label('loc_1FFE35')
 
     # PUSH(0x00000000)
     builder.push_int(0)
@@ -287,10 +267,8 @@ def create_DOF_ON():
     # RETURN()
     builder.ret()
 
-    # Verify no pending call sequences
-    builder.finalize()
-
-    return function
+    # Finalize and return function
+    return builder.finalize()
 
 
 def create_sound_play_se():
@@ -318,11 +296,12 @@ def create_sound_play_se():
         RETURN()
     '''
 
-    function, builder = FalcomVMBuilder.create_function('sound_play_se', 0x149B2, num_params = 8)
+    # Create builder and function
+    builder = FalcomVMBuilder()
+    builder.create_function('sound_play_se', 0x149B2, num_params = 8)
 
-    # Create single block with label
-    entry_block = LowLevelILBasicBlock(0x149B2, 0, label = 'sound_play_se')
-    function.add_basic_block(entry_block)
+    # Create single block with label (automatically added to function)
+    entry_block = builder.create_basic_block(0x149B2, 'sound_play_se')
 
 
 
@@ -331,7 +310,6 @@ def create_sound_play_se():
     # sp auto-set to num_params (8), fp = 0
     # Parameters: STACK[fp + 0..7] = STACK[0..7]
     builder.set_current_block(entry_block)
-    builder.label('sound_play_se')
 
     # LOAD_STACK(-32) x 8 - Load all 8 parameters
     # Will auto-detect and use fp-relative: STACK[fp + 0..7]
@@ -355,10 +333,8 @@ def create_sound_play_se():
     # RETURN()
     builder.ret()
 
-    # Verify no pending call sequences
-    builder.finalize()
-
-    return function
+    # Finalize and return function
+    return builder.finalize()
 
 
 def main():

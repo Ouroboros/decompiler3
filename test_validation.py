@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 '''Test validation logic for Falcom VM builder state management'''
 
-from ir.llil import LowLevelILFunction, LowLevelILBasicBlock
 from falcom.builder import FalcomVMBuilder
 
 
 def test_missing_push_func_id():
     '''Test: call push_ret_addr without push_func_id'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
     builder.set_current_block(entry)
 
     try:
@@ -29,11 +27,10 @@ def test_missing_push_func_id():
 
 def test_missing_push_ret_addr():
     '''Test: call() without push_ret_addr'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
     builder.set_current_block(entry)
 
     builder.push_func_id()
@@ -53,11 +50,10 @@ def test_missing_push_ret_addr():
 
 def test_double_push_func_id():
     '''Test: call push_func_id twice without call in between'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
     builder.set_current_block(entry)
 
     builder.push_func_id()
@@ -77,11 +73,10 @@ def test_double_push_func_id():
 
 def test_double_push_ret_addr():
     '''Test: call push_ret_addr twice without call in between'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
     builder.set_current_block(entry)
 
     builder.push_func_id()
@@ -102,11 +97,10 @@ def test_double_push_ret_addr():
 
 def test_call_without_push_func_id():
     '''Test: call() with push_ret_addr but no push_func_id'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
     builder.set_current_block(entry)
 
     # This should fail at push_ret_addr already
@@ -125,13 +119,11 @@ def test_call_without_push_func_id():
 
 def test_correct_sequence():
     '''Test: correct sequence should work'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    ret_block = LowLevelILBasicBlock(0, 'ret_block', label = 'loc_ret')
-    func.add_basic_block(entry)
-    func.add_basic_block(ret_block)
+    entry = builder.create_basic_block(0)
+    ret_block = builder.create_basic_block(0, 'loc_ret')
 
     builder.set_current_block(entry)
 
@@ -149,11 +141,10 @@ def test_correct_sequence():
 
 def test_undefined_label():
     '''Test: call with undefined return label'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
 
     builder.set_current_block(entry)
 
@@ -174,13 +165,11 @@ def test_undefined_label():
 
 def test_sp_mismatch():
     '''Test: sp mismatch when return block already built'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    ret_block = LowLevelILBasicBlock(0, 'ret_block', label = 'loc_ret')
-    func.add_basic_block(entry)
-    func.add_basic_block(ret_block)
+    entry = builder.create_basic_block(0)
+    ret_block = builder.create_basic_block(0, 'loc_ret')
 
     # Build entry block
     builder.set_current_block(entry)
@@ -209,11 +198,10 @@ def test_sp_mismatch():
 
 def test_pending_func_id():
     '''Test: function ends with pending push_func_id'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    func.add_basic_block(entry)
+    entry = builder.create_basic_block(0)
 
     builder.set_current_block(entry)
     builder.push_func_id()
@@ -234,13 +222,11 @@ def test_pending_func_id():
 
 def test_pending_ret_addr():
     '''Test: function ends with pending push_ret_addr'''
-    func = LowLevelILFunction('test', num_params = 0)
-    builder = FalcomVMBuilder(func)
+    builder = FalcomVMBuilder()
+    builder.create_function('test', num_params = 0)
 
-    entry = LowLevelILBasicBlock(0, 'entry')
-    ret_block = LowLevelILBasicBlock(0, 'ret_block', label = 'loc_ret')
-    func.add_basic_block(entry)
-    func.add_basic_block(ret_block)
+    entry = builder.create_basic_block(0)
+    ret_block = builder.create_basic_block(0, 'loc_ret')
 
     builder.set_current_block(entry)
 

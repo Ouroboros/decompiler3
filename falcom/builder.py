@@ -3,7 +3,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
 from typing import Union, List
-from ir.llil import LowLevelILEq, LowLevelILIf
+from ir.llil import LowLevelILEq, LowLevelILIf, LowLevelILFunction, LowLevelILBasicBlock
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
 
@@ -12,46 +12,94 @@ class FalcomVMBuilder(LowLevelILBuilder):
     '''High-level builder with Falcom VM patterns
 
     Usage:
-        func, builder = FalcomVMBuilder.create_function('name', addr, num_params)
-        # ... build instructions ...
-        builder.finalize()  # Validates state
-        return func
+        builder = FalcomVMBuilder()
+        builder.create_function('DOF_ON', 0x1FFDB6, num_params=2)
+
+        # Create blocks (auto-added to function)
+        entry = builder.create_basic_block(0x1FFDB6, 'DOF_ON')
+        loc_ret = builder.create_basic_block(0x1FFDCB, 'loc_ret')
+
+        # Build instructions
+        builder.set_current_block(entry)
+        builder.push_func_id()
+        builder.push_ret_addr('loc_ret')
+        builder.push_int(1)
+        builder.call('some_func')
+
+        builder.set_current_block(loc_ret)
+        builder.ret()
+
+        return builder.finalize()  # Returns function after validation
     '''
 
-    def __init__(self, function):
-        super().__init__(function)
+    def __init__(self):
+        '''Create builder without function (call create_function first)'''
+        self.function = None
+        self.current_block = None
+        self.current_sp = 0
+        self.frame_base_sp = None
+        self.vstack = []
         self.sp_before_call = None  # Track sp before call for automatic cleanup
         self.return_target_label = None  # Track return address label for next call
+        self._finalized = False
 
-    @staticmethod
-    def create_function(name: str, start_addr: int = 0, num_params: int = 0):
-        '''Create function and builder together
+    def create_function(self, name: str, start_addr: int = 0, num_params: int = 0):
+        '''Create function inside builder
 
         Args:
             name: Function name
             start_addr: Function start address
             num_params: Number of parameters
 
+        Example:
+            builder = FalcomVMBuilder()
+            builder.create_function('DOF_ON', 0x1FFDB6, 2)
+            # ... build instructions ...
+            return builder.finalize()
+        '''
+        if self.function is not None:
+            raise RuntimeError('Function already created')
+        self.function = LowLevelILFunction(name, start_addr, num_params)
+
+    def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
+        '''Create basic block and automatically add to function
+
+        Args:
+            start: Block start address
+            label: Optional label name (if None, uses default loc_{start:X})
+
         Returns:
-            Tuple of (function, builder)
+            The created basic block
 
         Example:
-            func, builder = FalcomVMBuilder.create_function('DOF_ON', 0x1FFDB6, 2)
-            # ... build instructions ...
-            builder.finalize()
-            return func
+            entry = builder.create_basic_block(0x243C5, 'AV_04_0017')
+            loc_ret = builder.create_basic_block(0x243E3, 'loc_243E3')
         '''
-        from ir.llil import LowLevelILFunction
-        func = LowLevelILFunction(name, start_addr, num_params)
-        builder = FalcomVMBuilder(func)
-        return func, builder
+        if self.function is None:
+            raise RuntimeError('No function created. Call create_function() first.')
 
-    def finalize(self):
-        '''Finalize function and verify no pending call sequences
+        # Get next block index
+        index = len(self.function.basic_blocks)
+        # Create block
+        block = LowLevelILBasicBlock(start, index, label=label)
+        # Automatically add to function
+        self.function.add_basic_block(block)
+        return block
 
-        Call this after all instructions have been added to verify the
-        builder state is clean (no incomplete call sequences).
+    def finalize(self) -> 'LowLevelILFunction':
+        '''Finalize builder and return function
+
+        Returns:
+            The constructed LowLevelILFunction
+
+        Raises:
+            RuntimeError: If function not created, already finalized, or pending call sequences
         '''
+        if self.function is None:
+            raise RuntimeError('No function created. Call create_function() first.')
+        if self._finalized:
+            raise RuntimeError('Builder already finalized')
+
         # Check for pending call setup
         if self.sp_before_call is not None:
             raise RuntimeError(
@@ -64,9 +112,8 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Incomplete call sequence detected (push_ret_addr without call).'
             )
 
-        # Call parent finalization if it exists
-        if hasattr(super(), 'finalize'):
-            super().finalize()
+        self._finalized = True
+        return self.function
 
     # === Falcom Specific Constants ===
 
@@ -116,7 +163,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         if return_block is None:
             raise RuntimeError(
                 f'Return target label "{self.return_target_label}" cannot be resolved to a basic block. '
-                f'Make sure to call mark_label() before call().'
+                f'Make sure the block with this label has been created.'
             )
 
         # Verify sp alignment: restored sp must match target block's entry sp
@@ -131,36 +178,13 @@ class FalcomVMBuilder(LowLevelILBuilder):
                     f'This indicates inconsistent stack management.'
                 )
 
-        # Call with return target
-        super().call(target, return_target = self.return_target_label)
+        # Call with return target (pass block, not label string)
+        super().call(target, return_target = return_block)
 
         # Clean up state
         self.return_target_label = None
         self.current_sp = self.sp_before_call
         self.sp_before_call = None
-
-    # === Falcom Call Patterns ===
-
-    def falcom_call_simple(self, func_name: str, args: List[Union[int, str]], ret_label: str):
-        '''Standard Falcom call pattern'''
-        # Push call context
-        self.push_func_id()
-        self.push_ret_addr(ret_label)
-
-        # Push arguments
-        for arg in args:
-            if isinstance(arg, int):
-                self.stack_push(self.const_int(arg))
-            elif isinstance(arg, str):
-                self.stack_push(self.const_str(arg))
-            else:
-                self.stack_push(arg)
-
-        # Call function
-        self.call(func_name)
-
-        # Return label
-        self.label(ret_label)
 
     # === VM Operations ===
 
