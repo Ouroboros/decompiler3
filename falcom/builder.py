@@ -12,31 +12,45 @@ class FalcomVMBuilder(LowLevelILBuilder):
     '''High-level builder with Falcom VM patterns
 
     Usage:
-        builder = FalcomVMBuilder('func_name', start_addr=0x1000, num_params=2)
+        func, builder = FalcomVMBuilder.create_function('name', addr, num_params)
         # ... build instructions ...
-        function = builder.finalize()  # Returns function and validates state
+        builder.finalize()  # Validates state
+        return func
     '''
 
-    def __init__(self, name: str, start_addr: int = 0, num_params: int = 0):
-        '''Create builder with new function
+    def __init__(self, function):
+        super().__init__(function)
+        self.sp_before_call = None  # Track sp before call for automatic cleanup
+        self.return_target_label = None  # Track return address label for next call
+
+    @staticmethod
+    def create_function(name: str, start_addr: int = 0, num_params: int = 0):
+        '''Create function and builder together
 
         Args:
             name: Function name
             start_addr: Function start address
             num_params: Number of parameters
-        '''
-        super().__init__(name, start_addr, num_params)
-        self.sp_before_call = None  # Track sp before call for automatic cleanup
-        self.return_target_label = None  # Track return address label for next call
-
-    def finalize(self) -> 'LowLevelILFunction':
-        '''Finalize function and verify no pending call sequences
 
         Returns:
-            The constructed LowLevelILFunction
+            Tuple of (function, builder)
 
-        Raises:
-            RuntimeError: If there are pending call sequences
+        Example:
+            func, builder = FalcomVMBuilder.create_function('DOF_ON', 0x1FFDB6, 2)
+            # ... build instructions ...
+            builder.finalize()
+            return func
+        '''
+        from ir.llil import LowLevelILFunction
+        func = LowLevelILFunction(name, start_addr, num_params)
+        builder = FalcomVMBuilder(func)
+        return func, builder
+
+    def finalize(self):
+        '''Finalize function and verify no pending call sequences
+
+        Call this after all instructions have been added to verify the
+        builder state is clean (no incomplete call sequences).
         '''
         # Check for pending call setup
         if self.sp_before_call is not None:
@@ -50,8 +64,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Incomplete call sequence detected (push_ret_addr without call).'
             )
 
-        # Call parent finalization
-        return super().finalize()
+        # Call parent finalization if it exists
+        if hasattr(super(), 'finalize'):
+            super().finalize()
 
     # === Falcom Specific Constants ===
 

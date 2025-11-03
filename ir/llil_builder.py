@@ -13,28 +13,14 @@ from .llil import (
 
 
 class LowLevelILBuilder:
-    '''Mid-level builder with convenience methods
+    '''Mid-level builder with convenience methods'''
 
-    Usage:
-        builder = LowLevelILBuilder('func_name', start_addr=0x1000, num_params=2)
-        # ... build instructions ...
-        function = builder.finalize()  # Returns function and validates state
-    '''
-
-    def __init__(self, name: str, start_addr: int = 0, num_params: int = 0):
-        '''Create builder with new function
-
-        Args:
-            name: Function name
-            start_addr: Function start address
-            num_params: Number of parameters
-        '''
-        self.function = LowLevelILFunction(name, start_addr, num_params)
+    def __init__(self, function: LowLevelILFunction):
+        self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
         self.current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
         self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
         self.vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
-        self._finalized = False  # Track if finalize() was called
 
     def set_current_block(self, block: LowLevelILBasicBlock, sp: Optional[int] = None):
         '''Set the current basic block for instruction insertion
@@ -80,24 +66,6 @@ class LowLevelILBuilder:
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         '''Get block by label name'''
         return self.function.get_block_by_label(label)
-
-    def finalize(self) -> LowLevelILFunction:
-        '''Finalize builder and return function
-
-        This method should be called after all instructions have been added.
-        It validates the builder state and returns the function.
-
-        Returns:
-            The constructed LowLevelILFunction
-
-        Raises:
-            RuntimeError: If builder was already finalized
-        '''
-        if self._finalized:
-            raise RuntimeError('Builder already finalized')
-
-        self._finalized = True
-        return self.function
 
     def add_instruction(self, instr: LowLevelILInstruction):
         '''Add instruction to current block and update stack pointer tracking'''
