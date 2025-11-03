@@ -6,16 +6,16 @@ Defines Falcom VM-specific instructions that extend the generic LLIL.
 
 from enum import IntEnum
 from typing import Optional
-from ir.llil import LowLevelILInstruction
+from ir.llil import LowLevelILInstruction, LowLevelILOperation
 
 
 class LowLevelILFalcomOperation(IntEnum):
     '''Falcom-specific LLIL operations
 
-    Start from 1000 to avoid conflicts with generic LLIL operations.
+    Independent enum that starts from LLIL_USER_DEFINED to avoid conflicts.
     '''
-    LLIL_GLOBAL_LOAD = 1000   # Load from global variable array
-    LLIL_GLOBAL_STORE = 1001  # Store to global variable array
+    LLIL_GLOBAL_LOAD = LowLevelILOperation.LLIL_USER_DEFINED     # Load from global variable array
+    LLIL_GLOBAL_STORE = LowLevelILOperation.LLIL_USER_DEFINED + 1  # Store to global variable array
 
 
 class LowLevelILGlobalLoad(LowLevelILInstruction):

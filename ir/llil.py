@@ -62,6 +62,9 @@ class LowLevelILOperation(IntEnum):
     LLIL_DEBUG = 61             # debug info
     LLIL_STACK_ADDR = 62        # address of stack location (sp + offset)
 
+    # User-defined extensions (reserved range: 1000+)
+    LLIL_USER_DEFINED = 1000    # Start of user-defined operations
+
 
 class LowLevelILInstruction(ABC):
     '''Base class for all LLIL instructions'''
