@@ -34,11 +34,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def __init__(self):
         '''Create builder without function (call create_function first)'''
+        # Don't call super().__init__ yet - parent needs function parameter
+        # Will be called in create_function()
         self.function = None
-        self.current_block = None
-        self.current_sp = 0
-        self.frame_base_sp = None
-        self.vstack = []
         self.sp_before_call = None  # Track sp before call for automatic cleanup
         self.return_target_label = None  # Track return address label for next call
         self._finalized = False
@@ -59,7 +57,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
         '''
         if self.function is not None:
             raise RuntimeError('Function already created')
-        self.function = LowLevelILFunction(name, start_addr, num_params)
+
+        # Create function and initialize parent class
+        function = LowLevelILFunction(name, start_addr, num_params)
+        super().__init__(function)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
         '''Create basic block and automatically add to function
