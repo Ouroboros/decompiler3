@@ -59,10 +59,6 @@ class LowLevelILBuilder:
             self.frame_base_sp = 0
             self.function.frame_base_sp = 0
 
-    def mark_label(self, name: str, block: LowLevelILBasicBlock):
-        '''Associate a label name with a block'''
-        self.function.mark_label(name, block)
-
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         '''Get block by label name'''
         return self.function.get_block_by_label(label)
@@ -383,10 +379,13 @@ class LowLevelILBuilder:
     # === Special ===
 
     def label(self, name: str):
-        '''Label - marks current block with this label name'''
+        '''Label - inserts a label instruction at current position
+
+        Note: Block labels should be set via LowLevelILBasicBlock constructor.
+        This method only adds a visual label instruction for display purposes.
+        '''
         if self.current_block is None:
             raise RuntimeError('No current block to label')
-        self.mark_label(name, self.current_block)
         self.add_instruction(LowLevelILLabelInstr(name))
 
     def debug_line(self, line_no: int):

@@ -45,20 +45,16 @@ def create_AV_04_0017():
 
     function = LowLevelILFunction('AV_04_0017', 0x243C5, num_params = 0)
 
-    # Create all blocks upfront
-    entry_block = LowLevelILBasicBlock(0x243C5, 0)
-    loc_243E3 = LowLevelILBasicBlock(0x243E3, 1)
-    loc_243FB = LowLevelILBasicBlock(0x243FB, 2)
+    # Create all blocks upfront with labels
+    entry_block = LowLevelILBasicBlock(0x243C5, 0, label = 'AV_04_0017')
+    loc_243E3 = LowLevelILBasicBlock(0x243E3, 1, label = 'loc_243E3')
+    loc_243FB = LowLevelILBasicBlock(0x243FB, 2, label = 'loc_243FB')
 
     function.add_basic_block(entry_block)
     function.add_basic_block(loc_243E3)
     function.add_basic_block(loc_243FB)
 
     builder = FalcomVMBuilder(function)
-
-    # Pre-register labels for all blocks (required before call)
-    builder.mark_label('loc_243E3', loc_243E3)
-    builder.mark_label('loc_243FB', loc_243FB)
 
     # === BLOCK 0: Entry - map_event_box_set_enable call ===
     # sp auto-set to num_params (0), fp = 0
@@ -169,14 +165,14 @@ def create_DOF_ON():
 
     function = LowLevelILFunction('DOF_ON', 0x1FFDB6, num_params = 2)
 
-    # Create all blocks upfront
-    entry_block = LowLevelILBasicBlock(0x1FFDB6, 0)
-    loc_1FFDCB = LowLevelILBasicBlock(0x1FFDCB, 1)
-    nonzero_path = LowLevelILBasicBlock(0x1FFDD8, 2)  # Implicit block after POP_JMP_ZERO
-    loc_1FFE02 = LowLevelILBasicBlock(0x1FFE02, 3)
-    loc_1FFE07 = LowLevelILBasicBlock(0x1FFE07, 4)    # Zero branch target
-    loc_1FFE20 = LowLevelILBasicBlock(0x1FFE20, 5)    # Merge point
-    loc_1FFE35 = LowLevelILBasicBlock(0x1FFE35, 6)
+    # Create all blocks upfront with labels
+    entry_block = LowLevelILBasicBlock(0x1FFDB6, 0, label = 'DOF_ON')
+    loc_1FFDCB = LowLevelILBasicBlock(0x1FFDCB, 1, label = 'loc_1FFDCB')
+    nonzero_path = LowLevelILBasicBlock(0x1FFDD8, 2)  # Uses default label loc_1FFDD8
+    loc_1FFE02 = LowLevelILBasicBlock(0x1FFE02, 3, label = 'loc_1FFE02')
+    loc_1FFE07 = LowLevelILBasicBlock(0x1FFE07, 4, label = 'loc_1FFE07')
+    loc_1FFE20 = LowLevelILBasicBlock(0x1FFE20, 5, label = 'loc_1FFE20')
+    loc_1FFE35 = LowLevelILBasicBlock(0x1FFE35, 6, label = 'loc_1FFE35')
 
     function.add_basic_block(entry_block)
     function.add_basic_block(loc_1FFDCB)
@@ -187,13 +183,6 @@ def create_DOF_ON():
     function.add_basic_block(loc_1FFE35)
 
     builder = FalcomVMBuilder(function)
-
-    # Pre-register labels for all blocks (required before call)
-    builder.mark_label('loc_1FFDCB', loc_1FFDCB)
-    builder.mark_label('loc_1FFE02', loc_1FFE02)
-    builder.mark_label('loc_1FFE07', loc_1FFE07)
-    builder.mark_label('loc_1FFE20', loc_1FFE20)
-    builder.mark_label('loc_1FFE35', loc_1FFE35)
 
     # === BLOCK 0: Entry - Enable DOF ===
     # DOF_ON has 2 parameters (arg1, arg2)
@@ -332,8 +321,8 @@ def create_sound_play_se():
 
     function = LowLevelILFunction('sound_play_se', 0x149B2, num_params = 8)
 
-    # Create single block
-    entry_block = LowLevelILBasicBlock(0x149B2, 0)
+    # Create single block with label
+    entry_block = LowLevelILBasicBlock(0x149B2, 0, label = 'sound_play_se')
     function.add_basic_block(entry_block)
 
     builder = FalcomVMBuilder(function)

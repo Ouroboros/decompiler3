@@ -473,10 +473,11 @@ class LowLevelILSyscall(LowLevelILInstruction):
 class LowLevelILBasicBlock:
     '''Basic block containing LLIL instructions (following BN design)'''
 
-    def __init__(self, start: int, index: int = 0):
+    def __init__(self, start: int, index: int = 0, label: Optional[str] = None):
         self.start = start
         self.end = start
         self.index = index  # Block index in function
+        self.label = label if label is not None else f'loc_{start:X}'  # Default label from address
         self.instructions: List[LowLevelILInstruction] = []
         self.sp_in = 0   # sp state at block entry
         self.sp_out = 0  # sp state at block exit
@@ -548,7 +549,6 @@ class LowLevelILFunction:
         self.num_params = num_params  # Number of parameters
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
-        self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label -> block
         self.frame_base_sp: Optional[int] = None  # Frame pointer (sp at function entry)
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
@@ -561,23 +561,13 @@ class LowLevelILFunction:
         '''Get basic block at address'''
         return self._block_map.get(addr)
 
-    def mark_label(self, name: str, block: LowLevelILBasicBlock):
-        '''Associate a label name with a block'''
-        self._label_map[name] = block
-
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         '''Get block by label name
 
-        First tries the label map, then falls back to searching blocks
-        by their label_name property (set via LowLevelILLabelInstr).
+        Searches blocks by their label attribute (set in constructor).
         '''
-        # Try label map first (explicit marks)
-        if label in self._label_map:
-            return self._label_map[label]
-
-        # Fall back to searching by label_name property
         for block in self.basic_blocks:
-            if block.label_name == label:
+            if block.label == label:
                 return block
 
         return None

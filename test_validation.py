@@ -129,12 +129,11 @@ def test_correct_sequence():
     builder = FalcomVMBuilder(func)
 
     entry = LowLevelILBasicBlock(0, 'entry')
-    ret_block = LowLevelILBasicBlock(0, 'ret_block')
+    ret_block = LowLevelILBasicBlock(0, 'ret_block', label = 'loc_ret')
     func.add_basic_block(entry)
     func.add_basic_block(ret_block)
 
     builder.set_current_block(entry)
-    builder.mark_label('loc_ret', ret_block)
 
     try:
         builder.push_func_id()
@@ -179,11 +178,9 @@ def test_sp_mismatch():
     builder = FalcomVMBuilder(func)
 
     entry = LowLevelILBasicBlock(0, 'entry')
-    ret_block = LowLevelILBasicBlock(0, 'ret_block')
+    ret_block = LowLevelILBasicBlock(0, 'ret_block', label = 'loc_ret')
     func.add_basic_block(entry)
     func.add_basic_block(ret_block)
-
-    builder.mark_label('loc_ret', ret_block)
 
     # Build entry block
     builder.set_current_block(entry)
@@ -241,12 +238,11 @@ def test_pending_ret_addr():
     builder = FalcomVMBuilder(func)
 
     entry = LowLevelILBasicBlock(0, 'entry')
-    ret_block = LowLevelILBasicBlock(0, 'ret_block')
+    ret_block = LowLevelILBasicBlock(0, 'ret_block', label = 'loc_ret')
     func.add_basic_block(entry)
     func.add_basic_block(ret_block)
 
     builder.set_current_block(entry)
-    builder.mark_label('loc_ret', ret_block)
 
     builder.push_func_id()
     builder.push_ret_addr('loc_ret')
