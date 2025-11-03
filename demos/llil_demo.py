@@ -364,9 +364,9 @@ def create_Dummy_m3010_talk0():
     loc_8ADA5 = builder.create_basic_block(0x8ADA5, 'loc_8ADA5')
     loc_8ADC3 = builder.create_basic_block(0x8ADC3, 'loc_8ADC3')
     loc_8ADE2 = builder.create_basic_block(0x8ADE2, 'loc_8ADE2')
+    fade_out_block = builder.create_basic_block(0x8AE08, 'fade_out_block')  # Fall-through from loc_8ADE2
     loc_8AE20 = builder.create_basic_block(0x8AE20, 'loc_8AE20')
-    loc_8AE38 = builder.create_basic_block(0x8AE38, 'loc_8AE38')
-    check_case_0 = builder.create_basic_block(0x8AE48, 'check_case_0')
+    loc_8AE38 = builder.create_basic_block(0x8AE38, 'loc_8AE38')  # check_case_0
     loc_8AE7C = builder.create_basic_block(0x8AE7C, 'loc_8AE7C')
     loc_8AEB8 = builder.create_basic_block(0x8AEB8, 'loc_8AEB8')
     loc_8AEBD = builder.create_basic_block(0x8AEBD, 'loc_8AEBD')
@@ -468,30 +468,30 @@ def create_Dummy_m3010_talk0():
     builder.load_stack(-WORD_SIZE)
     builder.push_int(0)
     builder.ge()  # GE() operation
-    # POP_JMP_ZERO: if result is zero, jump to loc_8AFC2, else continue to loc_8AE20
-    builder.pop_jmp_zero(loc_8AFC2, loc_8AE20)
+    # POP_JMP_ZERO: if result is zero, jump to loc_8AFC2, else continue to fade_out_block
+    builder.pop_jmp_zero(loc_8AFC2, fade_out_block)
 
-    # === BLOCK 9: loc_8AE20 - fade_out ===
-    builder.set_current_block(loc_8AE20)
+    # === BLOCK 9: fade_out_block - Fall-through: call fade_out ===
+    builder.set_current_block(fade_out_block)
     builder.debug_line(10807)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AE38')
+    builder.push_ret_addr('loc_8AE20')
     builder.push_int(0)
     builder.push(builder.const_float(1.0))
     builder.push_int(0)
     builder.push(builder.const_float(0.5))
     builder.call('fade_out')
 
-    # === BLOCK 10: loc_8AE38 - fade_wait ===
-    builder.set_current_block(loc_8AE38)
+    # === BLOCK 10: loc_8AE20 - fade_out return: call fade_wait ===
+    builder.set_current_block(loc_8AE20)
     builder.debug_line(10808)
     builder.push_func_id()
-    builder.push_ret_addr('check_case_0')
+    builder.push_ret_addr('loc_8AE38')
     builder.push_int(0)
     builder.call('fade_wait')
 
-    # === BLOCK 11: check_case_0 - Check if selection == 0 ===
-    builder.set_current_block(check_case_0)
+    # === BLOCK 11: loc_8AE38 - Check if selection == 0 ===
+    builder.set_current_block(loc_8AE38)
     builder.debug_line(10810)
     builder.load_stack(-WORD_SIZE)
     builder.push_int(0)
