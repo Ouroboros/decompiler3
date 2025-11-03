@@ -561,10 +561,6 @@ class LowLevelILFunction:
         '''Get basic block by start address'''
         return self._block_map.get(addr)
 
-    def get_basic_block_at(self, addr: int) -> Optional[LowLevelILBasicBlock]:
-        '''Get basic block at address (alias for get_block_by_addr)'''
-        return self.get_block_by_addr(addr)
-
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
         '''Get block by label name
 
