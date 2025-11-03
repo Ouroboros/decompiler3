@@ -450,7 +450,7 @@ class LowLevelILDebug(LowLevelILInstruction):
         self.value = value
 
     def __str__(self) -> str:
-        return f'DBG_{self.debug_type.upper()} {self.value}'
+        return f'dbg_{self.debug_type.lower()} {self.value}'
 
 
 # === VM Specific ===
