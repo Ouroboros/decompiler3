@@ -9,6 +9,7 @@ from .llil import (
     LowLevelILSub, LowLevelILDiv, LowLevelILEq, LowLevelILNe,
     LowLevelILLt, LowLevelILLe, LowLevelILGt, LowLevelILGe,
     LowLevelILStackPush, LowLevelILStackStore, LowLevelILStackPop,
+    LowLevelILStackAddr,
     WORD_SIZE
 )
 
@@ -204,6 +205,18 @@ class LowLevelILBuilder:
             # Accessing within current stack frame (temporaries/locals) - use sp-relative
             stack_val = self.stack_load(offset)
             self.stack_push(stack_val)
+
+    def push_stack_addr(self, offset: int):
+        '''Push the address of stack location (sp + offset)
+
+        This is used for PUSH_STACK_OFFSET instruction which pushes the address,
+        not the value at that address. This represents &STACK[sp + offset].
+
+        Args:
+            offset: Byte offset relative to current sp
+        '''
+        stack_addr = LowLevelILStackAddr(offset)
+        self.stack_push(stack_addr)
 
     # === Register Operations ===
 

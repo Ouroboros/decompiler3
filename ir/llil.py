@@ -60,6 +60,7 @@ class LowLevelILOperation(IntEnum):
     # VM specific
     LLIL_SYSCALL = 60           # system call
     LLIL_DEBUG = 61             # debug info
+    LLIL_STACK_ADDR = 62        # address of stack location (sp + offset)
 
 
 class LowLevelILInstruction(ABC):
@@ -231,6 +232,28 @@ class LowLevelILStackPop(LowLevelILInstruction):
 
     def __str__(self) -> str:
         return 'STACK[--sp]'
+
+
+class LowLevelILStackAddr(LowLevelILInstruction):
+    '''Address of stack location: &STACK[sp + offset]
+
+    Used for PUSH_STACK_OFFSET which pushes the address (sp + offset), not the value.
+    This represents a pointer/reference to a stack location.
+    '''
+
+    def __init__(self, offset: int, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_STACK_ADDR, size)
+        self.offset = offset  # Byte offset relative to sp
+
+    def __str__(self) -> str:
+        # Convert byte offset to word offset for display
+        word_offset = self.offset // WORD_SIZE
+        if word_offset == 0:
+            return '&STACK[sp]'
+        elif word_offset > 0:
+            return f'&STACK[sp + {word_offset}]'
+        else:
+            return f'&STACK[sp - {-word_offset}]'
 
 
 # Alias for compatibility

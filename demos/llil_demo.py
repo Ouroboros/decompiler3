@@ -733,12 +733,12 @@ def create_EV_06_37_00():
     # Call quest_get_lgc_level
     builder.push_func_id()
     builder.push_ret_addr('loc_16AC74')
-    # PUSH_STACK_OFFSET(-16) - push value from stack frame
-    builder.load_stack(-16)
+    # PUSH_STACK_OFFSET(-16) - push address of stack location
+    builder.push_stack_addr(-16)
     # PUSH_STACK_OFFSET(-24)
-    builder.load_stack(-24)
+    builder.push_stack_addr(-24)
     # PUSH_STACK_OFFSET(-32)
-    builder.load_stack(-32)
+    builder.push_stack_addr(-32)
     builder.call('quest_get_lgc_level')
 
     # === BLOCK 1: loc_16AC74 - Return ===
@@ -755,7 +755,7 @@ def test_EV_06_37_00():
     print('Simple function demonstrating:')
     print('- Stack frame allocation (4 x PUSH 0)')
     print('- POP_TO to initialize frame variable')
-    print('- PUSH_STACK_OFFSET to pass frame variables as arguments')
+    print('- PUSH_STACK_OFFSET to pass addresses (not values) as arguments')
     print()
 
     func5 = create_EV_06_37_00()
