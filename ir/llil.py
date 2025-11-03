@@ -581,7 +581,7 @@ class LowLevelILFunction:
                 block.add_outgoing_edge(last_instr.false_target)
 
             elif not isinstance(last_instr, Terminal):
-                # Falls through to next block
+                # Non-terminal instructions (e.g., call) fall through to next block
                 next_idx = block.index + 1
                 if next_idx < len(self.basic_blocks):
                     block.add_outgoing_edge(self.basic_blocks[next_idx])
