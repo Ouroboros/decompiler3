@@ -104,9 +104,63 @@ This applies to:
 - Keyword arguments: `func(key = value)`
 - Annotated assignments: `x: int = 5`
 
+### 5. English-Only Comments
+
+**NEVER** use Chinese (or any non-English language) in code comments or documentation.
+
+#### ❌ WRONG:
+```python
+rhs = stack_pop()  # 先弹出来的是右操作数（栈顶）
+lhs = stack_pop()  # 再弹出来的是左操作数（下面那个）
+```
+
+#### ✅ CORRECT:
+```python
+rhs = stack_pop()  # First pop gets right operand (top of stack)
+lhs = stack_pop()  # Second pop gets left operand (below it)
+```
+
+**Why?**
+- Code consistency
+- International collaboration
+- Easier for tooling and static analysis
+
+### 6. Concise Git Commit Messages
+
+Keep commit messages **short and focused** (1-2 sentences).
+
+#### ❌ WRONG:
+```
+Fix binary operation operand order in expand format
+
+Issue: lhs/rhs were reversed in binary operation expansion
+
+Based on VM C code analysis, the correct order is:
+1. First pop → lhs
+2. Second pop → rhs
+3. Compute: rhs OP lhs (not lhs OP rhs!)
+
+Example from GE operation in VM:
+  lhs = *(_DWORD *)(v112 + stack_ptr_1);  // First pop
+  rhs = *(_DWORD *)(v75 + stack_ptr_1);   // Second pop
+  cmp_result = (int)(rhs) >= (int)(lhs);  // rhs >= lhs
+
+Changes:
+- Swap pop order: lhs first, then rhs
+- Reverse expression: rhs OP lhs instead of lhs OP rhs
+- Update all operations: ADD, SUB, MUL, DIV, EQ, NE, LT, LE, GT, GE
+```
+
+#### ✅ CORRECT:
+```
+Fix binary operation operand order
+
+Corrected lhs/rhs pop order based on VM C code analysis.
+```
+
 ## Enforcement
 
-All code must follow these rules. Any hardcoded magic numbers will be rejected.
+All code must follow these rules.
 
 ### Code Review Checklist:
 - [ ] No hardcoded `4` for word size
@@ -114,3 +168,5 @@ All code must follow these rules. Any hardcoded magic numbers will be rejected.
 - [ ] All constants imported from appropriate modules
 - [ ] Comments reference constant names, not values
 - [ ] All assignments have spaces: `x = value` (not `x=value`)
+- [ ] All comments are in English (no Chinese or other languages)
+- [ ] Commit messages are concise (1-2 sentences)
