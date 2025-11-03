@@ -373,17 +373,6 @@ class LowLevelILIf(Terminal):
             return f'if {self.condition} goto {true_name}'
 
 
-class LowLevelILBranch(LowLevelILIf):
-    '''Simplified branch with only one target (falls through otherwise)'''
-
-    def __init__(self, condition: 'LowLevelILInstruction', target: 'LowLevelILBasicBlock'):
-        super().__init__(condition, target, None)
-
-    def __str__(self) -> str:
-        target_name = self.true_target.label_name or f'block_{self.true_target.index}'
-        return f'if {self.condition} goto {target_name}'
-
-
 class LowLevelILCall(ControlFlow):
     '''Function call'''
 
@@ -574,15 +563,14 @@ class LowLevelILFunction:
                 block.add_outgoing_edge(last_instr.target)
 
             elif isinstance(last_instr, LowLevelILIf):
-                # Edges already created via block references
+                # Both targets must be explicitly specified
+                if last_instr.false_target is None:
+                    raise RuntimeError(
+                        f'Block {block.index} has If instruction with no false_target. '
+                        f'Both true_target and false_target must be explicitly specified.'
+                    )
                 block.add_outgoing_edge(last_instr.true_target)
-                if last_instr.false_target:
-                    block.add_outgoing_edge(last_instr.false_target)
-                else:
-                    # LowLevelILBranch: false_target is None, so fall through to next block
-                    next_idx = block.index + 1
-                    if next_idx < len(self.basic_blocks):
-                        block.add_outgoing_edge(self.basic_blocks[next_idx])
+                block.add_outgoing_edge(last_instr.false_target)
 
             elif not isinstance(last_instr, Terminal):
                 # Falls through to next block
@@ -629,7 +617,7 @@ class LowLevelILFunction:
                 header += f', fp = {self.frame_base_sp}'
             header += ']\\l'
             label_parts.append(header)
-            label_parts.append('─' * 40 + '\\l')
+            label_parts.append('-' * 40 + '\\l')
 
             # Instructions
             for instr in block.instructions:

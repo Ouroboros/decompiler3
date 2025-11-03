@@ -335,14 +335,31 @@ class LowLevelILBuilder:
             target = target_block
         self.add_instruction(LowLevelILJmp(target))
 
-    def branch_if(self, condition: LowLevelILInstruction, target: Union[str, LowLevelILBasicBlock]):
-        '''Branch if condition is true - target can be label or block'''
-        if isinstance(target, str):
-            target_block = self.get_block_by_label(target)
-            if target_block is None:
-                raise ValueError(f'Undefined label: {target}')
-            target = target_block
-        self.add_instruction(LowLevelILBranch(condition, target))
+    def branch_if(self, condition: LowLevelILInstruction,
+                  true_target: Union[str, LowLevelILBasicBlock],
+                  false_target: Union[str, LowLevelILBasicBlock]):
+        '''Conditional branch - targets can be labels or blocks
+
+        Args:
+            condition: Condition expression
+            true_target: Block to jump to if condition is true
+            false_target: Block to jump to if condition is false
+        '''
+        # Resolve true target
+        if isinstance(true_target, str):
+            true_block = self.get_block_by_label(true_target)
+            if true_block is None:
+                raise ValueError(f'Undefined label: {true_target}')
+            true_target = true_block
+
+        # Resolve false target
+        if isinstance(false_target, str):
+            false_block = self.get_block_by_label(false_target)
+            if false_block is None:
+                raise ValueError(f'Undefined label: {false_target}')
+            false_target = false_block
+
+        self.add_instruction(LowLevelILIf(condition, true_target, false_target))
 
     def call(self, target: Union[str, LowLevelILInstruction], stack_cleanup: Optional[int] = None):
         '''Function call

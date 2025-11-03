@@ -209,7 +209,8 @@ def create_DOF_ON():
     # EQ()
     builder.eq()
     # POP_JMP_ZERO('loc_1FFE07')
-    builder.pop_jmp_zero(loc_1FFE07)
+    # If zero (equal): jump to loc_1FFE07, else fall through to nonzero_path
+    builder.pop_jmp_zero(loc_1FFE07, nonzero_path)
 
     # === BLOCK 2: Nonzero path - Calculate focus range ===
     builder.set_current_block(nonzero_path)

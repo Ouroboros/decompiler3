@@ -3,7 +3,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
 from typing import Union, List
-from ir.llil import LowLevelILEq, LowLevelILBranch
+from ir.llil import LowLevelILEq
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
 
@@ -84,20 +84,32 @@ class FalcomVMBuilder(LowLevelILBuilder):
         reg_val = self.reg_load(reg_index)
         self.stack_push(reg_val)
 
-    def pop_jmp_zero(self, target):
-        '''POP_JMP_ZERO operation - branch if popped value is zero'''
+    def pop_jmp_zero(self, true_target, false_target):
+        '''POP_JMP_ZERO operation - branch if popped value is zero
+
+        Args:
+            true_target: Block to jump to if value is zero
+            false_target: Block to jump to if value is not zero
+        '''
         # Pop from stack using StackPop expression
         cond = self.pop()
         # Create EQ(cond, 0) without adding as instruction
         # This is just used as the branch condition expression
         zero = self.const_int(0)
         is_zero = LowLevelILEq(cond, zero)
-        # Branch if is_zero is true
-        self.add_instruction(LowLevelILBranch(is_zero, target))
+        # Create If with both targets explicitly specified
+        from ir.llil import LowLevelILIf
+        self.add_instruction(LowLevelILIf(is_zero, true_target, false_target))
 
-    def pop_jmp_not_zero(self, target):
-        '''POP_JMP_NOT_ZERO operation'''
+    def pop_jmp_not_zero(self, true_target, false_target):
+        '''POP_JMP_NOT_ZERO operation - branch if popped value is not zero
+
+        Args:
+            true_target: Block to jump to if value is not zero
+            false_target: Block to jump to if value is zero
+        '''
         # Pop from stack using StackPop expression
         cond = self.pop()
-        # Branch if condition != 0
-        self.branch_if(cond, target)
+        # Create If with both targets explicitly specified
+        from ir.llil import LowLevelILIf
+        self.add_instruction(LowLevelILIf(cond, true_target, false_target))
