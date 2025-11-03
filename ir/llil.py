@@ -595,3 +595,96 @@ class LowLevelILFunction:
         for block in self.basic_blocks:
             result += str(block)
         return result
+
+    def to_dot(self) -> str:
+        '''Generate Graphviz DOT format for CFG visualization
+
+        Returns:
+            DOT format string that can be rendered with:
+            - Graphviz: dot -Tpng output.dot -o output.png
+            - Online: https://dreampuf.github.io/GraphvizOnline/
+
+        Example:
+            func.build_cfg()
+            dot = func.to_dot()
+            with open('cfg.dot', 'w') as f:
+                f.write(dot)
+        '''
+        lines = []
+        lines.append(f'digraph "{self.name}" {{')
+        lines.append('    rankdir=TB;')
+        lines.append('    node [shape=box, fontname="Courier New", fontsize=10];')
+        lines.append('    edge [fontname="Courier New", fontsize=9];')
+        lines.append('')
+
+        # Add nodes (basic blocks)
+        for block in self.basic_blocks:
+            label_parts = []
+
+            # Block header
+            block_name = block.label_name or f'block_{block.index}'
+            header = f'{block_name} @ {hex(block.start)}\\l'
+            header += f'[sp = {block.sp_in}'
+            if hasattr(self, 'frame_base_sp') and self.frame_base_sp is not None:
+                header += f', fp = {self.frame_base_sp}'
+            header += ']\\l'
+            label_parts.append(header)
+            label_parts.append('─' * 40 + '\\l')
+
+            # Instructions
+            for instr in block.instructions:
+                instr_str = str(instr).replace('\\', '\\\\').replace('"', '\\"')
+                label_parts.append(instr_str + '\\l')
+
+            label = ''.join(label_parts)
+
+            # Node styling
+            if block.index == 0:
+                # Entry block
+                lines.append(f'    block_{block.index} [label="{label}", style=filled, fillcolor=lightgreen];')
+            elif block.has_terminal and isinstance(block.instructions[-1], LowLevelILRet):
+                # Exit block
+                lines.append(f'    block_{block.index} [label="{label}", style=filled, fillcolor=lightblue];')
+            else:
+                lines.append(f'    block_{block.index} [label="{label}"];')
+
+        lines.append('')
+
+        # Add edges
+        for block in self.basic_blocks:
+            if not block.outgoing_edges:
+                continue
+
+            last_instr = block.instructions[-1] if block.instructions else None
+
+            for target in block.outgoing_edges:
+                # Determine edge label and style
+                edge_label = ''
+                edge_style = ''
+
+                if isinstance(last_instr, LowLevelILIf):
+                    # Conditional branch
+                    if target == last_instr.true_target:
+                        edge_label = 'true'
+                        edge_style = ', color=green'
+                    elif last_instr.false_target and target == last_instr.false_target:
+                        edge_label = 'false'
+                        edge_style = ', color=red'
+                    else:
+                        edge_label = 'fall-through'
+                        edge_style = ', style=dashed'
+                elif isinstance(last_instr, LowLevelILGoto):
+                    edge_label = 'goto'
+                    edge_style = ', color=blue'
+                else:
+                    # Fall-through
+                    edge_label = 'fall-through'
+                    edge_style = ', style=dashed'
+
+                if edge_label:
+                    lines.append(f'    block_{block.index} -> block_{target.index} [label="{edge_label}"{edge_style}];')
+                else:
+                    lines.append(f'    block_{block.index} -> block_{target.index}{edge_style};')
+
+        lines.append('}')
+        return '\n'.join(lines)

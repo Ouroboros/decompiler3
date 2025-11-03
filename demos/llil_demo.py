@@ -381,6 +381,15 @@ def main():
     func2 = create_DOF_ON()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
 
+    # Generate CFG visualization
+    func2.build_cfg()
+    dot = func2.to_dot()
+    with open('DOF_ON_cfg.dot', 'w') as f:
+        f.write(dot)
+    print('\n📊 CFG saved to DOF_ON_cfg.dot')
+    print('   View online: https://dreampuf.github.io/GraphvizOnline/')
+    print('   Or render: dot -Tpng DOF_ON_cfg.dot -o DOF_ON_cfg.png')
+
     # Test 3: sound_play_se - SYSCALL with multiple parameters
     print('\n🧪 Test 3: sound_play_se - SYSCALL with Multiple Parameters')
     print('-' * 60)
