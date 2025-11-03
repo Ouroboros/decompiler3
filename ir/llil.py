@@ -414,7 +414,11 @@ class LowLevelILConst(LowLevelILInstruction):
         if isinstance(self.value, str):
             return f"'{self.value}'"
         elif isinstance(self.value, float):
-            return f'{self.value:.6f}' if self.value != int(self.value) else f'{self.value:.1f}'
+            # Format float with up to 6 decimal places, strip trailing zeros
+            formatted = f'{self.value:.6f}'
+            # Remove trailing zeros and decimal point if not needed
+            formatted = formatted.rstrip('0').rstrip('.')
+            return formatted
         elif isinstance(self.value, int):
             if self.is_hex:
                 # Hex display
