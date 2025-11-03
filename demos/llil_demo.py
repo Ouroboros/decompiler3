@@ -43,18 +43,17 @@ def create_AV_04_0017():
         RETURN()
     '''
 
-    function = LowLevelILFunction('AV_04_0017', 0x243C5, num_params = 0)
+    # Create builder (creates function internally)
+    builder = FalcomVMBuilder('AV_04_0017', 0x243C5, num_params = 0)
 
     # Create all blocks upfront with labels
     entry_block = LowLevelILBasicBlock(0x243C5, 0, label = 'AV_04_0017')
     loc_243E3 = LowLevelILBasicBlock(0x243E3, 1, label = 'loc_243E3')
     loc_243FB = LowLevelILBasicBlock(0x243FB, 2, label = 'loc_243FB')
 
-    function.add_basic_block(entry_block)
-    function.add_basic_block(loc_243E3)
-    function.add_basic_block(loc_243FB)
-
-    builder = FalcomVMBuilder(function)
+    builder.function.add_basic_block(entry_block)
+    builder.function.add_basic_block(loc_243E3)
+    builder.function.add_basic_block(loc_243FB)
 
     # === BLOCK 0: Entry - map_event_box_set_enable call ===
     # sp auto-set to num_params (0), fp = 0
@@ -104,10 +103,8 @@ def create_AV_04_0017():
     # RETURN()
     builder.ret()
 
-    # Verify no pending call sequences
-    builder.finalize()
-
-    return function
+    # Finalize and return function (validates no pending call sequences)
+    return builder.finalize()
 
 
 def create_DOF_ON():
@@ -163,7 +160,7 @@ def create_DOF_ON():
         RETURN()
     '''
 
-    function = LowLevelILFunction('DOF_ON', 0x1FFDB6, num_params = 2)
+    builder = FalcomVMBuilder('DOF_ON', 0x1FFDB6, num_params = 2)
 
     # Create all blocks upfront with labels
     entry_block = LowLevelILBasicBlock(0x1FFDB6, 0, label = 'DOF_ON')
@@ -174,15 +171,13 @@ def create_DOF_ON():
     loc_1FFE20 = LowLevelILBasicBlock(0x1FFE20, 5, label = 'loc_1FFE20')
     loc_1FFE35 = LowLevelILBasicBlock(0x1FFE35, 6, label = 'loc_1FFE35')
 
-    function.add_basic_block(entry_block)
-    function.add_basic_block(loc_1FFDCB)
-    function.add_basic_block(nonzero_path)
-    function.add_basic_block(loc_1FFE02)
-    function.add_basic_block(loc_1FFE07)
-    function.add_basic_block(loc_1FFE20)
-    function.add_basic_block(loc_1FFE35)
-
-    builder = FalcomVMBuilder(function)
+    builder.function.add_basic_block(entry_block)
+    builder.function.add_basic_block(loc_1FFDCB)
+    builder.function.add_basic_block(nonzero_path)
+    builder.function.add_basic_block(loc_1FFE02)
+    builder.function.add_basic_block(loc_1FFE07)
+    builder.function.add_basic_block(loc_1FFE20)
+    builder.function.add_basic_block(loc_1FFE35)
 
     # === BLOCK 0: Entry - Enable DOF ===
     # DOF_ON has 2 parameters (arg1, arg2)
@@ -288,10 +283,8 @@ def create_DOF_ON():
     # RETURN()
     builder.ret()
 
-    # Verify no pending call sequences
-    builder.finalize()
-
-    return function
+    # Finalize and return function (validates no pending call sequences)
+    return builder.finalize()
 
 
 def create_sound_play_se():
@@ -319,13 +312,11 @@ def create_sound_play_se():
         RETURN()
     '''
 
-    function = LowLevelILFunction('sound_play_se', 0x149B2, num_params = 8)
+    builder = FalcomVMBuilder('sound_play_se', 0x149B2, num_params = 8)
 
     # Create single block with label
     entry_block = LowLevelILBasicBlock(0x149B2, 0, label = 'sound_play_se')
-    function.add_basic_block(entry_block)
-
-    builder = FalcomVMBuilder(function)
+    builder.function.add_basic_block(entry_block)
 
     # === BLOCK 0: Entry - SYSCALL ===
     # Function has 8 parameters (already pushed by caller)
@@ -356,10 +347,8 @@ def create_sound_play_se():
     # RETURN()
     builder.ret()
 
-    # Verify no pending call sequences
-    builder.finalize()
-
-    return function
+    # Finalize and return function (validates no pending call sequences)
+    return builder.finalize()
 
 
 def main():

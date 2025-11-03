@@ -9,18 +9,34 @@ from .constants import FalcomConstants
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
-    '''High-level builder with Falcom VM patterns'''
+    '''High-level builder with Falcom VM patterns
 
-    def __init__(self, function):
-        super().__init__(function)
+    Usage:
+        builder = FalcomVMBuilder('func_name', start_addr=0x1000, num_params=2)
+        # ... build instructions ...
+        function = builder.finalize()  # Returns function and validates state
+    '''
+
+    def __init__(self, name: str, start_addr: int = 0, num_params: int = 0):
+        '''Create builder with new function
+
+        Args:
+            name: Function name
+            start_addr: Function start address
+            num_params: Number of parameters
+        '''
+        super().__init__(name, start_addr, num_params)
         self.sp_before_call = None  # Track sp before call for automatic cleanup
         self.return_target_label = None  # Track return address label for next call
 
-    def finalize(self):
+    def finalize(self) -> 'LowLevelILFunction':
         '''Finalize function and verify no pending call sequences
 
-        Call this after all instructions have been added to verify the
-        builder state is clean (no incomplete call sequences).
+        Returns:
+            The constructed LowLevelILFunction
+
+        Raises:
+            RuntimeError: If there are pending call sequences
         '''
         # Check for pending call setup
         if self.sp_before_call is not None:
@@ -34,9 +50,8 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Incomplete call sequence detected (push_ret_addr without call).'
             )
 
-        # Call parent finalization if it exists
-        if hasattr(super(), 'finalize'):
-            super().finalize()
+        # Call parent finalization
+        return super().finalize()
 
     # === Falcom Specific Constants ===
 
