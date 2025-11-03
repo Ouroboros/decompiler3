@@ -372,12 +372,19 @@ class LowLevelILIf(Terminal):
             return f'if {self.condition} goto {true_name}'
 
 
-class LowLevelILCall(ControlFlow):
-    '''Function call'''
+class LowLevelILCall(Terminal):
+    '''Function call
 
-    def __init__(self, target: Union[str, 'LowLevelILInstruction']):
+    In Falcom VM, call is a terminal instruction because control transfers
+    to the called function, then returns to an explicit return address
+    (not fall-through).
+    '''
+
+    def __init__(self, target: Union[str, 'LowLevelILInstruction'],
+                 return_target: Optional[Union[str, 'LowLevelILBasicBlock']] = None):
         super().__init__(LowLevelILOperation.LLIL_CALL)
         self.target = target
+        self.return_target = return_target  # Where to return after call (label or block)
 
     def __str__(self) -> str:
         return f'call {self.target}'
@@ -580,11 +587,31 @@ class LowLevelILFunction:
                 block.add_outgoing_edge(last_instr.true_target)
                 block.add_outgoing_edge(last_instr.false_target)
 
+            elif isinstance(last_instr, LowLevelILCall):
+                # Call returns to explicit return target
+                if last_instr.return_target is not None:
+                    return_block = last_instr.return_target
+                    # Resolve label if needed
+                    if isinstance(return_block, str):
+                        # Find block by label
+                        for b in self.basic_blocks:
+                            if b.label_name == return_block:
+                                return_block = b
+                                break
+                        else:
+                            raise RuntimeError(f'Undefined return label: {return_block}')
+                    block.add_outgoing_edge(return_block)
+                # If no return target specified, fall through (for compatibility)
+                else:
+                    next_idx = block.index + 1
+                    if next_idx < len(self.basic_blocks):
+                        block.add_outgoing_edge(self.basic_blocks[next_idx])
+
             elif not isinstance(last_instr, Terminal):
-                # Non-terminal instructions (e.g., call) fall through to next block
-                next_idx = block.index + 1
-                if next_idx < len(self.basic_blocks):
-                    block.add_outgoing_edge(self.basic_blocks[next_idx])
+                # Should not happen - all blocks must end with terminal
+                raise RuntimeError(
+                    f'Block {block.index} ends with non-terminal instruction: {last_instr}'
+                )
 
     def __str__(self) -> str:
         result = f'; ---------- {self.name} ----------\n'

@@ -361,15 +361,18 @@ class LowLevelILBuilder:
 
         self.add_instruction(LowLevelILIf(condition, true_target, false_target))
 
-    def call(self, target: Union[str, LowLevelILInstruction], stack_cleanup: Optional[int] = None):
+    def call(self, target: Union[str, LowLevelILInstruction],
+             return_target: Optional[Union[str, LowLevelILBasicBlock]] = None,
+             stack_cleanup: Optional[int] = None):
         '''Function call
 
         Args:
             target: Function name or address
+            return_target: Block or label to return to after call (resolved in build_cfg)
             stack_cleanup: Number of stack slots to pop after call (for callee cleanup)
                           If None, no automatic cleanup is performed
         '''
-        self.add_instruction(LowLevelILCall(target))
+        self.add_instruction(LowLevelILCall(target, return_target))
         # In Falcom VM, callee cleans up the stack (including func_id, ret_addr, and arguments)
         if stack_cleanup is not None:
             self.current_sp -= stack_cleanup

@@ -14,6 +14,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     def __init__(self, function):
         super().__init__(function)
         self.sp_before_call = None  # Track sp before call for automatic cleanup
+        self.return_target_label = None  # Track return address label for next call
 
     # === Falcom Specific Constants ===
 
@@ -24,12 +25,15 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(FalcomConstants.current_func_id())
 
     def push_ret_addr(self, label: str):
-        '''Push return address'''
+        '''Push return address and remember it for call instruction'''
+        self.return_target_label = label  # Remember for next call
         self.stack_push(FalcomConstants.ret_addr(label))
 
     def call(self, target):
         '''Falcom VM call - automatically cleans up stack (callee cleanup convention)'''
-        super().call(target)
+        # Call with return target
+        super().call(target, return_target = self.return_target_label)
+        self.return_target_label = None  # Clear after use
         # Falcom VM: callee cleans up all arguments, ret_addr, and func_id
         if self.sp_before_call is not None:
             self.current_sp = self.sp_before_call
