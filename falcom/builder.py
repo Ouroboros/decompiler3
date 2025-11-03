@@ -219,7 +219,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''
         # Pop from stack using StackPop expression
-        stack_val = super().pop()
+        stack_val = self.pop()
         self.reg_store(reg_index, stack_val)
 
     def get_reg(self, reg_index: int):
@@ -237,7 +237,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
               to the new sp position. For example, POP_TO(-WORD_SIZE) stores the
               popped value to STACK[sp - 1] where sp is the post-pop value.
         '''
-        val = super().pop()
+        val = self.pop()
         self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
 
     def pop_jmp_zero(self, true_target, false_target):
@@ -248,7 +248,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             false_target: Block to jump to if value is not zero
         '''
         # Pop from stack using StackPop expression
-        cond = super().pop()
+        cond = self.pop()
         # Create EQ(cond, 0) without adding as instruction
         # This is just used as the branch condition expression
         zero = self.const_int(0)
@@ -264,7 +264,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             false_target: Block to jump to if value is zero
         '''
         # Pop from stack using StackPop expression
-        cond = super().pop()
+        cond = self.pop()
         # Create If with both targets explicitly specified
         self.add_instruction(LowLevelILIf(cond, true_target, false_target))
 
