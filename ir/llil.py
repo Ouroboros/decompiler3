@@ -549,6 +549,7 @@ class LowLevelILFunction:
         self.num_params = num_params  # Number of parameters
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
+        self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label -> block
         self.frame_base_sp: Optional[int] = None  # Frame pointer (sp at function entry)
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
@@ -556,21 +557,15 @@ class LowLevelILFunction:
         block.index = len(self.basic_blocks)
         self.basic_blocks.append(block)
         self._block_map[block.start] = block
+        self._label_map[block.label] = block
 
     def get_block_by_addr(self, addr: int) -> Optional[LowLevelILBasicBlock]:
         '''Get basic block by start address'''
         return self._block_map.get(addr)
 
     def get_block_by_label(self, label: str) -> Optional[LowLevelILBasicBlock]:
-        '''Get block by label name
-
-        Searches blocks by their label attribute (set in constructor).
-        '''
-        for block in self.basic_blocks:
-            if block.label == label:
-                return block
-
-        return None
+        '''Get block by label name (O(1) lookup using label map)'''
+        return self._label_map.get(label)
 
     def build_cfg(self):
         '''Build control flow graph from terminal instructions
