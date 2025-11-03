@@ -516,18 +516,12 @@ class LLILFormatter:
         ]
 
         for block in func.basic_blocks:
-            # Block header: {block_N}  label_name: [sp = 0]
+            # Block header: {block_N}(addr), label, [sp = N, fp = M]
 
             block_info = [
                 f'block_{block.index}(0x{block.start:04X})',
+                block.label,
             ]
-
-            if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
-                label_name = block.instructions[0].name
-                block_info.append(label_name)
-                instructions_to_format = block.instructions[1:]
-            else:
-                instructions_to_format = block.instructions
 
             # Show sp and fp (fp only on first block)
             if block.index == 0 and func.frame_base_sp is not None:
@@ -536,6 +530,12 @@ class LLILFormatter:
                 block_info.append(f'[sp = {block.sp_in}]')
 
             result.append(', '.join(block_info))
+
+            # Skip LowLevelILLabelInstr if present (redundant with block.label)
+            if block.instructions and isinstance(block.instructions[0], LowLevelILLabelInstr):
+                instructions_to_format = block.instructions[1:]
+            else:
+                instructions_to_format = block.instructions
 
             # Format instructions - now returns list
             indent = '  '
