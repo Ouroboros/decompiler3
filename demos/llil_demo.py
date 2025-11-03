@@ -367,13 +367,15 @@ def create_Dummy_m3010_talk0():
     fade_out_block = builder.create_basic_block(0x8AE08, 'fade_out_block')  # Fall-through from loc_8ADE2
     loc_8AE20 = builder.create_basic_block(0x8AE20, 'loc_8AE20')
     loc_8AE38 = builder.create_basic_block(0x8AE38, 'loc_8AE38')  # check_case_0
+    case_0_chr_set_pos = builder.create_basic_block(0x8AE58, 'case_0_chr_set_pos')  # Fall-through for case 0
     loc_8AE7C = builder.create_basic_block(0x8AE7C, 'loc_8AE7C')
     loc_8AEB8 = builder.create_basic_block(0x8AEB8, 'loc_8AEB8')
-    loc_8AEBD = builder.create_basic_block(0x8AEBD, 'loc_8AEBD')
+    loc_8AEBD = builder.create_basic_block(0x8AEBD, 'loc_8AEBD')  # check_case_1
+    case_1_chr_set_pos = builder.create_basic_block(0x8AEE1, 'case_1_chr_set_pos')  # Fall-through for case 1
     loc_8AF01 = builder.create_basic_block(0x8AF01, 'loc_8AF01')
     loc_8AF3D = builder.create_basic_block(0x8AF3D, 'loc_8AF3D')
-    loc_8AF42 = builder.create_basic_block(0x8AF42, 'loc_8AF42')
-    loc_8AFAA = builder.create_basic_block(0x8AFAA, 'loc_8AFAA')  # chr_set_pos in case 2
+    loc_8AF42 = builder.create_basic_block(0x8AF42, 'loc_8AF42')  # check_case_2
+    loc_8AFAA = builder.create_basic_block(0x8AFAA, 'loc_8AFAA')  # Fall-through: chr_set_pos in case 2
     loc_8AF86 = builder.create_basic_block(0x8AF86, 'loc_8AF86')  # camera_rotate_chr in case 2
     loc_8AFC2 = builder.create_basic_block(0x8AFC2, 'loc_8AFC2')  # Main merge point
     loc_8AFD4 = builder.create_basic_block(0x8AFD4, 'loc_8AFD4')
@@ -496,14 +498,14 @@ def create_Dummy_m3010_talk0():
     builder.load_stack(-WORD_SIZE)
     builder.push_int(0)
     builder.eq()
-    # POP_JMP_ZERO: if not equal, jump to loc_8AEBD, else continue to loc_8AE7C
-    builder.pop_jmp_zero(loc_8AEBD, loc_8AE7C)
+    # POP_JMP_ZERO: if not equal, jump to loc_8AEBD, else continue to case_0_chr_set_pos
+    builder.pop_jmp_zero(loc_8AEBD, case_0_chr_set_pos)
 
-    # === BLOCK 12: loc_8AE7C - Case 0: chr_set_pos ===
-    builder.set_current_block(loc_8AE7C)
+    # === BLOCK 12: case_0_chr_set_pos - Fall-through: call chr_set_pos ===
+    builder.set_current_block(case_0_chr_set_pos)
     builder.debug_line(10811)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AEB8')
+    builder.push_ret_addr('loc_8AE7C')
     builder.push(builder.const_float(188.359))
     builder.push(builder.const_float(122.862))
     builder.push(builder.const_float(1.918))
@@ -511,11 +513,11 @@ def create_Dummy_m3010_talk0():
     builder.push_int(65000)
     builder.call('chr_set_pos')
 
-    # === BLOCK 13: loc_8AEB8 - camera_rotate_chr ===
-    builder.set_current_block(loc_8AEB8)
+    # === BLOCK 13: loc_8AE7C - camera_rotate_chr ===
+    builder.set_current_block(loc_8AE7C)
     builder.debug_line(10812)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AFC2')
+    builder.push_ret_addr('loc_8AEB8')
     builder.push_int(-1)
     builder.push_int(3)
     builder.push_int(0)
@@ -524,22 +526,25 @@ def create_Dummy_m3010_talk0():
     builder.push(builder.const_float(0.0))
     builder.push_int(65000)
     builder.call('camera_rotate_chr')
-    # Falls through to loc_8AFC2 (handled by call return target)
 
-    # === BLOCK 14: loc_8AEBD - Check if selection == 1 ===
+    # === BLOCK 14: loc_8AEB8 - Jump to merge point ===
+    builder.set_current_block(loc_8AEB8)
+    builder.add_instruction(LowLevelILGoto(loc_8AFC2))
+
+    # === BLOCK 15: loc_8AEBD - Check if selection == 1 ===
     builder.set_current_block(loc_8AEBD)
     builder.debug_line(10814)
     builder.load_stack(-WORD_SIZE)
     builder.push_int(1)
     builder.eq()
-    # POP_JMP_ZERO: if not equal, jump to loc_8AF42, else continue to loc_8AF01
-    builder.pop_jmp_zero(loc_8AF42, loc_8AF01)
+    # POP_JMP_ZERO: if not equal, jump to loc_8AF42, else continue to case_1_chr_set_pos
+    builder.pop_jmp_zero(loc_8AF42, case_1_chr_set_pos)
 
-    # === BLOCK 15: loc_8AF01 - Case 1: chr_set_pos ===
-    builder.set_current_block(loc_8AF01)
+    # === BLOCK 15: case_1_chr_set_pos - Fall-through: call chr_set_pos ===
+    builder.set_current_block(case_1_chr_set_pos)
     builder.debug_line(10815)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AF3D')
+    builder.push_ret_addr('loc_8AF01')
     builder.push(builder.const_float(62.994))
     builder.push(builder.const_float(-62.892))
     builder.push(builder.const_float(-0.297))
@@ -547,11 +552,11 @@ def create_Dummy_m3010_talk0():
     builder.push_int(65000)
     builder.call('chr_set_pos')
 
-    # === BLOCK 16: loc_8AF3D - camera_rotate_chr ===
-    builder.set_current_block(loc_8AF3D)
+    # === BLOCK 16: loc_8AF01 - camera_rotate_chr ===
+    builder.set_current_block(loc_8AF01)
     builder.debug_line(10816)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AFC2')
+    builder.push_ret_addr('loc_8AF3D')
     builder.push_int(-1)
     builder.push_int(3)
     builder.push_int(0)
@@ -560,9 +565,12 @@ def create_Dummy_m3010_talk0():
     builder.push(builder.const_float(0.0))
     builder.push_int(65000)
     builder.call('camera_rotate_chr')
-    # Falls through to loc_8AFC2
 
-    # === BLOCK 17: loc_8AF42 - Check if selection == 2, then chr_set_pos ===
+    # === BLOCK 17: loc_8AF3D - Jump to merge point ===
+    builder.set_current_block(loc_8AF3D)
+    builder.add_instruction(LowLevelILGoto(loc_8AFC2))
+
+    # === BLOCK 18: loc_8AF42 - Check if selection == 2, then chr_set_pos ===
     builder.set_current_block(loc_8AF42)
     builder.debug_line(10818)
     builder.load_stack(-WORD_SIZE)
