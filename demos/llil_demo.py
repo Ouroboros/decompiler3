@@ -707,6 +707,61 @@ def test_Dummy_m3010_talk0():
     print('   Or render: dot -Tpng Dummy_m3010_talk0_cfg.dot -o Dummy_m3010_talk0_cfg.png')
 
 
+def create_EV_06_37_00():
+    '''EV_06_37_00 - Simple function with stack frame and quest_get_lgc_level call'''
+    builder = FalcomVMBuilder()
+    builder.create_function('EV_06_37_00', 0x16AC50, num_params=0)
+
+    # Create blocks
+    entry = builder.create_basic_block(0x16AC50, 'EV_06_37_00')
+    loc_16AC74 = builder.create_basic_block(0x16AC74, 'loc_16AC74')
+
+    # === BLOCK 0: Entry - Setup stack frame and call quest_get_lgc_level ===
+    builder.set_current_block(entry)
+
+    # PUSH(0x00000000) - 4 times to allocate stack frame
+    builder.push_int(0, is_hex=True)
+    builder.push_int(0, is_hex=True)
+    builder.push_int(0, is_hex=True)
+    builder.push_int(0, is_hex=True)
+
+    # PUSH_INT(0)
+    builder.push_int(0)
+    # POP_TO(-4)
+    builder.pop_to(-4)
+
+    # Call quest_get_lgc_level
+    builder.push_func_id()
+    builder.push_ret_addr('loc_16AC74')
+    # PUSH_STACK_OFFSET(-16) - push value from stack frame
+    builder.load_stack(-16)
+    # PUSH_STACK_OFFSET(-24)
+    builder.load_stack(-24)
+    # PUSH_STACK_OFFSET(-32)
+    builder.load_stack(-32)
+    builder.call('quest_get_lgc_level')
+
+    # === BLOCK 1: loc_16AC74 - Return ===
+    builder.set_current_block(loc_16AC74)
+    builder.ret()
+
+    return builder.finalize()
+
+
+def test_EV_06_37_00():
+    '''Test EV_06_37_00 function'''
+    print('\n🧪 Test 5: EV_06_37_00 - Stack Frame and Quest Call')
+    print('-' * 60)
+    print('Simple function demonstrating:')
+    print('- Stack frame allocation (4 x PUSH 0)')
+    print('- POP_TO to initialize frame variable')
+    print('- PUSH_STACK_OFFSET to pass frame variables as arguments')
+    print()
+
+    func5 = create_EV_06_37_00()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
+
+
 def main():
     print('🔧 LLIL Demo - Expression-based Architecture')
     print('=' * 60)
@@ -722,7 +777,8 @@ def main():
     # test_AV_04_0017()
     # test_DOF_ON()
     # test_sound_play_se()
-    test_Dummy_m3010_talk0()
+    # test_Dummy_m3010_talk0()
+    test_EV_06_37_00()
 
     print('\n✅ Demo completed successfully!')
     print('\nKey features demonstrated:')
