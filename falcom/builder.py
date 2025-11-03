@@ -73,41 +73,6 @@ class FalcomVMBuilder(LowLevelILBuilder):
         '''PUSH_STR operation'''
         self.stack_push(self.const_str(value))
 
-    def load_stack(self, offset: int):
-        '''LOAD_STACK operation - loads from sp + offset and pushes result
-
-        Automatically determines whether to use sp-relative or fp-relative addressing:
-        - If accessing parameter area (STACK[0..num_params-1]), uses fp
-        - Otherwise uses sp
-        '''
-        from ir.llil import WORD_SIZE
-
-        # Calculate word offset
-        word_offset = offset // WORD_SIZE
-        # Calculate absolute stack position
-        absolute_pos = self.current_sp + word_offset
-
-        # Check if accessing parameter area
-        # New scheme: fp = 0, parameters at STACK[0..num_params-1]
-        num_params = self.function.num_params if hasattr(self.function, 'num_params') else 0
-        if absolute_pos >= 0 and absolute_pos < num_params:
-            # Accessing parameters - use fp-relative
-            # absolute_pos = fp + fp_offset, and fp = 0, so fp_offset = absolute_pos
-            fp_offset = absolute_pos * WORD_SIZE  # Convert to bytes
-            self.load_frame(fp_offset)
-        else:
-            # Accessing within current stack frame (temporaries/locals) - use sp-relative
-            stack_val = self.stack_load(offset)
-            self.stack_push(stack_val)
-
-    def load_frame(self, offset: int):
-        '''LOAD_FRAME operation - loads from frame + offset and pushes result
-
-        Use this for accessing function parameters (frame-relative addressing).
-        '''
-        frame_val = self.frame_load(offset)
-        self.stack_push(frame_val)
-
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''
         # Pop from stack using StackPop expression
