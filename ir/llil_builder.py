@@ -209,13 +209,19 @@ class LowLevelILBuilder:
     def push_stack_addr(self, offset: int):
         '''Push the address of stack location (sp + offset)
 
-        This is used for PUSH_STACK_OFFSET instruction which pushes the address,
-        not the value at that address. This represents &STACK[sp + offset].
+        This is used for PUSH_STACK_OFFSET instruction which pushes the address
+        of a stack slot. The slot index is computed at build time using current_sp
+        and remains constant regardless of subsequent sp changes.
 
         Args:
-            offset: Byte offset relative to current sp
+            offset: Byte offset relative to current sp (at build time)
         '''
-        stack_addr = LowLevelILStackAddr(offset)
+        # Convert byte offset to word offset
+        word_offset = offset // WORD_SIZE
+        # Calculate absolute slot index using current sp
+        slot_index = self.current_sp + word_offset
+        # Create stack address with absolute slot index
+        stack_addr = LowLevelILStackAddr(slot_index)
         self.stack_push(stack_addr)
 
     def sp_add(self, delta: int):

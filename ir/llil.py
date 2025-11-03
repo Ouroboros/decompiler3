@@ -235,25 +235,19 @@ class LowLevelILStackPop(LowLevelILInstruction):
 
 
 class LowLevelILStackAddr(LowLevelILInstruction):
-    '''Address of stack location: &STACK[sp + offset]
+    '''Address of a specific stack slot (constant, independent of sp changes)
 
-    Used for PUSH_STACK_OFFSET which pushes the address (sp + offset), not the value.
-    This represents a pointer/reference to a stack location.
+    Used for PUSH_STACK_OFFSET which pushes the address of a stack slot.
+    The slot_index is computed at build time and remains constant regardless
+    of subsequent sp changes.
     '''
 
-    def __init__(self, offset: int, size: int = 4):
+    def __init__(self, slot_index: int, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_ADDR, size)
-        self.offset = offset  # Byte offset relative to sp
+        self.slot_index = slot_index  # Absolute stack slot index
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
-        word_offset = self.offset // WORD_SIZE
-        if word_offset == 0:
-            return '&STACK[sp]'
-        elif word_offset > 0:
-            return f'&STACK[sp + {word_offset}]'
-        else:
-            return f'&STACK[sp - {-word_offset}]'
+        return f'&STACK[{self.slot_index}]'
 
 
 # Alias for compatibility
