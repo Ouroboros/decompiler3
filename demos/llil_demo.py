@@ -626,54 +626,50 @@ def create_Dummy_m3010_talk0():
     return builder.finalize()
 
 
-def main():
-    print('🔧 LLIL Demo - Expression-based Architecture')
-    print('=' * 60)
-    print('Source: Real game functions from Kuro no Kiseki')
-    print()
-    print('Features:')
-    print('  ✓ First-class PUSH/POP instructions (no pattern matching)')
-    print('  ✓ Virtual stack tracks expressions')
-    print('  ✓ Operations hold operands: EQ(lhs, rhs)')
-    print('  ✓ Data flow visible for optimization')
+def test_AV_04_0017():
+    '''Test 1: AV_04_0017 - Simple linear function'''
+    print('\n🧪 Test 1: AV_04_0017 - Simple Linear Function')
+    print('-' * 60)
+    print('Source: m4000.py (id: 0x0000 offset: 0x243C5)')
+    print('3 blocks, no branching, 2 function calls')
 
-    # # Test 1: AV_04_0017 - Simple linear function
-    # print('\n🧪 Test 1: AV_04_0017 - Simple Linear Function')
-    # print('-' * 60)
-    # print('Source: m4000.py (id: 0x0000 offset: 0x243C5)')
-    # print('3 blocks, no branching, 2 function calls')
-    #
-    # func1 = create_AV_04_0017()
-    # print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
-    #
-    # # Test 2: DOF_ON - Complex control flow
-    # print('\n🧪 Test 2: DOF_ON - Complex Control Flow')
-    # print('-' * 60)
-    # print('Source: c0000.py (id: 0x003F offset: 0x1FFDB6)')
-    # print('7 blocks, conditional branching, merge points')
-    #
-    # func2 = create_DOF_ON()
-    # print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
-    #
-    # # Generate CFG visualization
-    # func2.build_cfg()
-    # dot = func2.to_dot()
-    # with open('DOF_ON_cfg.dot', 'w') as f:
-    #     f.write(dot)
-    # print('\n📊 CFG saved to DOF_ON_cfg.dot')
-    # print('   View online: https://dreampuf.github.io/GraphvizOnline/')
-    # print('   Or render: dot -Tpng DOF_ON_cfg.dot -o DOF_ON_cfg.png')
-    #
-    # # Test 3: sound_play_se - SYSCALL with multiple parameters
-    # print('\n🧪 Test 3: sound_play_se - SYSCALL with Multiple Parameters')
-    # print('-' * 60)
-    # print('Source: c0000.py (id: 0x008F offset: 0x149B2)')
-    # print('8 parameters, 1 block, demonstrates SYSCALL and parameter loading')
-    #
-    # func3 = create_sound_play_se()
-    # print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
+    func1 = create_AV_04_0017()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
 
-    # Test 4: Dummy_m3010_talk0 - Complex control flow with multiple branches
+
+def test_DOF_ON():
+    '''Test 2: DOF_ON - Complex control flow'''
+    print('\n🧪 Test 2: DOF_ON - Complex Control Flow')
+    print('-' * 60)
+    print('Source: c0000.py (id: 0x003F offset: 0x1FFDB6)')
+    print('7 blocks, conditional branching, merge points')
+
+    func2 = create_DOF_ON()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
+
+    # Generate CFG visualization
+    func2.build_cfg()
+    dot = func2.to_dot()
+    with open('DOF_ON_cfg.dot', 'w') as f:
+        f.write(dot)
+    print('\n📊 CFG saved to DOF_ON_cfg.dot')
+    print('   View online: https://dreampuf.github.io/GraphvizOnline/')
+    print('   Or render: dot -Tpng DOF_ON_cfg.dot -o DOF_ON_cfg.png')
+
+
+def test_sound_play_se():
+    '''Test 3: sound_play_se - SYSCALL with multiple parameters'''
+    print('\n🧪 Test 3: sound_play_se - SYSCALL with Multiple Parameters')
+    print('-' * 60)
+    print('Source: c0000.py (id: 0x008F offset: 0x149B2)')
+    print('8 parameters, 1 block, demonstrates SYSCALL and parameter loading')
+
+    func3 = create_sound_play_se()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
+
+
+def test_Dummy_m3010_talk0():
+    '''Test 4: Dummy_m3010_talk0 - Complex menu system'''
     print('\n🧪 Test 4: Dummy_m3010_talk0 - Complex Menu System')
     print('-' * 60)
     print('Source: m3010.py (id: 0x0005 offset: 0x8ACC7)')
@@ -690,6 +686,24 @@ def main():
     print('\n📊 CFG saved to Dummy_m3010_talk0_cfg.dot')
     print('   View online: https://dreampuf.github.io/GraphvizOnline/')
     print('   Or render: dot -Tpng Dummy_m3010_talk0_cfg.dot -o Dummy_m3010_talk0_cfg.png')
+
+
+def main():
+    print('🔧 LLIL Demo - Expression-based Architecture')
+    print('=' * 60)
+    print('Source: Real game functions from Kuro no Kiseki')
+    print()
+    print('Features:')
+    print('  ✓ First-class PUSH/POP instructions (no pattern matching)')
+    print('  ✓ Virtual stack tracks expressions')
+    print('  ✓ Operations hold operands: EQ(lhs, rhs)')
+    print('  ✓ Data flow visible for optimization')
+
+    # Test individual functions (comment/uncomment as needed)
+    # test_AV_04_0017()
+    # test_DOF_ON()
+    # test_sound_play_se()
+    test_Dummy_m3010_talk0()
 
     print('\n✅ Demo completed successfully!')
     print('\nKey features demonstrated:')
