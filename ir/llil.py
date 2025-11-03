@@ -219,8 +219,11 @@ class LowLevelILStackPush(LowLevelILInstruction):
     def __init__(self, value: Union['LowLevelILInstruction', int, str], size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_PUSH, size)
         self.value = value
+        self.slot_index: Optional[int] = None  # Slot being written to
 
     def __str__(self) -> str:
+        if self.slot_index is not None:
+            return f'STACK[sp++] = {self.value}  ; STACK[{self.slot_index}]'
         return f'STACK[sp++] = {self.value}'
 
 
@@ -229,8 +232,11 @@ class LowLevelILStackPop(LowLevelILInstruction):
 
     def __init__(self, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_POP, size)
+        self.slot_index: Optional[int] = None  # Slot being read from
 
     def __str__(self) -> str:
+        if self.slot_index is not None:
+            return f'STACK[--sp]  ; STACK[{self.slot_index}]'
         return 'STACK[--sp]'
 
 

@@ -103,6 +103,7 @@ class LowLevelILBuilder:
         expr = self._to_expr(value)
         # Generate StackPush instruction (semantic: STACK[sp] = value; sp++)
         push_instr = LowLevelILStackPush(expr, size)
+        push_instr.slot_index = self.current_sp  # Record slot being written to
         self.add_instruction(push_instr)
         # Maintain sp in builder (sp maintained here, not in add_instruction)
         self.current_sp += 1
@@ -124,6 +125,7 @@ class LowLevelILBuilder:
         pop_expr = LowLevelILStackPop(size)
         # Maintain sp in builder
         self.current_sp -= 1
+        pop_expr.slot_index = self.current_sp  # Record slot being read from
 
         return pop_expr
 
