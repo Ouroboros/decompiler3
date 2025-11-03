@@ -373,8 +373,8 @@ def create_Dummy_m3010_talk0():
     loc_8AF01 = builder.create_basic_block(0x8AF01, 'loc_8AF01')
     loc_8AF3D = builder.create_basic_block(0x8AF3D, 'loc_8AF3D')
     loc_8AF42 = builder.create_basic_block(0x8AF42, 'loc_8AF42')
-    loc_8AF86 = builder.create_basic_block(0x8AF86, 'loc_8AF86')
-    loc_8AFAA = builder.create_basic_block(0x8AFAA, 'loc_8AFAA')  # After chr_set_pos in case 2
+    loc_8AFAA = builder.create_basic_block(0x8AFAA, 'loc_8AFAA')  # chr_set_pos in case 2
+    loc_8AF86 = builder.create_basic_block(0x8AF86, 'loc_8AF86')  # camera_rotate_chr in case 2
     loc_8AFC2 = builder.create_basic_block(0x8AFC2, 'loc_8AFC2')  # Main merge point
     loc_8AFD4 = builder.create_basic_block(0x8AFD4, 'loc_8AFD4')
     check_fade_in = builder.create_basic_block(0x8AFE4, 'check_fade_in')
@@ -562,20 +562,20 @@ def create_Dummy_m3010_talk0():
     builder.call('camera_rotate_chr')
     # Falls through to loc_8AFC2
 
-    # === BLOCK 17: loc_8AF42 - Check if selection == 2 ===
+    # === BLOCK 17: loc_8AF42 - Check if selection == 2, then chr_set_pos ===
     builder.set_current_block(loc_8AF42)
     builder.debug_line(10818)
     builder.load_stack(-WORD_SIZE)
     builder.push_int(2)
     builder.eq()
-    # POP_JMP_ZERO: if not equal, jump to loc_8AFC2, else continue to loc_8AF86
-    builder.pop_jmp_zero(loc_8AFC2, loc_8AF86)
+    # POP_JMP_ZERO: if not equal, jump to loc_8AFC2, else continue with chr_set_pos
+    builder.pop_jmp_zero(loc_8AFC2, loc_8AFAA)
 
-    # === BLOCK 18: loc_8AF86 - Case 2: chr_set_pos ===
-    builder.set_current_block(loc_8AF86)
+    # === BLOCK 18: loc_8AFAA - Case 2: chr_set_pos ===
+    builder.set_current_block(loc_8AFAA)
     builder.debug_line(10819)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AFAA')  # Return to next block for second call
+    builder.push_ret_addr('loc_8AF86')  # Return to loc_8AF86 for second call
     builder.push(builder.const_float(112.963))
     builder.push(builder.const_float(-157.72))
     builder.push(builder.const_float(-0.283))
@@ -583,8 +583,8 @@ def create_Dummy_m3010_talk0():
     builder.push_int(65000)
     builder.call('chr_set_pos')
 
-    # === BLOCK 19: loc_8AFAA - Case 2: camera_rotate_chr ===
-    builder.set_current_block(loc_8AFAA)
+    # === BLOCK 19: loc_8AF86 - Case 2: camera_rotate_chr ===
+    builder.set_current_block(loc_8AF86)
     builder.debug_line(10820)
     builder.push_func_id()
     builder.push_ret_addr('loc_8AFC2')
