@@ -348,10 +348,13 @@ class LowLevelILJmp(LowLevelILGoto):
     pass
 
 
-class LowLevelILIf(ControlFlow):
+class LowLevelILIf(Terminal):
     '''Conditional branch - targets must be BasicBlocks
 
     condition: LowLevelILInstruction that evaluates to true/false
+
+    Note: This is a terminal instruction - no more instructions can be added
+    to the block after an If instruction.
     '''
 
     def __init__(self, condition: 'LowLevelILInstruction', true_target: 'LowLevelILBasicBlock',
@@ -488,7 +491,16 @@ class LowLevelILBasicBlock:
         self.incoming_edges: List['LowLevelILBasicBlock'] = []
 
     def add_instruction(self, instr: LowLevelILInstruction):
-        '''Add instruction to this block'''
+        '''Add instruction to this block
+
+        Raises:
+            RuntimeError: If block already has a terminal instruction
+        '''
+        if self.has_terminal:
+            raise RuntimeError(
+                f'Cannot add instruction to block_{self.index}: '
+                f'block already has terminal instruction {self.instructions[-1]}'
+            )
         instr.instr_index = len(self.instructions)
         self.instructions.append(instr)
 
