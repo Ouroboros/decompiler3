@@ -668,7 +668,7 @@ def test_DOF_ON():
 
     # Generate CFG visualization
     func2.build_cfg()
-    dot = func2.to_dot()
+    dot = LLILFormatter.to_dot(func2)
     with open('DOF_ON_cfg.dot', 'w') as f:
         f.write(dot)
     print('\n📊 CFG saved to DOF_ON_cfg.dot')
@@ -699,7 +699,7 @@ def test_Dummy_m3010_talk0():
 
     # Generate CFG visualization
     func4.build_cfg()
-    dot = func4.to_dot()
+    dot = LLILFormatter.to_dot(func4)
     with open('Dummy_m3010_talk0_cfg.dot', 'w') as f:
         f.write(dot)
     print('\n📊 CFG saved to Dummy_m3010_talk0_cfg.dot')
