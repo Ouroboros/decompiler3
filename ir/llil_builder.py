@@ -437,11 +437,11 @@ class LLILFormatter:
     def _format_binary_op_expanded(binary_op: LowLevelILBinaryOp) -> List[str]:
         '''Format binary operation with expanded pseudo-code
 
-        Note: Stack is LIFO (last in, first out)
-        For PUSH a; PUSH b; OP:
-          First pop gets b (→ rhs)
-          Second pop gets a (→ lhs)
-          Compute: lhs OP rhs
+        Stack operation order:
+          rhs = stack_pop();   // 先弹出来的是右操作数（栈顶）
+          lhs = stack_pop();   // 再弹出来的是左操作数（下面那个）
+          result = (lhs OP rhs);
+          stack_push(result);
         '''
         # Map operation types to their expression strings
         expr_map = {
@@ -461,8 +461,8 @@ class LLILFormatter:
 
         return [
             f'; expand {binary_op.operation_name}',
-            'rhs = STACK[--sp]',  # First pop (right operand)
-            'lhs = STACK[--sp]',  # Second pop (left operand)
+            'rhs = STACK[--sp]',  # 先弹出来的是右操作数（栈顶）
+            'lhs = STACK[--sp]',  # 再弹出来的是左操作数（下面那个）
             f'STACK[sp++] = {expr}'
         ]
 
