@@ -437,30 +437,32 @@ class LLILFormatter:
     def _format_binary_op_expanded(binary_op: LowLevelILBinaryOp) -> List[str]:
         '''Format binary operation with expanded pseudo-code
 
-        Note: Stack pops in reverse order!
-        First pop gets lhs, second pop gets rhs, then compute rhs OP lhs
+        Note: Stack is LIFO (last in, first out)
+        For PUSH a; PUSH b; OP:
+          First pop gets b (→ rhs)
+          Second pop gets a (→ lhs)
+          Compute: lhs OP rhs
         '''
         # Map operation types to their expression strings
-        # Important: Expression is rhs OP lhs (not lhs OP rhs)
         expr_map = {
-            LowLevelILOperation.LLIL_ADD: 'rhs + lhs',  # Addition is commutative
-            LowLevelILOperation.LLIL_SUB: 'rhs - lhs',  # rhs - lhs (reversed!)
-            LowLevelILOperation.LLIL_MUL: 'rhs * lhs',  # Multiplication is commutative
-            LowLevelILOperation.LLIL_DIV: 'rhs / lhs',  # rhs / lhs (reversed!)
-            LowLevelILOperation.LLIL_EQ: '(rhs == lhs) ? 1 : 0',  # Equality is commutative
-            LowLevelILOperation.LLIL_NE: '(rhs != lhs) ? 1 : 0',  # Inequality is commutative
-            LowLevelILOperation.LLIL_LT: '(rhs < lhs) ? 1 : 0',   # rhs < lhs (reversed!)
-            LowLevelILOperation.LLIL_LE: '(rhs <= lhs) ? 1 : 0',  # rhs <= lhs (reversed!)
-            LowLevelILOperation.LLIL_GT: '(rhs > lhs) ? 1 : 0',   # rhs > lhs (reversed!)
-            LowLevelILOperation.LLIL_GE: '(rhs >= lhs) ? 1 : 0',  # rhs >= lhs (reversed!)
+            LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
+            LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
+            LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
+            LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
+            LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
         }
 
         expr = expr_map[binary_op.operation]
 
         return [
             f'; expand {binary_op.operation_name}',
-            'lhs = STACK[--sp]',  # First pop
-            'rhs = STACK[--sp]',  # Second pop
+            'rhs = STACK[--sp]',  # First pop (right operand)
+            'lhs = STACK[--sp]',  # Second pop (left operand)
             f'STACK[sp++] = {expr}'
         ]
 
