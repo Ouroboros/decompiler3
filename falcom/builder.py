@@ -286,11 +286,27 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Create If with both targets explicitly specified
         self.add_instruction(LowLevelILIf(is_not_zero, true_target, false_target))
 
-    def pop_n(self, count: int):
-        '''POP operation - discard N slots from stack
+    def pop_bytes(self, num_bytes: int):
+        '''POP operation - discard N bytes from stack
+
+        VM instruction: POP(size)
 
         Args:
-            count: Number of slots to pop (e.g., 1 to pop 1 word)
+            num_bytes: Number of bytes to pop (e.g., 4 to pop 1 word, 16 to pop 4 words)
+        '''
+        # Convert bytes to words
+        num_words = num_bytes // WORD_SIZE
+        if num_bytes % WORD_SIZE != 0:
+            raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
+        self.sp_add(-num_words)
+
+    def pop_n(self, count: int):
+        '''POP_N operation - discard N slots from stack
+
+        VM instruction: POP_N(count)
+
+        Args:
+            count: Number of slots to pop (e.g., 1 to pop 1 slot)
         '''
         self.sp_add(-count)
 
