@@ -8,6 +8,8 @@ from .llil import (
     LowLevelILBinaryOp, LowLevelILOperation,
     LowLevelILSub, LowLevelILDiv, LowLevelILEq, LowLevelILNe,
     LowLevelILLt, LowLevelILLe, LowLevelILGt, LowLevelILGe,
+    LowLevelILAnd, LowLevelILOr, LowLevelILLogicalAnd, LowLevelILLogicalOr,
+    LowLevelILNeg, LowLevelILNot, LowLevelILTestZero,
     LowLevelILStackPush, LowLevelILStackStore, LowLevelILStackPop,
     LowLevelILStackAddr, LowLevelILSpAdd,
     WORD_SIZE
@@ -360,6 +362,67 @@ class LowLevelILBuilder:
         '''GE operation - computes lhs >= rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size)
 
+    # === Bitwise Operations ===
+
+    def bitwise_and(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+        '''Bitwise AND operation - computes lhs & rhs (pops rhs first, then lhs)'''
+        return self._binary_op(LowLevelILAnd, lhs, rhs, push = push, size = size)
+
+    def bitwise_or(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+        '''Bitwise OR operation - computes lhs | rhs (pops rhs first, then lhs)'''
+        return self._binary_op(LowLevelILOr, lhs, rhs, push = push, size = size)
+
+    # === Logical Operations ===
+
+    def logical_and(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+        '''Logical AND operation - computes lhs && rhs (pops rhs first, then lhs)'''
+        return self._binary_op(LowLevelILLogicalAnd, lhs, rhs, push = push, size = size)
+
+    def logical_or(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+        '''Logical OR operation - computes lhs || rhs (pops rhs first, then lhs)'''
+        return self._binary_op(LowLevelILLogicalOr, lhs, rhs, push = push, size = size)
+
+    # === Unary Operations ===
+
+    def neg(self, operand = None, *, push: bool = True, size: int = 4):
+        '''NEG operation - arithmetic negation -x (pops operand if not provided)'''
+        if operand is None:
+            operand = self.pop(size)
+        else:
+            operand = self._to_expr(operand)
+        op = LowLevelILNeg(operand, size)
+        if push:
+            self.push(op, size)
+        else:
+            self.add_instruction(op)
+        return op
+
+    def logical_not(self, operand = None, *, push: bool = True, size: int = 4):
+        '''NOT operation - logical NOT !x (pops operand if not provided)'''
+        if operand is None:
+            operand = self.pop(size)
+        else:
+            operand = self._to_expr(operand)
+        op = LowLevelILNot(operand, size)
+        if push:
+            self.push(op, size)
+        else:
+            self.add_instruction(op)
+        return op
+
+    def test_zero(self, operand = None, *, push: bool = True, size: int = 4):
+        '''TEST_ZERO operation - test if x == 0 (pops operand if not provided)'''
+        if operand is None:
+            operand = self.pop(size)
+        else:
+            operand = self._to_expr(operand)
+        op = LowLevelILTestZero(operand, size)
+        if push:
+            self.push(op, size)
+        else:
+            self.add_instruction(op)
+        return op
+
     # === Control Flow ===
 
     def jmp(self, target: Union[str, LowLevelILBasicBlock]):
@@ -493,6 +556,10 @@ class LLILFormatter:
             LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
             LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
             LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_AND: 'lhs & rhs',
+            LowLevelILOperation.LLIL_OR: 'lhs | rhs',
+            LowLevelILOperation.LLIL_LOGICAL_AND: '(lhs && rhs) ? 1 : 0',
+            LowLevelILOperation.LLIL_LOGICAL_OR: '(lhs || rhs) ? 1 : 0',
         }
 
         expr = expr_map[binary_op.operation]
@@ -515,6 +582,31 @@ class LLILFormatter:
         ]
 
     @staticmethod
+    def _format_unary_op_expanded(unary_op: 'LowLevelILUnaryOp') -> List[str]:
+        '''Format unary operation with expanded pseudo-code'''
+        from .llil import LowLevelILUnaryOp
+
+        # Map operation types to their expression strings
+        unary_expr_map = {
+            LowLevelILOperation.LLIL_NEG: '-operand',
+            LowLevelILOperation.LLIL_NOT: '!operand ? 1 : 0',
+            LowLevelILOperation.LLIL_TEST_ZERO: '(operand == 0) ? 1 : 0',
+        }
+
+        expr = unary_expr_map.get(unary_op.operation, f'UNARY_OP({unary_op.operation})(operand)')
+
+        # Get slot index from operand if it's StackPop
+        operand_line = 'operand = STACK[--sp]'
+        if isinstance(unary_op.operand, LowLevelILStackPop) and unary_op.operand.slot_index is not None:
+            operand_line += f' ; [{unary_op.operand.slot_index}]'
+
+        return [
+            f'; expand {unary_op.operation_name}',
+            operand_line,
+            f'STACK[sp++] = {expr}'
+        ]
+
+    @staticmethod
     def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
         '''Format instruction with expanded stack operations (multi-line)
 
@@ -524,13 +616,23 @@ class LLILFormatter:
         - The actual operation
         - Push operation for result
         '''
+        from .llil import LowLevelILUnaryOp
+
         # StackPush containing a binary operation: expand the binary op
         if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr.value)
 
+        # StackPush containing a unary operation: expand the unary op
+        if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILUnaryOp):
+            return LLILFormatter._format_unary_op_expanded(instr.value)
+
         # Binary operations: pop 2, compute, push 1
         if isinstance(instr, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr)
+
+        # Unary operations: pop 1, compute, push 1
+        if isinstance(instr, LowLevelILUnaryOp):
+            return LLILFormatter._format_unary_op_expanded(instr)
 
         # StackStore with StackPop: expand to avoid ambiguity
         if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILStackPop):

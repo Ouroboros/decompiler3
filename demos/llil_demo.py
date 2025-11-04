@@ -667,7 +667,6 @@ def test_DOF_ON():
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
 
     # Generate CFG visualization
-    func2.build_cfg()
     dot = LLILFormatter.to_dot(func2)
     with open('DOF_ON_cfg.dot', 'w') as f:
         f.write(dot)
@@ -698,7 +697,6 @@ def test_Dummy_m3010_talk0():
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func4)))
 
     # Generate CFG visualization
-    func4.build_cfg()
     dot = LLILFormatter.to_dot(func4)
     with open('Dummy_m3010_talk0_cfg.dot', 'w') as f:
         f.write(dot)
@@ -792,7 +790,6 @@ def test_conditional():
     func5 = create_test_conditional()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
 
-    func5.build_cfg()
     dot = LLILFormatter.to_dot(func5)
     with open('test_conditional_cfg.dot', 'w') as f:
         f.write(dot)
@@ -811,7 +808,6 @@ def test_EV_06_37_00():
     func6 = create_EV_06_37_00()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func6)))
 
-    func6.build_cfg()
     dot = LLILFormatter.to_dot(func6)
     with open('EV_06_37_00_cfg.dot', 'w') as f:
         f.write(dot)

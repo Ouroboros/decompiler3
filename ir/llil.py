@@ -45,6 +45,15 @@ class LowLevelILOperation(IntEnum):
     LLIL_LE = 27
     LLIL_GT = 28
     LLIL_GE = 29
+    LLIL_AND = 30               # bitwise AND
+    LLIL_OR = 31                # bitwise OR
+    LLIL_LOGICAL_AND = 32       # logical AND (&&)
+    LLIL_LOGICAL_OR = 33        # logical OR (||)
+
+    # Unary operations
+    LLIL_NEG = 35               # arithmetic negation (-x)
+    LLIL_NOT = 36               # logical NOT (!x)
+    LLIL_TEST_ZERO = 37         # test if zero (x == 0)
 
     # Control flow
     LLIL_JMP = 40               # unconditional jump
@@ -349,6 +358,58 @@ class LowLevelILGt(LowLevelILBinaryOp):
 class LowLevelILGe(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_GE, lhs, rhs, size)
+
+
+class LowLevelILAnd(LowLevelILBinaryOp):
+    '''Bitwise AND'''
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_AND, lhs, rhs, size)
+
+
+class LowLevelILOr(LowLevelILBinaryOp):
+    '''Bitwise OR'''
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_OR, lhs, rhs, size)
+
+
+class LowLevelILLogicalAnd(LowLevelILBinaryOp):
+    '''Logical AND (&&)'''
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_LOGICAL_AND, lhs, rhs, size)
+
+
+class LowLevelILLogicalOr(LowLevelILBinaryOp):
+    '''Logical OR (||)'''
+    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_LOGICAL_OR, lhs, rhs, size)
+
+
+# === Unary Operations ===
+
+class LowLevelILUnaryOp(LowLevelILInstruction):
+    '''Base class for unary operations'''
+
+    def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(operation, size)
+        self.operand = operand
+
+
+class LowLevelILNeg(LowLevelILUnaryOp):
+    '''Arithmetic negation (-x)'''
+    def __init__(self, operand: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_NEG, operand, size)
+
+
+class LowLevelILNot(LowLevelILUnaryOp):
+    '''Logical NOT (!x)'''
+    def __init__(self, operand: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_NOT, operand, size)
+
+
+class LowLevelILTestZero(LowLevelILUnaryOp):
+    '''Test if zero (x == 0)'''
+    def __init__(self, operand: 'LowLevelILInstruction' = None, size: int = 4):
+        super().__init__(LowLevelILOperation.LLIL_TEST_ZERO, operand, size)
 
 
 # === Control Flow ===
