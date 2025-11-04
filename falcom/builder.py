@@ -105,8 +105,15 @@ class FalcomVMBuilder(LowLevelILBuilder):
         Raises:
             RuntimeError: If function not created, already finalized, or pending call sequences
         '''
+
+        if self.current_sp != 0:
+            raise RuntimeError(f'Stack is not empty at the end of the function. Current sp: {self.current_sp}')
+
+        self.function.build_cfg()
+
         if self.function is None:
             raise RuntimeError('No function created. Call create_function() first.')
+
         if self._finalized:
             raise RuntimeError('Builder already finalized')
 
@@ -116,6 +123,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Function ended with pending call setup at sp={self.sp_before_call}. '
                 f'Incomplete call sequence detected (push_func_id without call).'
             )
+
         if self.return_target_label is not None:
             raise RuntimeError(
                 f'Function ended with pending return target "{self.return_target_label}". '

@@ -748,25 +748,32 @@ def create_test_conditional():
 
     # Create blocks
     entry = builder.create_basic_block(0x5BDA0, 'entry')
-    check2 = builder.create_basic_block(0x5BDA8, 'check2')
-    loc_5BDB1 = builder.create_basic_block(0x5BDB1, 'loc_5BDB1')
+    bb_check_eq_2 = builder.create_basic_block(0x5BDA8, 'check2')
+    bb_cond_1 = builder.create_basic_block(0x5BDB1, 'loc_5BDB1')
+    bb_cond_2 = builder.create_basic_block(0x5BDC1, 'loc_5BDC1')
 
     # === BLOCK 0: Entry - check if REG[0] == 1 ===
     builder.set_current_block(entry)
     builder.get_reg(0)
     builder.push_int(1)
     builder.eq()
-    builder.pop_jmp_not_zero(loc_5BDB1, check2)
+    builder.pop_jmp_not_zero(bb_cond_1, bb_check_eq_2)
 
     # === BLOCK 1: check2 - check if REG[0] == 2 ===
-    builder.set_current_block(check2)
+    builder.set_current_block(bb_check_eq_2)
     builder.get_reg(0)
     builder.push_int(2)
     builder.eq()
-    builder.pop_jmp_zero(loc_5BDB1, loc_5BDB1)
+    builder.pop_jmp_zero(bb_cond_2, bb_cond_1)
+
+    builder.set_current_block(bb_cond_2)
+    builder.load_global(0)
+    builder.set_global(0)
+    builder.jmp(bb_cond_1)
 
     # === BLOCK 2: loc_5BDB1 - Return ===
-    builder.set_current_block(loc_5BDB1)
+    builder.set_current_block(bb_cond_1)
+    builder.push_int(0)
     builder.ret()
 
     return builder.finalize()
