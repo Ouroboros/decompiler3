@@ -741,9 +741,59 @@ def create_EV_06_37_00():
     return builder.finalize()
 
 
+def create_test_conditional():
+    '''Test function - Conditional branches with POP_JMP_NOT_ZERO and POP_JMP_ZERO'''
+    builder = FalcomVMBuilder()
+    builder.create_function('test_conditional', 0x5BDA0, num_params=0)
+
+    # Create blocks
+    entry = builder.create_basic_block(0x5BDA0, 'entry')
+    check2 = builder.create_basic_block(0x5BDA8, 'check2')
+    loc_5BDB1 = builder.create_basic_block(0x5BDB1, 'loc_5BDB1')
+
+    # === BLOCK 0: Entry - check if REG[0] == 1 ===
+    builder.set_current_block(entry)
+    builder.get_reg(0)
+    builder.push_int(1)
+    builder.eq()
+    builder.pop_jmp_not_zero(loc_5BDB1, check2)
+
+    # === BLOCK 1: check2 - check if REG[0] == 2 ===
+    builder.set_current_block(check2)
+    builder.get_reg(0)
+    builder.push_int(2)
+    builder.eq()
+    builder.pop_jmp_zero(loc_5BDB1, loc_5BDB1)
+
+    # === BLOCK 2: loc_5BDB1 - Return ===
+    builder.set_current_block(loc_5BDB1)
+    builder.ret()
+
+    return builder.finalize()
+
+
+def test_conditional():
+    '''Test conditional branches'''
+    print('\n🧪 Test 5: Conditional Branches')
+    print('-' * 60)
+    print('Function demonstrating:')
+    print('- POP_JMP_NOT_ZERO: branch if value != 0')
+    print('- POP_JMP_ZERO: branch if value == 0')
+    print('- Multi-block control flow')
+    print()
+
+    func5 = create_test_conditional()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
+
+    func5.build_cfg()
+    dot = LLILFormatter.to_dot(func5)
+    with open('test_conditional_cfg.dot', 'w') as f:
+        f.write(dot)
+
+
 def test_EV_06_37_00():
     '''Test EV_06_37_00 function'''
-    print('\n🧪 Test 5: EV_06_37_00 - Global Variables')
+    print('\n🧪 Test 6: EV_06_37_00 - Global Variables')
     print('-' * 60)
     print('Function demonstrating:')
     print('- LOAD_GLOBAL: read from global variable array')
@@ -751,11 +801,11 @@ def test_EV_06_37_00():
     print('- Global variables are Falcom-specific extensions')
     print()
 
-    func5 = create_EV_06_37_00()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
+    func6 = create_EV_06_37_00()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func6)))
 
-    func5.build_cfg()
-    dot = LLILFormatter.to_dot(func5)
+    func6.build_cfg()
+    dot = LLILFormatter.to_dot(func6)
     with open('EV_06_37_00_cfg.dot', 'w') as f:
         f.write(dot)
 
@@ -766,6 +816,7 @@ def main():
     # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
+    test_conditional()
     test_EV_06_37_00()
 
 
