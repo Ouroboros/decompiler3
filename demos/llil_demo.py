@@ -61,7 +61,7 @@ def create_AV_04_0017():
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
     # PUSH_RET_ADDR('loc_243E3')
-    builder.push_ret_addr('loc_243E3')
+    builder.push_ret_addr(loc_243E3)
     # PUSH_INT(0)
     builder.push_int(0)
     # PUSH_STR('AV_04_0017')
@@ -78,7 +78,7 @@ def create_AV_04_0017():
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
     # PUSH_RET_ADDR('loc_243FB')
-    builder.push_ret_addr('loc_243FB')
+    builder.push_ret_addr(loc_243FB)
     # PUSH_INT(427)
     builder.push_int(427)
     # CALL(avoice_play)
@@ -263,7 +263,7 @@ def create_DOF_ON():
     # SET_REG(0)
     builder.set_reg(0)
     # POP(8) - pops 8 bytes from stack
-    builder.add_instruction(LowLevelILSpAdd(-2))  # 8 bytes = 2 words
+    builder.emit_sp_add(-2)  # 8 bytes = 2 words
     # RETURN()
     builder.ret()
 
@@ -320,7 +320,7 @@ def create_sound_play_se():
     builder.syscall(6, 0x10, 0x08)
 
     # POP(32) - Clean up 8 words pushed by syscall
-    builder.add_instruction(LowLevelILSpAdd(-8))
+    builder.emit_sp_add(-8)
 
     # PUSH(0x00000000)
     builder.push_int(0)
@@ -328,7 +328,7 @@ def create_sound_play_se():
     builder.set_reg(0)
 
     # POP(32) - Clean up 8 parameters (8 words = 32 bytes)
-    builder.add_instruction(LowLevelILSpAdd(-8))
+    builder.emit_sp_add(-8)
 
     # RETURN()
     builder.ret()
@@ -529,7 +529,7 @@ def create_Dummy_m3010_talk0():
 
     # === BLOCK 14: loc_8AEB8 - Jump to merge point ===
     builder.set_current_block(loc_8AEB8)
-    builder.add_instruction(LowLevelILGoto(loc_8AFC2))
+    builder.jmp(loc_8AFC2)
 
     # === BLOCK 15: loc_8AEBD - Check if selection == 1 ===
     builder.set_current_block(loc_8AEBD)
@@ -568,7 +568,7 @@ def create_Dummy_m3010_talk0():
 
     # === BLOCK 17: loc_8AF3D - Jump to merge point ===
     builder.set_current_block(loc_8AF3D)
-    builder.add_instruction(LowLevelILGoto(loc_8AFC2))
+    builder.jmp(loc_8AFC2)
 
     # === BLOCK 18: loc_8AF42 - Check if selection == 2, then chr_set_pos ===
     builder.set_current_block(loc_8AF42)
@@ -638,7 +638,7 @@ def create_Dummy_m3010_talk0():
     builder.push_int(0)
     builder.set_reg(0)
     # POP(4) - pop 4 bytes (1 word) from stack
-    builder.add_instruction(LowLevelILSpAdd(-1))
+    builder.emit_sp_add(-1)
     builder.ret()
 
     # Finalize and return function
@@ -654,6 +654,8 @@ def test_AV_04_0017():
 
     func1 = create_AV_04_0017()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
+    with open('AV_04_0017_cfg.dot', 'w') as f:
+        f.write(LLILFormatter.to_dot(func1))
 
 
 def test_DOF_ON():
@@ -772,6 +774,7 @@ def create_test_conditional():
     # === BLOCK 2: loc_5BDB1 - Return ===
     builder.set_current_block(bb_cond_1)
     builder.push_int(0)
+    builder.set_reg(0)  # Set return value to REG[0]
     builder.ret()
 
     return builder.finalize()
@@ -780,7 +783,7 @@ def create_test_conditional():
 def create_TALK_BEGIN():
     '''TALK_BEGIN - Function call with caller context and module call'''
     builder = FalcomVMBuilder()
-    builder.create_function('TALK_BEGIN', 0x54F50, num_params=2)
+    builder.create_function('TALK_BEGIN', 0x54F50, num_params = 2)
 
     # Create blocks
     entry = builder.create_basic_block(0x54F50, 'TALK_BEGIN')
@@ -790,7 +793,7 @@ def create_TALK_BEGIN():
     builder.set_current_block(entry)
 
     # PUSH_CALLER_CONTEXT('loc_54F6B')
-    builder.push_caller_context(loc_54F6B)
+    builder.push_caller_frame(loc_54F6B)
 
     # LOAD_STACK(-28)
     builder.load_stack(-28)
@@ -806,7 +809,7 @@ def create_TALK_BEGIN():
     builder.set_current_block(loc_54F6B)
 
     # PUSH(0x00000000)
-    builder.push_int(0x00000000, is_hex=True)
+    builder.push_int(0x00000000, is_hex = True)
     # SET_REG(0)
     builder.set_reg(0)
     # POP(8)
@@ -874,11 +877,11 @@ def test_EV_06_37_00():
 
 def main():
     # Test individual functions (comment/uncomment as needed)
-    # test_AV_04_0017()
+    test_AV_04_0017()
     # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
-    test_TALK_BEGIN()
+    # test_TALK_BEGIN()
     # test_conditional()
     # test_EV_06_37_00()
 

@@ -15,7 +15,7 @@ from ir.llil import (
 
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
-from .llil_ext import LowLevelILGlobalLoad, LowLevelILGlobalStore
+from .llil_ext import LowLevelILGlobalLoad, LowLevelILGlobalStore, LowLevelILPushCallerFrame, LowLevelILCallModule
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
@@ -48,7 +48,8 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Parent class expects a function, but we'll replace it in create_function
         super().__init__(None)
         self.sp_before_call = None  # Track sp before call for automatic cleanup
-        self.return_target_label = None  # Track return address label for next call
+        self.return_target_block = None  # Track return target basic block for next call
+        self.caller_frame_instr = None  # Track PUSH_CALLER_FRAME instruction for call_module
         self._finalized = False
 
     def create_function(self, name: str, start_addr: int = 0, num_params: int = 0):
@@ -70,6 +71,21 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
         # Create and set the function
         self.function = LowLevelILFunction(name, start_addr, num_params)
+
+    def add_instruction(self, instr):
+        '''Override to handle Falcom-specific instructions'''
+        # Handle Falcom-specific instructions BEFORE calling parent
+        if isinstance(instr, LowLevelILPushCallerFrame):
+            # PUSH_CALLER_FRAME pushes 4 values (occupies 4 stack slots)
+            instr.slot_index = self.sp_get()  # Record starting slot
+            # No sp adjustment here - push_caller_frame will emit SpAdd explicitly
+        elif isinstance(instr, LowLevelILCallModule):
+            # CALL_MODULE cleans up args + 4 caller frame values
+            # No sp adjustment here - call_module will emit SpAdd explicitly
+            pass
+
+        # Call parent to add instruction to block and handle SpAdd
+        super().add_instruction(instr)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
         '''Create basic block and automatically add to function
@@ -106,8 +122,8 @@ class FalcomVMBuilder(LowLevelILBuilder):
             RuntimeError: If function not created, already finalized, or pending call sequences
         '''
 
-        if self.current_sp != 0:
-            raise RuntimeError(f'Stack is not empty at the end of the function. Current sp: {self.current_sp}')
+        if self.sp_get() != 0:
+            raise RuntimeError(f'Stack is not empty at the end of the function. Current sp: {self.sp_get()}')
 
         self.function.build_cfg()
 
@@ -124,9 +140,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Incomplete call sequence detected (push_func_id without call).'
             )
 
-        if self.return_target_label is not None:
+        if self.return_target_block is not None:
             raise RuntimeError(
-                f'Function ended with pending return target "{self.return_target_label}". '
+                f'Function ended with pending return target "{self.return_target_block.label}". '
                 f'Incomplete call sequence detected (push_ret_addr without call).'
             )
 
@@ -144,48 +160,49 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'Did you forget to call()?'
             )
         # Save sp before we start pushing for the call
-        self.sp_before_call = self.current_sp
+        self.sp_before_call = self.sp_get()
         self.stack_push(FalcomConstants.current_func_id())
 
-    def push_ret_addr(self, target: Union[str, LowLevelILBasicBlock]):
+    def push_ret_addr(self, target: LowLevelILBasicBlock):
         '''Push return address and remember it for call instruction
 
         Args:
-            target: Either a label string or a basic block reference
+            target: Basic block reference for return target
         '''
         # Verify push_func_id was called first
+
+        if not isinstance(target, LowLevelILBasicBlock):
+            raise RuntimeError(f'target must be a LowLevelILBasicBlock, got {type(target)}')
+
         if self.sp_before_call is None:
             raise RuntimeError(
                 'push_ret_addr called without push_func_id. '
                 'Call push_func_id() first to set up the call.'
             )
         # Verify no previous return target pending
-        if self.return_target_label is not None:
+        if self.return_target_block is not None:
             raise RuntimeError(
-                f'Previous return target {self.return_target_label} not consumed. '
+                f'Previous return target {self.return_target_block.label} not consumed. '
                 f'Did you forget to call()?'
             )
 
-        # Handle both string label and block reference
-        if isinstance(target, str):
-            self.return_target_label = target  # Remember label for next call
-            self.stack_push(FalcomConstants.ret_addr(target))
-        else:
-            # target is a LowLevelILBasicBlock
-            self.return_target_label = target.label  # Remember label for next call
-            self.stack_push(FalcomConstants.ret_addr_block(target))
+        # Remember block for next call
+        self.return_target_block = target
+        self.stack_push(FalcomConstants.ret_addr_block(target))
 
-    def push_caller_context(self, return_target: Union[str, LowLevelILBasicBlock]):
-        '''PUSH_CALLER_CONTEXT operation - push all caller context in one instruction
+    def push_caller_frame(self, return_target: LowLevelILBasicBlock):
+        '''PUSH_CALLER_FRAME operation - save caller frame for module call
 
-        VM behavior: Pushes 4 values onto stack:
+        VM behavior: Pushes 4 values onto stack atomically to save caller frame:
           1. funcIndex (current function ID)
           2. retAddr (return address label/block)
           3. currScript (current script index)
           4. 0xF0000000 (context marker)
 
+        This saves the current call frame so a module call can return properly.
+
         Args:
-            return_target: Either a label string or a basic block reference for return
+            return_target: Basic block reference for return target
         '''
         # Verify no pending call setup
         if self.sp_before_call is not None:
@@ -195,26 +212,32 @@ class FalcomVMBuilder(LowLevelILBuilder):
             )
 
         # Save sp before we start pushing for the call
-        self.sp_before_call = self.current_sp
+        self.sp_before_call = self.sp_get()
 
-        # Push all 4 values
-        self.stack_push(FalcomConstants.current_func_id())
+        # Prepare the 4 values
+        func_id = FalcomConstants.current_func_id()
+        ret_addr = FalcomConstants.ret_addr_block(return_target)
+        script = FalcomConstants.current_script()
+        context_marker = self.const_raw(0xF0000000)
 
-        # Handle return target
-        if isinstance(return_target, str):
-            self.return_target_label = return_target
-            self.stack_push(FalcomConstants.ret_addr(return_target))
-        else:
-            self.return_target_label = return_target.label
-            self.stack_push(FalcomConstants.ret_addr_block(return_target))
+        # Remember block for next call
+        self.return_target_block = return_target
 
-        self.stack_push(FalcomConstants.current_script())
-        self.push_raw(0xF0000000)  # Context marker
+        # Create and add the atomic PUSH_CALLER_FRAME instruction
+        # This occupies 4 stack slots
+        push_frame_instr = LowLevelILPushCallerFrame(func_id, ret_addr, script, context_marker)
+        self.add_instruction(push_frame_instr)
+
+        # Emit SpAdd to represent the 4 values pushed
+        self.emit_sp_add(4)
+
+        # Save reference for call_module to use
+        self.caller_frame_instr = push_frame_instr
 
     def call(self, target):
         '''Falcom VM call - automatically cleans up stack (callee cleanup convention)'''
         # Verify call setup was done
-        if self.return_target_label is None:
+        if self.return_target_block is None:
             raise RuntimeError(
                 'No return target set. Did you forget to call push_ret_addr()?'
             )
@@ -223,12 +246,17 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 'No call setup found. Did you forget to call push_func_id()?'
             )
 
-        # Verify return target label can be resolved to a basic block
-        return_block = self.get_block_by_label(self.return_target_label)
-        if return_block is None:
+        # Get return block
+        return_block = self.return_target_block
+
+        # Calculate argc: total values pushed = sp_get() - sp_before_call
+        # This includes: func_id (1) + ret_addr (1) + args (N)
+        argc = self.sp_get() - self.sp_before_call
+
+        # Verify we have at least func_id and ret_addr
+        if argc < 2:
             raise RuntimeError(
-                f'Return target label "{self.return_target_label}" cannot be resolved to a basic block. '
-                f'Make sure the block with this label has been created.'
+                f'Expected at least 2 values (func_id, ret_addr), got {argc}'
             )
 
         # Verify sp alignment: restored sp must match target block's entry sp
@@ -243,12 +271,12 @@ class FalcomVMBuilder(LowLevelILBuilder):
                     f'This indicates inconsistent stack management.'
                 )
 
-        # Call with return target (pass block, not label string)
-        super().call(target, return_target = return_block)
+        # Call with return target and argc for stack cleanup
+        # argc will adjust shadow SP to balance the stack
+        super().call(target, return_target = return_block, argc = argc)
 
         # Clean up state
-        self.return_target_label = None
-        self.current_sp = self.sp_before_call
+        self.return_target_block = None
         self.sp_before_call = None
 
     def call_module(self, module: str, func: str, arg_count: int):
@@ -257,40 +285,64 @@ class FalcomVMBuilder(LowLevelILBuilder):
         Args:
             module: Module name (e.g., 'system')
             func: Function name (e.g., 'OnTalkBegin')
-            arg_count: Number of arguments already on stack
+            arg_count: Number of arguments on vstack
 
-        Note: Assumes push_func_id() and push_ret_addr() were already called.
-        The module call pops arg_count arguments from the stack.
+        Note: Assumes push_caller_frame() was already called.
+        Pops arg_count arguments from vstack and creates CALL_MODULE IL.
+        The IL includes the caller_frame and arguments, representing the complete call operation.
+        Automatically cleans up arg_count + 4 caller frame values from stack.
         '''
         # Verify call setup was done
-        if self.return_target_label is None:
+        if self.return_target_block is None:
             raise RuntimeError(
-                'No return target set. Did you forget to call push_ret_addr()?'
+                'No return target set. Did you forget to call push_caller_frame()?'
             )
         if self.sp_before_call is None:
             raise RuntimeError(
-                'No call setup found. Did you forget to call push_func_id()?'
+                'No call setup found. Did you forget to call push_caller_frame()?'
             )
-
-        # Create module call target string
-        target = f'{module}.{func}'
-
-        # Verify return target label can be resolved to a basic block
-        return_block = self.get_block_by_label(self.return_target_label)
-        if return_block is None:
+        if self.caller_frame_instr is None:
             raise RuntimeError(
-                f'Return target label "{self.return_target_label}" cannot be resolved to a basic block. '
-                f'Make sure the block with this label has been created.'
+                'No caller frame instruction found. Did you forget to call push_caller_frame()?'
             )
 
-        # Call the module function
-        # Note: arg_count is the number of user arguments, not including func_id and ret_addr
-        super().call(target, return_target=return_block)
+        # Get return block
+        return_block = self.return_target_block
+
+        # Pop arguments from vstack (in reverse order: last arg first)
+        args = []
+        for _ in range(arg_count):
+            if self.vstack_size() == 0:
+                raise RuntimeError(
+                    f'Vstack underflow: trying to pop {arg_count} args but only {len(args)} available'
+                )
+            args.append(self.vstack_pop())
+        # Reverse to get correct order (first arg first)
+        args.reverse()
+
+        # Create and add CALL_MODULE instruction
+        # This represents the call that cleans up args + 4 caller frame values
+        call_instr = LowLevelILCallModule(module, func, self.caller_frame_instr, args, return_block)
+        self.add_instruction(call_instr)
+
+        # Emit SpAdd to represent stack cleanup (arg_count + 4 caller frame values)
+        cleanup_count = arg_count + 4
+        self.emit_sp_add(-cleanup_count)
+
+        # Verify stack is balanced
+        if self.sp_get() != self.sp_before_call:
+            raise RuntimeError(
+                f'Stack imbalance in call_module: after cleaning up {arg_count} args + 4 caller frame, '
+                f'current_sp={self.sp_get()} but expected sp_before_call={self.sp_before_call}'
+            )
+
+        # Add terminal instruction to jump to return block
+        self.jmp(return_block)
 
         # Clean up state
-        self.return_target_label = None
-        self.current_sp = self.sp_before_call
+        self.return_target_block = None
         self.sp_before_call = None
+        self.caller_frame_instr = None
 
     # === VM Operations ===
 
@@ -313,7 +365,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         Args:
             value: Raw 32-bit value to push (displayed as hex)
         '''
-        self.stack_push(self.const_int(value, is_hex=True))
+        self.stack_push(self.const_raw(value))
 
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''
@@ -384,7 +436,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
 
         num_words = num_bytes // WORD_SIZE
-        self.sp_add(-num_words)
+        self.emit_sp_add(-num_words)
 
     def pop_n(self, count: int):
         '''POP_N operation - discard N slots from stack
@@ -398,7 +450,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         if count <= 0:
             raise ValueError(f'count ({count}) must be positive')
 
-        self.sp_add(-count)
+        self.emit_sp_add(-count)
 
     def load_global(self, index: int):
         '''LOAD_GLOBAL operation - push global variable onto stack

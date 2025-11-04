@@ -71,8 +71,12 @@ class LowLevelILOperation(IntEnum):
     LLIL_DEBUG = 61             # debug info
     LLIL_STACK_ADDR = 62        # address of stack location (sp + offset)
 
-    # User-defined extensions (reserved range: 1000+)
-    LLIL_USER_DEFINED = 1000    # Start of user-defined operations
+    # Falcom VM specific (user-defined extensions)
+    LLIL_PUSH_CALLER_FRAME = 1000  # Falcom VM: push caller frame (4 values)
+    LLIL_CALL_MODULE = 1001        # Falcom VM: call module function
+
+    # User-defined extensions (reserved range: 1002+)
+    LLIL_USER_DEFINED = 1002    # Start of user-defined operations
 
 
 class LowLevelILInstruction(ABC):
@@ -99,20 +103,50 @@ class LowLevelILInstruction(ABC):
 
 # === Instruction Categories (following BinaryNinja design) ===
 
-class ControlFlow(LowLevelILInstruction):
+class LowLevelILExpr(LowLevelILInstruction):
+    '''Base class for value expressions (produces a value)
+
+    Expressions can be used as operands to other instructions.
+    Examples: CONST, StackLoad, FrameLoad, BinaryOp, UnaryOp
+
+    vstack only stores LowLevelILExpr instances.
+    '''
+    pass
+
+
+class LowLevelILStatement(LowLevelILInstruction):
+    '''Base class for statements (side effects, no value)
+
+    Statements have side effects but do not produce values.
+    Examples: StackStore, FrameStore, SpAdd, PUSH_CALLER_FRAME
+
+    Basic blocks only store LowLevelILStatement instances.
+    '''
+    pass
+
+
+class ControlFlow(LowLevelILStatement):
     '''Base class for control flow instructions'''
     pass
 
 
-class Terminal(ControlFlow):
-    '''Base class for terminal control flow instructions (goto, ret, etc)'''
+class LowLevelILTerminal(ControlFlow):
+    '''Base class for terminal control flow instructions (goto, ret, etc)
+
+    Terminal instructions end a basic block and transfer control elsewhere.
+    No more instructions can be added to a block after a terminal.
+    '''
     pass
+
+
+# Alias for compatibility
+Terminal = LowLevelILTerminal
 
 
 # === Atomic Stack Operations ===
 
-class LowLevelILStackStore(LowLevelILInstruction):
-    '''STACK[sp + offset] = value
+class LowLevelILStackStore(LowLevelILStatement):
+    '''STACK[sp + offset] = value (statement)
 
     Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
@@ -133,8 +167,8 @@ class LowLevelILStackStore(LowLevelILInstruction):
             return f'STACK[sp - {-word_offset}] = {self.value}'
 
 
-class LowLevelILStackLoad(LowLevelILInstruction):
-    '''load STACK[sp + offset]
+class LowLevelILStackLoad(LowLevelILExpr):
+    '''load STACK[sp + offset] (expression)
 
     Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
@@ -154,8 +188,8 @@ class LowLevelILStackLoad(LowLevelILInstruction):
             return f'STACK[sp - {-word_offset}]'
 
 
-class LowLevelILFrameLoad(LowLevelILInstruction):
-    '''load STACK[frame + offset]
+class LowLevelILFrameLoad(LowLevelILExpr):
+    '''load STACK[frame + offset] (expression)
 
     Frame-relative load for function parameters and local variables.
     frame = sp at function entry.
@@ -183,8 +217,8 @@ class LowLevelILFrameLoad(LowLevelILInstruction):
             return f'STACK[fp - {-word_offset}]'
 
 
-class LowLevelILFrameStore(LowLevelILInstruction):
-    '''STACK[frame + offset] = value
+class LowLevelILFrameStore(LowLevelILStatement):
+    '''STACK[frame + offset] = value (statement)
 
     Frame-relative store for function parameters and local variables.
     frame = sp at function entry.
@@ -207,8 +241,8 @@ class LowLevelILFrameStore(LowLevelILInstruction):
             return f'STACK[fp - {-word_offset}] = {self.value}'
 
 
-class LowLevelILSpAdd(LowLevelILInstruction):
-    '''sp = sp + delta'''
+class LowLevelILSpAdd(LowLevelILStatement):
+    '''sp = sp + delta (statement)'''
 
     def __init__(self, delta: int):
         super().__init__(LowLevelILOperation.LLIL_SP_ADD, 0)
@@ -225,8 +259,12 @@ class LowLevelILSpAdd(LowLevelILInstruction):
             return f'sp -= {-self.delta}'
 
 
-class LowLevelILStackPush(LowLevelILInstruction):
-    '''STACK[sp] = value; sp++ (statement, does not return value)'''
+class LowLevelILStackPush(LowLevelILStatement):
+    '''STACK[sp] = value; sp++ (statement, does not return value)
+
+    DEPRECATED: This is builder sugar only. Normalize pass will expand to:
+      StackStore(sp+0, value) → SpAdd(+1)
+    '''
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_PUSH, size)
@@ -237,8 +275,12 @@ class LowLevelILStackPush(LowLevelILInstruction):
         return f'STACK[sp++] = {self.value}'
 
 
-class LowLevelILStackPop(LowLevelILInstruction):
-    '''sp--; return STACK[sp] (value expression with side effect)'''
+class LowLevelILStackPop(LowLevelILExpr):
+    '''sp--; return STACK[sp] (value expression with side effect)
+
+    DEPRECATED: This is builder sugar only. Normalize pass will expand to:
+      SpAdd(-1) → StackLoad(sp+0)
+    '''
 
     def __init__(self, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_POP, size)
@@ -248,7 +290,7 @@ class LowLevelILStackPop(LowLevelILInstruction):
         return 'STACK[--sp]'
 
 
-class LowLevelILStackAddr(LowLevelILInstruction):
+class LowLevelILStackAddr(LowLevelILExpr):
     '''Address of a specific stack slot (constant, independent of sp changes)
 
     Used for PUSH_STACK_OFFSET which pushes the address of a stack slot.
@@ -270,8 +312,8 @@ LowLevelILVspAdd = LowLevelILSpAdd
 
 # === Register Operations ===
 
-class LowLevelILRegStore(LowLevelILInstruction):
-    '''REG[index] = value'''
+class LowLevelILRegStore(LowLevelILStatement):
+    '''REG[index] = value (statement)'''
 
     def __init__(self, reg_index: int, value: Union['LowLevelILInstruction', int], size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_REG_STORE, size)
@@ -282,8 +324,8 @@ class LowLevelILRegStore(LowLevelILInstruction):
         return f'REG[{self.reg_index}] = {self.value}'
 
 
-class LowLevelILRegLoad(LowLevelILInstruction):
-    '''load REG[index]'''
+class LowLevelILRegLoad(LowLevelILExpr):
+    '''load REG[index] (expression)'''
 
     def __init__(self, reg_index: int, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_REG_LOAD, size)
@@ -295,8 +337,8 @@ class LowLevelILRegLoad(LowLevelILInstruction):
 
 # === Arithmetic Operations ===
 
-class LowLevelILBinaryOp(LowLevelILInstruction):
-    '''Base for binary operations'''
+class LowLevelILBinaryOp(LowLevelILExpr):
+    '''Base for binary operations (expression)'''
 
     def __init__(self, operation: LowLevelILOperation, lhs: 'LowLevelILInstruction' = None,
                  rhs: 'LowLevelILInstruction' = None, size: int = 4):
@@ -386,8 +428,8 @@ class LowLevelILLogicalOr(LowLevelILBinaryOp):
 
 # === Unary Operations ===
 
-class LowLevelILUnaryOp(LowLevelILInstruction):
-    '''Base class for unary operations'''
+class LowLevelILUnaryOp(LowLevelILExpr):
+    '''Base class for unary operations (expression)'''
 
     def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILInstruction' = None, size: int = 4):
         super().__init__(operation, size)
@@ -414,8 +456,8 @@ class LowLevelILTestZero(LowLevelILUnaryOp):
 
 # === Control Flow ===
 
-class LowLevelILGoto(Terminal):
-    '''Unconditional jump - target must be a BasicBlock'''
+class LowLevelILGoto(LowLevelILTerminal):
+    '''Unconditional jump - target must be a BasicBlock (terminal)'''
 
     def __init__(self, target: 'LowLevelILBasicBlock'):
         super().__init__(LowLevelILOperation.LLIL_JMP)
@@ -430,8 +472,8 @@ class LowLevelILJmp(LowLevelILGoto):
     pass
 
 
-class LowLevelILIf(Terminal):
-    '''Conditional branch - targets must be BasicBlocks
+class LowLevelILIf(LowLevelILTerminal):
+    '''Conditional branch - targets must be BasicBlocks (terminal)
 
     condition: LowLevelILInstruction that evaluates to true/false
 
@@ -455,8 +497,8 @@ class LowLevelILIf(Terminal):
             return f'if {self.condition} goto {true_name}'
 
 
-class LowLevelILCall(Terminal):
-    '''Function call
+class LowLevelILCall(LowLevelILTerminal):
+    '''Function call (terminal)
 
     In Falcom VM, call is a terminal instruction because control transfers
     to the called function, then returns to an explicit return address
@@ -473,8 +515,8 @@ class LowLevelILCall(Terminal):
         return f'call {self.target}'
 
 
-class LowLevelILRet(Terminal):
-    '''Return from function'''
+class LowLevelILRet(LowLevelILTerminal):
+    '''Return from function (terminal)'''
 
     def __init__(self):
         super().__init__(LowLevelILOperation.LLIL_RET)
@@ -485,13 +527,14 @@ class LowLevelILRet(Terminal):
 
 # === Constants and Special ===
 
-class LowLevelILConst(LowLevelILInstruction):
-    '''Constant value (int, float, or string)'''
+class LowLevelILConst(LowLevelILExpr):
+    '''Constant value (int, float, or string) (expression)'''
 
-    def __init__(self, value: Union[int, float, str], size: int = 4, is_hex: bool = False):
+    def __init__(self, value: Union[int, float, str], size: int = 4, is_hex: bool = False, is_raw: bool = False):
         super().__init__(LowLevelILOperation.LLIL_CONST, size)
         self.value = value
         self.is_hex = is_hex  # True to display as hex, False for decimal (default)
+        self.is_raw = is_raw  # True for raw values (type-less), False for typed constants
 
     def __str__(self) -> str:
         if isinstance(self.value, str):
@@ -505,7 +548,13 @@ class LowLevelILConst(LowLevelILInstruction):
             return formatted
 
         elif isinstance(self.value, int):
-            if self.is_hex:
+            # Raw values are always displayed in hex
+            if self.is_raw:
+                if self.value < 0:
+                    return f'-0x{-self.value:X}'
+                else:
+                    return f'0x{self.value:X}'
+            elif self.is_hex:
                 # Hex display
                 if self.value < 0:
                     # Negative hex: -0xAB
@@ -520,8 +569,8 @@ class LowLevelILConst(LowLevelILInstruction):
             return str(self.value)
 
 
-class LowLevelILLabelInstr(LowLevelILInstruction):
-    '''Label instruction (for marking positions in code)'''
+class LowLevelILLabelInstr(LowLevelILStatement):
+    '''Label instruction (for marking positions in code) (statement)'''
 
     def __init__(self, name: str):
         super().__init__(LowLevelILOperation.LLIL_LABEL)
@@ -531,8 +580,8 @@ class LowLevelILLabelInstr(LowLevelILInstruction):
         return f'{self.name}:'
 
 
-class LowLevelILDebug(LowLevelILInstruction):
-    '''Debug information'''
+class LowLevelILDebug(LowLevelILStatement):
+    '''Debug information (statement)'''
 
     def __init__(self, debug_type: str, value: Any):
         super().__init__(LowLevelILOperation.LLIL_DEBUG)
@@ -545,8 +594,8 @@ class LowLevelILDebug(LowLevelILInstruction):
 
 # === VM Specific ===
 
-class LowLevelILSyscall(LowLevelILInstruction):
-    '''System call'''
+class LowLevelILSyscall(LowLevelILStatement):
+    '''System call (statement)'''
 
     def __init__(self, subsystem: int, cmd: int, argc: int):
         super().__init__(LowLevelILOperation.LLIL_SYSCALL)

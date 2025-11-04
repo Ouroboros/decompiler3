@@ -22,17 +22,83 @@ class LowLevelILBuilder:
     def __init__(self, function: LowLevelILFunction):
         self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
-        self.current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out)
+        self.__current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out) - PRIVATE
         self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
-        self.vstack: List[LowLevelILInstruction] = []  # Virtual stack for expression tracking
+        self.__vstack: List[LowLevelILExpr] = []  # Virtual stack for expression tracking - PRIVATE (ONLY stores LowLevelILExpr)
 
-    def set_current_block(self, block: LowLevelILBasicBlock, sp: Optional[int] = None):
+    # === Stack Pointer Management (Public Interface) ===
+
+    def sp_get(self) -> int:
+        '''Get current stack pointer value'''
+        return self.__current_sp
+
+    def __sp_set(self, value: int):
+        '''Set shadow SP to absolute value (does NOT emit IL) - PRIVATE
+
+        Use cases (INTERNAL ONLY):
+        1. Initialize block SP state (set_current_block)
+
+        WARNING: This does NOT emit SpAdd IL. Only used internally.
+        To modify SP with IL emission, use emit_sp_add().
+        '''
+        self.__current_sp = value
+
+    def __sp_adjust(self, delta: int):
+        '''Adjust shadow SP by delta (does NOT emit IL) - PRIVATE
+
+        This is ONLY called by add_instruction() when it detects SpAdd IL.
+        It syncs the shadow SP to reflect the IL that was just added.
+
+        WARNING: NEVER call this directly! Use emit_sp_add() instead.
+        '''
+        self.__current_sp += delta
+
+    def emit_sp_add(self, delta: int) -> LowLevelILSpAdd:
+        '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)
+
+        This is the ONLY method that should be used to modify SP.
+        Ensures all SP changes are represented in the IL.
+
+        Args:
+            delta: Number of words to add to sp (can be positive or negative)
+
+        Returns:
+            The emitted LowLevelILSpAdd instruction
+        '''
+        sp_add = LowLevelILSpAdd(delta)
+        self.add_instruction(sp_add)
+        # Note: add_instruction will handle the sp update via its existing logic
+        return sp_add
+
+    # === Virtual Stack Management (Public Interface) ===
+
+    def vstack_push(self, expr: LowLevelILExpr):
+        '''Push expression to vstack (only accepts LowLevelILExpr)'''
+        if not isinstance(expr, LowLevelILExpr):
+            raise TypeError(f'vstack only accepts LowLevelILExpr, got {type(expr).__name__}')
+        self.__vstack.append(expr)
+
+    def vstack_pop(self) -> LowLevelILExpr:
+        '''Pop expression from vstack (returns LowLevelILExpr)'''
+        if not self.__vstack:
+            raise RuntimeError('Vstack underflow: attempting to pop from empty vstack')
+        return self.__vstack.pop()
+
+    def vstack_peek(self) -> LowLevelILExpr:
+        '''Peek at top of vstack without popping (returns LowLevelILExpr)'''
+        if not self.__vstack:
+            raise RuntimeError('Vstack empty: cannot peek')
+        return self.__vstack[-1]
+
+    def vstack_size(self) -> int:
+        '''Get current vstack size'''
+        return len(self.__vstack)
+
+    def set_current_block(self, block: LowLevelILBasicBlock):
         '''Set the current basic block for instruction insertion
 
         Args:
             block: The block to set as current
-            sp: Optional stack pointer value. If None, uses function's num_params on first block,
-                or continues from previous block's sp
 
         Raises:
             RuntimeError: If block has not been added to function
@@ -43,19 +109,17 @@ class LowLevelILBuilder:
 
         # Save previous block's sp_out if we have a current block
         if self.current_block is not None:
-            self.current_block.sp_out = self.current_sp
+            self.current_block.sp_out = self.sp_get()
 
         self.current_block = block
 
         # Set new block's sp_in and current sp
-        if sp is not None:
-            self.current_sp = sp
-        elif self.frame_base_sp is None:
+        if self.frame_base_sp is None:
             # First block: use function's parameter count as initial sp
-            self.current_sp = self.function.num_params
+            self.__sp_set(self.function.num_params)
         # else: continue from previous block's sp
 
-        block.sp_in = self.current_sp
+        block.sp_in = self.sp_get()
 
         # Save frame base sp on first block (function entry)
         # New scheme: fp = 0 (points to first parameter)
@@ -79,14 +143,17 @@ class LowLevelILBuilder:
 
         # Update stack pointer based on instruction type
         if isinstance(instr, LowLevelILSpAdd):
-            self.current_sp += instr.delta
+            self.__sp_adjust(instr.delta)
 
     # === Virtual Stack Management ===
 
-    def _to_expr(self, value: Union[LowLevelILInstruction, int, float, str]) -> LowLevelILInstruction:
-        '''Convert value to expression'''
-        if isinstance(value, LowLevelILInstruction):
+    def _to_expr(self, value: Union[LowLevelILExpr, int, float, str]) -> LowLevelILExpr:
+        '''Convert value to expression (always returns LowLevelILExpr)'''
+        if isinstance(value, LowLevelILExpr):
             return value
+        elif isinstance(value, LowLevelILInstruction):
+            # Should not happen - only Expr should be passed
+            raise TypeError(f'Expected LowLevelILExpr, got {type(value).__name__}. Statements cannot be used as expressions.')
         elif isinstance(value, int):
             return self.const_int(value)
         elif isinstance(value, float):
@@ -96,58 +163,65 @@ class LowLevelILBuilder:
         else:
             raise TypeError(f'Cannot convert {type(value)} to expression')
 
-    def push(self, value: Union[LowLevelILInstruction, int, float, str], size: int = 4) -> LowLevelILInstruction:
-        '''Push value onto stack using StackPush instruction
+    def push(self, value: Union[LowLevelILExpr, int, float, str], size: int = 4) -> LowLevelILExpr:
+        '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)
 
-        Generates LowLevelILStackPush and maintains sp.
-        Returns the expression that was pushed.
+        Generates:
+          1. StackStore(sp+0, value)
+          2. SpAdd(+1)
+
+        Args:
+            value: Expression or primitive value to push (must be LowLevelILExpr or int/float/str)
+            size: Size in bytes
+
+        Returns:
+            The expression that was pushed (LowLevelILExpr)
         '''
         expr = self._to_expr(value)
-        # Generate StackPush instruction (semantic: STACK[sp] = value; sp++)
-        push_instr = LowLevelILStackPush(expr, size)
-        push_instr.slot_index = self.current_sp  # Record slot being written to
-        self.add_instruction(push_instr)
-        # Maintain sp in builder (sp maintained here, not in add_instruction)
-        self.current_sp += 1
+        # 1. StackStore(sp+0, value)
+        self.add_instruction(LowLevelILStackStore(expr, offset=0, size=size))
+        # 2. SpAdd(+1)
+        self.emit_sp_add(1)
         # Track on vstack for expression tracking
-        self.vstack.append(expr)
+        self.vstack_push(expr)
         return expr
 
-    def pop(self, size: int = 4) -> LowLevelILInstruction:
-        '''Pop value from stack using StackPop expression
+    def pop(self, size: int = 4) -> LowLevelILExpr:
+        '''Pop value from stack (SPEC-compliant: SpAdd + StackLoad)
 
-        Returns LowLevelILStackPop expression (value expression with side effect).
-        Maintains sp in builder (sp maintained here, not in add_instruction).
+        Generates:
+          1. SpAdd(-1)
+          2. Returns StackLoad(sp+0) expression
+
+        Returns the StackLoad expression (the popped value).
         '''
         # Pop from virtual stack for tracking
-        if self.vstack:
-            self.vstack.pop()
+        if self.vstack_size() > 0:
+            self.vstack_pop()
 
-        # Create StackPop expression (semantic: sp--; return STACK[sp])
-        pop_expr = LowLevelILStackPop(size)
-        # Maintain sp in builder
-        self.current_sp -= 1
-        pop_expr.slot_index = self.current_sp  # Record slot being read from
-
-        return pop_expr
+        # 1. SpAdd(-1)
+        self.emit_sp_add(-1)
+        # 2. StackLoad(sp+0) - return the expression
+        return LowLevelILStackLoad(offset=0, size=size)
 
     # === Legacy Stack Operations (kept for compatibility) ===
 
-    def stack_push(self, value: Union[LowLevelILInstruction, int, str], size: int = 4):
+    def stack_push(self, value: Union[LowLevelILExpr, int, str], size: int = 4):
         '''STACK[sp++] = value (legacy, use push() instead)'''
         self.push(value, size)
 
-    def stack_pop(self, size: int = 4) -> LowLevelILStackLoad:
+    def stack_pop(self, size: int = 4) -> LowLevelILExpr:
         '''STACK[--sp] (legacy, use pop() instead)'''
         return self.pop(size)
 
     def stack_load(self, offset: int, size: int = 4) -> LowLevelILStackLoad:
-        '''STACK[sp + offset] (no sp change)'''
+        '''STACK[sp + offset] (no sp change) - returns expression'''
         return LowLevelILStackLoad(offset, size)
 
-    def stack_store(self, value: Union[LowLevelILInstruction, int, str], offset: int, size: int = 4):
+    def stack_store(self, value: Union[LowLevelILExpr, int, str], offset: int, size: int = 4):
         '''STACK[sp + offset] = value (no sp change)'''
-        self.add_instruction(LowLevelILStackStore(value, offset, size))
+        expr = self._to_expr(value)
+        self.add_instruction(LowLevelILStackStore(expr, offset, size))
 
     def frame_load(self, offset: int, size: int = 4) -> 'LowLevelILFrameLoad':
         '''STACK[frame + offset] - Frame-relative load (for function parameters/locals)
@@ -161,15 +235,16 @@ class LowLevelILBuilder:
         '''
         return LowLevelILFrameLoad(offset, size)
 
-    def frame_store(self, value: Union[LowLevelILInstruction, int, str], offset: int, size: int = 4):
+    def frame_store(self, value: Union[LowLevelILExpr, int, str], offset: int, size: int = 4):
         '''STACK[frame + offset] = value - Frame-relative store (for function parameters/locals)
 
         Args:
-            value: Value to store
+            value: Value to store (expression or primitive)
             offset: Byte offset relative to frame base (function entry sp)
             size: Size in bytes (default 4)
         '''
-        self.add_instruction(LowLevelILFrameStore(value, offset, size))
+        expr = self._to_expr(value)
+        self.add_instruction(LowLevelILFrameStore(expr, offset, size))
 
     def load_frame(self, offset: int):
         '''Load from frame + offset and push to stack
@@ -195,7 +270,7 @@ class LowLevelILBuilder:
         # Calculate word offset
         word_offset = offset // WORD_SIZE
         # Calculate absolute stack position
-        absolute_pos = self.current_sp + word_offset
+        absolute_pos = self.sp_get() + word_offset
 
         # Check if accessing parameter area
         # New scheme: fp = 0, parameters at STACK[0..num_params-1]
@@ -223,32 +298,21 @@ class LowLevelILBuilder:
         # Convert byte offset to word offset
         word_offset = offset // WORD_SIZE
         # Calculate absolute slot index using current sp
-        slot_index = self.current_sp + word_offset
+        slot_index = self.sp_get() + word_offset
         # Create stack address with absolute slot index
         stack_addr = LowLevelILStackAddr(slot_index)
         self.stack_push(stack_addr)
 
-    def sp_add(self, delta: int):
-        '''Adjust stack pointer: sp += delta
-
-        Only for shrinking stack (delta < 0). Use push() to grow stack.
-
-        Args:
-            delta: Number of words to add (must be negative)
-        '''
-        assert delta < 0, f'sp_add only for shrinking stack, got delta={delta}. Use push() to grow stack.'
-        self.add_instruction(LowLevelILSpAdd(delta))
-
-        # Synchronize vstack: pop items when shrinking stack
-        for _ in range(-delta):
-            if self.vstack:
-                self.vstack.pop()
+    # REMOVED: sp_add() - use emit_sp_add() instead
+    # def sp_add(self, delta: int):
+    #     '''DEPRECATED: Use emit_sp_add() instead'''
 
     # === Register Operations ===
 
-    def reg_store(self, reg_index: int, value: Union[LowLevelILInstruction, int], size: int = 4):
-        '''R[index] = value'''
-        self.add_instruction(LowLevelILRegStore(reg_index, value, size))
+    def reg_store(self, reg_index: int, value: Union[LowLevelILExpr, int], size: int = 4):
+        '''R[index] = value (store expression to register)'''
+        expr = self._to_expr(value)
+        self.add_instruction(LowLevelILRegStore(reg_index, expr, size))
 
     def reg_load(self, reg_index: int, size: int = 4) -> LowLevelILRegLoad:
         '''R[index]'''
@@ -274,9 +338,18 @@ class LowLevelILBuilder:
         '''String constant'''
         return LowLevelILConst(value, 0, False)
 
+    def const_raw(self, value: int, size: int = 4) -> LowLevelILConst:
+        '''Raw constant (type-less, displayed as hex)
+
+        Args:
+            value: Raw value
+            size: Size in bytes (default 4)
+        '''
+        return LowLevelILConst(value, size, is_hex = False, is_raw = True)
+
     # === Binary Operations ===
 
-    def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, size: int = 4) -> LowLevelILInstruction:
+    def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, size: int = 4) -> LowLevelILExpr:
         '''Generic binary operation handler
 
         Stack operation order (for implicit mode):
@@ -286,13 +359,13 @@ class LowLevelILBuilder:
 
         Args:
             op_class: The operation class (e.g., LowLevelILAdd)
-            lhs: Left operand (None = pop from vstack)
-            rhs: Right operand (None = pop from vstack)
+            lhs: Left operand (None = pop from vstack) - must be expr or primitive
+            rhs: Right operand (None = pop from vstack) - must be expr or primitive
             push: Whether to push result back to vstack
             size: Operation size
 
         Returns:
-            The operation expression
+            The operation expression (LowLevelILExpr)
         '''
         # Get operands - both must be None or both must be provided
         if lhs is None and rhs is None:
@@ -462,19 +535,20 @@ class LowLevelILBuilder:
 
     def call(self, target: Union[str, LowLevelILInstruction],
              return_target: Optional[Union[str, LowLevelILBasicBlock]] = None,
-             stack_cleanup: Optional[int] = None):
-        '''Function call
+             argc: Optional[int] = None):
+        '''Function call (terminal instruction)
 
         Args:
             target: Function name or address
             return_target: Block or label to return to after call (resolved in build_cfg)
-            stack_cleanup: Number of stack slots to pop after call (for callee cleanup)
-                          If None, no automatic cleanup is performed
+            argc: Number of stack slots to clean up (includes func_id + ret_addr + args)
         '''
+        # If argc provided, adjust shadow SP to clean up stack (without emitting IL)
+        # This is for Falcom VM callee cleanup convention
+        if argc is not None and argc > 0:
+            self.__sp_adjust(-argc)
+
         self.add_instruction(LowLevelILCall(target, return_target))
-        # In Falcom VM, callee cleans up the stack (including func_id, ret_addr, and arguments)
-        if stack_cleanup is not None:
-            self.current_sp -= stack_cleanup
 
     def ret(self):
         '''Return'''
