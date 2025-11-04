@@ -497,10 +497,18 @@ class LLILFormatter:
 
         expr = expr_map[binary_op.operation]
 
+        # Get slot indices from operands if they are StackPop
+        rhs_line = 'rhs = STACK[--sp]'
+        lhs_line = 'lhs = STACK[--sp]'
+        if isinstance(binary_op.rhs, LowLevelILStackPop) and binary_op.rhs.slot_index is not None:
+            rhs_line = f'rhs = STACK[--sp]  ; [{binary_op.rhs.slot_index}]'
+        if isinstance(binary_op.lhs, LowLevelILStackPop) and binary_op.lhs.slot_index is not None:
+            lhs_line = f'lhs = STACK[--sp]  ; [{binary_op.lhs.slot_index}]'
+
         return [
             f'; expand {binary_op.operation_name}',
-            'rhs = STACK[--sp]',  # First pop gets right operand (top of stack)
-            'lhs = STACK[--sp]',  # Second pop gets left operand (below it)
+            rhs_line,  # First pop gets right operand (top of stack)
+            lhs_line,  # Second pop gets left operand (below it)
             f'STACK[sp++] = {expr}'
         ]
 
@@ -561,8 +569,14 @@ class LLILFormatter:
                 # Multi-line instruction
                 result.extend(LLILFormatter.indent_lines(expanded, indent))
             else:
-                # Single line instruction
-                result.append(f'{indent}{expanded[0]}')
+                # Single line instruction - add slot comment if applicable
+                line = expanded[0]
+                # Add slot comment for StackPush and StackPop
+                if isinstance(instr, LowLevelILStackPush) and instr.slot_index is not None:
+                    line = f'{line}  ; [{instr.slot_index}]'
+                elif isinstance(instr, LowLevelILStackPop) and instr.slot_index is not None:
+                    line = f'{line}  ; [{instr.slot_index}]'
+                result.append(f'{indent}{line}')
 
         return result
 

@@ -225,8 +225,6 @@ class LowLevelILStackPush(LowLevelILInstruction):
         self.slot_index: Optional[int] = None  # Slot being written to
 
     def __str__(self) -> str:
-        if self.slot_index is not None:
-            return f'STACK[sp++] = {self.value}  ; [{self.slot_index}]'
         return f'STACK[sp++] = {self.value}'
 
 
@@ -238,8 +236,6 @@ class LowLevelILStackPop(LowLevelILInstruction):
         self.slot_index: Optional[int] = None  # Slot being read from
 
     def __str__(self) -> str:
-        if self.slot_index is not None:
-            return f'STACK[--sp]  ; [{self.slot_index}]'
         return 'STACK[--sp]'
 
 

@@ -816,8 +816,8 @@ def main():
     # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
+    # test_EV_06_37_00()
     test_conditional()
-    test_EV_06_37_00()
 
 
 if __name__ == '__main__':
