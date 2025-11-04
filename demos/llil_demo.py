@@ -790,8 +790,7 @@ def create_TALK_BEGIN():
     builder.set_current_block(entry)
 
     # PUSH_CALLER_CONTEXT('loc_54F6B')
-    builder.push_func_id()
-    builder.push_ret_addr(loc_54F6B)
+    builder.push_caller_context(loc_54F6B)
 
     # LOAD_STACK(-28)
     builder.load_stack(-28)

@@ -175,6 +175,42 @@ class FalcomVMBuilder(LowLevelILBuilder):
             self.return_target_label = target.label  # Remember label for next call
             self.stack_push(FalcomConstants.ret_addr_block(target))
 
+    def push_caller_context(self, return_target: Union[str, LowLevelILBasicBlock]):
+        '''PUSH_CALLER_CONTEXT operation - push all caller context in one instruction
+
+        VM behavior: Pushes 4 values onto stack:
+          1. funcIndex (current function ID)
+          2. retAddr (return address label/block)
+          3. currScript (current script index)
+          4. 0xF0000000 (context marker)
+
+        Args:
+            return_target: Either a label string or a basic block reference for return
+        '''
+        # Verify no pending call setup
+        if self.sp_before_call is not None:
+            raise RuntimeError(
+                f'Previous call setup at sp={self.sp_before_call} not completed. '
+                f'Did you forget to call()?'
+            )
+
+        # Save sp before we start pushing for the call
+        self.sp_before_call = self.current_sp
+
+        # Push all 4 values
+        self.stack_push(FalcomConstants.current_func_id())
+
+        # Handle return target
+        if isinstance(return_target, str):
+            self.return_target_label = return_target
+            self.stack_push(FalcomConstants.ret_addr(return_target))
+        else:
+            self.return_target_label = return_target.label
+            self.stack_push(FalcomConstants.ret_addr_block(return_target))
+
+        self.stack_push(FalcomConstants.current_script())
+        self.push_raw(0xF0000000)  # Context marker
+
     def call(self, target):
         '''Falcom VM call - automatically cleans up stack (callee cleanup convention)'''
         # Verify call setup was done
@@ -270,6 +306,14 @@ class FalcomVMBuilder(LowLevelILBuilder):
     def push_str(self, value: str):
         '''PUSH_STR operation'''
         self.stack_push(self.const_str(value))
+
+    def push_raw(self, value: int):
+        '''PUSH_RAW operation - push raw 4-byte value without type info
+
+        Args:
+            value: Raw 32-bit value to push (displayed as hex)
+        '''
+        self.stack_push(self.const_int(value, is_hex=True))
 
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''

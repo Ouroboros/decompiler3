@@ -44,6 +44,17 @@ class LowLevelILConstRetAddrBlock(LowLevelILConst):
         return f'<&{self.block.label}>'
 
 
+class LowLevelILConstScript(LowLevelILConst):
+    '''Falcom VM current script constant'''
+
+    def __init__(self):
+        # Special constant with no actual value
+        super().__init__(None, WORD_SIZE, False)
+
+    def __str__(self) -> str:
+        return '<script_id>'
+
+
 class FalcomConstants:
     '''Falcom VM specific constants factory'''
 
@@ -58,3 +69,7 @@ class FalcomConstants:
     @staticmethod
     def ret_addr_block(block: 'LowLevelILBasicBlock'):
         return LowLevelILConstRetAddrBlock(block)
+
+    @staticmethod
+    def current_script():
+        return LowLevelILConstScript()
