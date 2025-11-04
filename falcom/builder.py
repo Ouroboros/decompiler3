@@ -215,6 +215,47 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.current_sp = self.sp_before_call
         self.sp_before_call = None
 
+    def call_module(self, module: str, func: str, arg_count: int):
+        '''CALL_MODULE operation - call a module function
+
+        Args:
+            module: Module name (e.g., 'system')
+            func: Function name (e.g., 'OnTalkBegin')
+            arg_count: Number of arguments already on stack
+
+        Note: Assumes push_func_id() and push_ret_addr() were already called.
+        The module call pops arg_count arguments from the stack.
+        '''
+        # Verify call setup was done
+        if self.return_target_label is None:
+            raise RuntimeError(
+                'No return target set. Did you forget to call push_ret_addr()?'
+            )
+        if self.sp_before_call is None:
+            raise RuntimeError(
+                'No call setup found. Did you forget to call push_func_id()?'
+            )
+
+        # Create module call target string
+        target = f'{module}.{func}'
+
+        # Verify return target label can be resolved to a basic block
+        return_block = self.get_block_by_label(self.return_target_label)
+        if return_block is None:
+            raise RuntimeError(
+                f'Return target label "{self.return_target_label}" cannot be resolved to a basic block. '
+                f'Make sure the block with this label has been created.'
+            )
+
+        # Call the module function
+        # Note: arg_count is the number of user arguments, not including func_id and ret_addr
+        super().call(target, return_target=return_block)
+
+        # Clean up state
+        self.return_target_label = None
+        self.current_sp = self.sp_before_call
+        self.sp_before_call = None
+
     # === VM Operations ===
 
     def push_int(self, value: int, is_hex: bool = False):
@@ -295,9 +336,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
             num_bytes: Number of bytes to pop (e.g., 4 to pop 1 word, 16 to pop 4 words)
         '''
         # Convert bytes to words
-        num_words = num_bytes // WORD_SIZE
         if num_bytes % WORD_SIZE != 0:
             raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
+
+        num_words = num_bytes // WORD_SIZE
         self.sp_add(-num_words)
 
     def pop_n(self, count: int):
@@ -308,6 +350,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
         Args:
             count: Number of slots to pop (e.g., 1 to pop 1 slot)
         '''
+
+        if count <= 0:
+            raise ValueError(f'count ({count}) must be positive')
+
         self.sp_add(-count)
 
     def load_global(self, index: int):

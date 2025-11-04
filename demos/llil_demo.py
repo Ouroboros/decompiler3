@@ -777,9 +777,69 @@ def create_test_conditional():
     return builder.finalize()
 
 
+def create_TALK_BEGIN():
+    '''TALK_BEGIN - Function call with caller context and module call'''
+    builder = FalcomVMBuilder()
+    builder.create_function('TALK_BEGIN', 0x54F50, num_params=2)
+
+    # Create blocks
+    entry = builder.create_basic_block(0x54F50, 'TALK_BEGIN')
+    loc_54F6B = builder.create_basic_block(0x54F6B, 'loc_54F6B')
+
+    # === BLOCK 0: Entry ===
+    builder.set_current_block(entry)
+
+    # PUSH_CALLER_CONTEXT('loc_54F6B')
+    builder.push_func_id()
+    builder.push_ret_addr(loc_54F6B)
+
+    # LOAD_STACK(-28)
+    builder.load_stack(-28)
+    # PUSH_INT(0)
+    builder.push_int(0)
+    # LOAD_STACK(-32)
+    builder.load_stack(-32)
+
+    # CALL_MODULE('system', 'OnTalkBegin', 3)
+    builder.call_module('system', 'OnTalkBegin', 3)
+
+    # === BLOCK 1: loc_54F6B ===
+    builder.set_current_block(loc_54F6B)
+
+    # PUSH(0x00000000)
+    builder.push_int(0x00000000, is_hex=True)
+    # SET_REG(0)
+    builder.set_reg(0)
+    # POP(8)
+    builder.pop_bytes(8)
+
+    # RETURN()
+    builder.ret()
+
+    return builder.finalize()
+
+
+def test_TALK_BEGIN():
+    '''Test TALK_BEGIN function'''
+    print('\n🧪 Test 5: TALK_BEGIN - Module Calls')
+    print('-' * 60)
+    print('Function demonstrating:')
+    print('- CALL_MODULE: call external module function')
+    print('- LOAD_STACK: load from stack with negative offset (parameters)')
+    print('- Function parameters and caller context')
+    print()
+
+    func5 = create_TALK_BEGIN()
+    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
+
+    dot = LLILFormatter.to_dot(func5)
+    with open('TALK_BEGIN_cfg.dot', 'w') as f:
+        f.write(dot)
+
+
 def test_conditional():
     '''Test conditional branches'''
-    print('\n🧪 Test 5: Conditional Branches')
+    print('\n🧪 Test 6: Conditional Branches')
     print('-' * 60)
     print('Function demonstrating:')
     print('- POP_JMP_NOT_ZERO: branch if value != 0')
@@ -797,7 +857,7 @@ def test_conditional():
 
 def test_EV_06_37_00():
     '''Test EV_06_37_00 function'''
-    print('\n🧪 Test 6: EV_06_37_00 - Global Variables')
+    print('\n🧪 Test 7: EV_06_37_00 - Global Variables')
     print('-' * 60)
     print('Function demonstrating:')
     print('- LOAD_GLOBAL: read from global variable array')
@@ -819,8 +879,9 @@ def main():
     # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
+    test_TALK_BEGIN()
+    # test_conditional()
     # test_EV_06_37_00()
-    test_conditional()
 
 
 if __name__ == '__main__':
