@@ -265,8 +265,12 @@ class FalcomVMBuilder(LowLevelILBuilder):
         '''
         # Pop from stack using StackPop expression
         cond = self.pop()
+        # Create NE(cond, 0) without adding as instruction
+        # This is just used as the branch condition expression
+        zero = self.const_int(0)
+        is_not_zero = LowLevelILNe(cond, zero)
         # Create If with both targets explicitly specified
-        self.add_instruction(LowLevelILIf(cond, true_target, false_target))
+        self.add_instruction(LowLevelILIf(is_not_zero, true_target, false_target))
 
     def pop_n(self, count: int):
         '''POP operation - discard N slots from stack

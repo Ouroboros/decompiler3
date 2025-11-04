@@ -761,31 +761,12 @@ def test_EV_06_37_00():
 
 
 def main():
-    print('🔧 LLIL Demo - Expression-based Architecture')
-    print('=' * 60)
-    print('Source: Real game functions from Kuro no Kiseki')
-    print()
-    print('Features:')
-    print('  ✓ First-class PUSH/POP instructions (no pattern matching)')
-    print('  ✓ Virtual stack tracks expressions')
-    print('  ✓ Operations hold operands: EQ(lhs, rhs)')
-    print('  ✓ Data flow visible for optimization')
-
     # Test individual functions (comment/uncomment as needed)
     # test_AV_04_0017()
     # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
     test_EV_06_37_00()
-
-    print('\n✅ Demo completed successfully!')
-    print('\nKey features demonstrated:')
-    print('  ✅ First-class PUSH/POP: STACK[sp++] = value, STACK[--sp]')
-    print('  ✅ No pattern matching fragility')
-    print('  ✅ Expression tracking in operands: EQ(STACK[--sp], STACK[--sp])')
-    print('  ✅ Clean separation: Push/Pop vs Load/Store')
-    print('  ✅ Stack state tracking: [sp = N] in each block')
-    print('  ✅ Parameter access: LOAD_STACK with negative offset')
 
 
 if __name__ == '__main__':
