@@ -720,21 +720,17 @@ class LLILFormatter:
         if isinstance(instr, LowLevelILUnaryOp):
             return LLILFormatter._format_unary_op_expanded(instr)
 
-        # StackStore with StackPop: expand to avoid ambiguity
-        if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILStackPop):
-            word_offset = instr.offset // WORD_SIZE
-            if word_offset == 0:
-                target = 'STACK[sp]'
-            elif word_offset > 0:
-                target = f'STACK[sp + {word_offset}]'
-            else:
-                target = f'STACK[sp - {-word_offset}]'
+        # StackStore: show store operation
+        # if isinstance(instr, LowLevelILStackStore):
+        #     word_offset = instr.offset // WORD_SIZE
+        #     if word_offset == 0:
+        #         target = 'STACK[sp]'
+        #     elif word_offset > 0:
+        #         target = f'STACK[sp + {word_offset}]'
+        #     else:
+        #         target = f'STACK[sp - {-word_offset}]'
 
-            return [
-                '; expand POP_TO',
-                'temp = STACK[--sp]',
-                f'{target} = temp'
-            ]
+        #     return [f'{target} = {instr.value}']
 
         # For non-binary operations, return single line
         return [str(instr)]

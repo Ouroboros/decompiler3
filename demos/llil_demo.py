@@ -879,8 +879,8 @@ def test_EV_06_37_00():
 
 def main():
     # Test individual functions (comment/uncomment as needed)
-    test_AV_04_0017()
-    # test_DOF_ON()
+    # test_AV_04_0017()
+    test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
     # test_TALK_BEGIN()

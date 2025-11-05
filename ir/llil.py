@@ -23,8 +23,6 @@ class LowLevelILOperation(IntEnum):
     LLIL_STACK_STORE = 0        # STACK[sp + offset] = value
     LLIL_STACK_LOAD = 1         # load STACK[sp + offset]
     LLIL_SP_ADD = 2             # sp = sp + delta
-    LLIL_STACK_PUSH = 3         # STACK[sp] = value; sp++ (statement)
-    LLIL_STACK_POP = 4          # sp--; return STACK[sp] (value expression with side effect)
 
     # Frame operations (relative to frame base, for function parameters/locals)
     LLIL_FRAME_LOAD = 5         # load STACK[frame + offset]
@@ -259,35 +257,6 @@ class LowLevelILSpAdd(LowLevelILStatement):
             return f'sp -= {-self.delta}'
 
 
-class LowLevelILStackPush(LowLevelILStatement):
-    '''STACK[sp] = value; sp++ (statement, does not return value)
-
-    DEPRECATED: This is builder sugar only. Normalize pass will expand to:
-      StackStore(sp+0, value) → SpAdd(+1)
-    '''
-
-    def __init__(self, value: Union['LowLevelILInstruction', int, str], size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_STACK_PUSH, size)
-        self.value = value
-        self.slot_index: Optional[int] = None  # Slot being written to
-
-    def __str__(self) -> str:
-        return f'STACK[sp++] = {self.value}'
-
-
-class LowLevelILStackPop(LowLevelILExpr):
-    '''sp--; return STACK[sp] (value expression with side effect)
-
-    DEPRECATED: This is builder sugar only. Normalize pass will expand to:
-      SpAdd(-1) → StackLoad(sp+0)
-    '''
-
-    def __init__(self, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_STACK_POP, size)
-        self.slot_index: Optional[int] = None  # Slot being read from
-
-    def __str__(self) -> str:
-        return 'STACK[--sp]'
 
 
 class LowLevelILStackAddr(LowLevelILExpr):
