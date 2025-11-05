@@ -192,22 +192,12 @@ class LowLevelILBuilder:
         return expr
 
     def pop(self, size: int = 4) -> LowLevelILExpr:
-        '''Pop value from stack (SPEC-compliant: SpAdd + StackLoad)
+        '''Pop value from stack
 
-        Generates:
-          1. SpAdd(-1)
-          2. Returns StackLoad(sp+0) expression
-
-        Returns the StackLoad expression (the popped value).
+        Returns the expression from vstack (will raise if empty).
         '''
-        # Pop from virtual stack for tracking
-        if self.vstack_size() > 0:
-            self.vstack_pop()
-
-        # 1. SpAdd(-1)
-        self.emit_sp_add(-1)
-        # 2. StackLoad(sp+0) - return the expression
-        return LowLevelILStackLoad(offset=0, size=size)
+        self.__sp_adjust(-1)
+        return self.vstack_pop()
 
     # === Legacy Stack Operations (kept for compatibility) ===
 
@@ -613,53 +603,36 @@ class LLILFormatter:
         # This can be extended with custom formatting logic for specific instruction types
         return str(instr)
 
+    # Map operation to expression template
+    __expr_templates = {
+        LowLevelILOperation.LLIL_ADD: '{lhs} + {rhs}',
+        LowLevelILOperation.LLIL_SUB: '{lhs} - {rhs}',
+        LowLevelILOperation.LLIL_MUL: '{lhs} * {rhs}',
+        LowLevelILOperation.LLIL_DIV: '{lhs} / {rhs}',
+        LowLevelILOperation.LLIL_EQ: '({lhs} == {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_NE: '({lhs} != {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_LT: '({lhs} < {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_LE: '({lhs} <= {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_GT: '({lhs} > {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_GE: '({lhs} >= {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_AND: '{lhs} & {rhs}',
+        LowLevelILOperation.LLIL_OR: '{lhs} | {rhs}',
+        LowLevelILOperation.LLIL_LOGICAL_AND: '({lhs} && {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_LOGICAL_OR: '({lhs} || {rhs}) ? 1 : 0',
+    }
+
     @staticmethod
     def _format_binary_op_expanded(binary_op: LowLevelILBinaryOp) -> List[str]:
-        '''Format binary operation with expanded pseudo-code
+        '''Format binary operation with expanded pseudo-code'''
 
-        Stack operation order:
-          rhs = stack_pop();   // First pop gets right operand (top of stack)
-          lhs = stack_pop();   // Second pop gets left operand (below it)
-          result = (lhs OP rhs);
-          stack_push(result);
-        '''
-        # Map operation types to their expression strings
-        expr_map = {
-            LowLevelILOperation.LLIL_ADD: 'lhs + rhs',
-            LowLevelILOperation.LLIL_SUB: 'lhs - rhs',
-            LowLevelILOperation.LLIL_MUL: 'lhs * rhs',
-            LowLevelILOperation.LLIL_DIV: 'lhs / rhs',
-            LowLevelILOperation.LLIL_EQ: '(lhs == rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_NE: '(lhs != rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_LT: '(lhs < rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_LE: '(lhs <= rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_GT: '(lhs > rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_GE: '(lhs >= rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_AND: 'lhs & rhs',
-            LowLevelILOperation.LLIL_OR: 'lhs | rhs',
-            LowLevelILOperation.LLIL_LOGICAL_AND: '(lhs && rhs) ? 1 : 0',
-            LowLevelILOperation.LLIL_LOGICAL_OR: '(lhs || rhs) ? 1 : 0',
-        }
+        template = LLILFormatter.__expr_templates[binary_op.operation]
+        expr = template.format(lhs = 'lhs', rhs = 'rhs')
 
-        expr = expr_map[binary_op.operation]
-
-        # Build expanded lines
-        lines = [f'; expand {binary_op.operation_name}']
-
-        # Pop right operand (top of stack)
-        rhs_load = 'rhs = STACK[--sp]'
-        if isinstance(binary_op.rhs, LowLevelILStackLoad) and hasattr(binary_op.rhs, 'slot_index') and binary_op.rhs.slot_index is not None:
-            rhs_load += f' ; [{binary_op.rhs.slot_index}]'
-        lines.append(rhs_load)
-
-        # Pop left operand (below it)
-        lhs_load = 'lhs = STACK[--sp]'
-        if isinstance(binary_op.lhs, LowLevelILStackLoad) and hasattr(binary_op.lhs, 'slot_index') and binary_op.lhs.slot_index is not None:
-            lhs_load += f' ; [{binary_op.lhs.slot_index}]'
-        lines.append(lhs_load)
-
-        # Compute and push result
+        lines = []
+        lines.append(f'rhs = STACK[--sp]  ; {binary_op.rhs}')
+        lines.append(f'lhs = STACK[--sp]  ; {binary_op.lhs}')
         lines.append(f'STACK[sp] = {expr}')
+        lines.append('sp++')
 
         return lines
 
@@ -668,27 +641,20 @@ class LLILFormatter:
         '''Format unary operation with expanded pseudo-code'''
         from .llil import LowLevelILUnaryOp
 
-        # Map operation types to their expression strings
-        unary_expr_map = {
-            LowLevelILOperation.LLIL_NEG: '-operand',
-            LowLevelILOperation.LLIL_NOT: '!operand ? 1 : 0',
-            LowLevelILOperation.LLIL_TEST_ZERO: '(operand == 0) ? 1 : 0',
+        # Map operation to expression template
+        expr_templates = {
+            LowLevelILOperation.LLIL_NEG: '-{operand}',
+            LowLevelILOperation.LLIL_NOT: '!{operand} ? 1 : 0',
+            LowLevelILOperation.LLIL_TEST_ZERO: '({operand} == 0) ? 1 : 0',
         }
 
-        expr = unary_expr_map.get(unary_op.operation, f'UNARY_OP({unary_op.operation})(operand)')
+        template = expr_templates.get(unary_op.operation, f'UNARY_OP({unary_op.operation})({{operand}})')
+        expr = template.format(operand = 'operand')
 
-        # Build expanded lines
-        lines = [f'; expand {unary_op.operation_name}']
-
-        # Pop operand
-        lines.append('sp--')
-        operand_load = 'operand = STACK[sp]'
-        if isinstance(unary_op.operand, LowLevelILStackLoad) and hasattr(unary_op.operand, 'slot_index') and unary_op.operand.slot_index is not None:
-            operand_load += f' ; [{unary_op.operand.slot_index}]'
-        lines.append(operand_load)
-
-        # Compute and push result
+        lines = []
+        lines.append(f'operand = STACK[--sp]  ; {unary_op.operand}')
         lines.append(f'STACK[sp] = {expr}')
+        lines.append('sp++')
 
         return lines
 
@@ -702,7 +668,6 @@ class LLILFormatter:
         - The actual operation
         - Push operation for result
         '''
-        from .llil import LowLevelILUnaryOp
 
         # StackStore containing a binary operation: expand the binary op
         if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILBinaryOp):
