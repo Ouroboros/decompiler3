@@ -4,16 +4,6 @@ LLIL v2 Builder - Layered architecture for convenience
 
 from typing import Union, Optional, List
 from .llil import *
-from .llil import (
-    LowLevelILBinaryOp, LowLevelILOperation,
-    LowLevelILSub, LowLevelILDiv, LowLevelILEq, LowLevelILNe,
-    LowLevelILLt, LowLevelILLe, LowLevelILGt, LowLevelILGe,
-    LowLevelILAnd, LowLevelILOr, LowLevelILLogicalAnd, LowLevelILLogicalOr,
-    LowLevelILNeg, LowLevelILNot, LowLevelILTestZero,
-    LowLevelILStackPush, LowLevelILStackStore, LowLevelILStackPop,
-    LowLevelILStackAddr, LowLevelILSpAdd,
-    WORD_SIZE
-)
 
 
 class LowLevelILBuilder:
@@ -52,6 +42,21 @@ class LowLevelILBuilder:
         WARNING: NEVER call this directly! Use emit_sp_add() instead.
         '''
         self.__current_sp += delta
+
+    def __cleanup_stack(self, argc: int):
+        '''Clean up stack and vstack without emitting IL - PRIVATE
+
+        Adjusts shadow SP and pops from vstack.
+        Used for callee cleanup convention where runtime handles stack cleanup.
+
+        Args:
+            argc: Number of stack slots to clean up
+        '''
+        if argc > 0:
+            self.__sp_adjust(-argc)
+            # Pop from vstack (will raise if underflow - indicates bug in caller)
+            for _ in range(argc):
+                self.vstack_pop()
 
     def emit_sp_add(self, delta: int) -> LowLevelILSpAdd:
         '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)
@@ -543,10 +548,10 @@ class LowLevelILBuilder:
             return_target: Block or label to return to after call (resolved in build_cfg)
             argc: Number of stack slots to clean up (includes func_id + ret_addr + args)
         '''
-        # If argc provided, adjust shadow SP to clean up stack (without emitting IL)
+        # If argc provided, clean up stack (without emitting IL)
         # This is for Falcom VM callee cleanup convention
-        if argc is not None and argc > 0:
-            self.__sp_adjust(-argc)
+        if argc is not None:
+            self.__cleanup_stack(argc)
 
         self.add_instruction(LowLevelILCall(target, return_target))
 
@@ -638,22 +643,25 @@ class LLILFormatter:
 
         expr = expr_map[binary_op.operation]
 
-        # Get slot indices from operands if they are StackPop
-        rhs_line = 'rhs = STACK[--sp]'
-        lhs_line = 'lhs = STACK[--sp]'
+        # Build expanded lines
+        lines = [f'; expand {binary_op.operation_name}']
 
-        if isinstance(binary_op.rhs, LowLevelILStackPop) and binary_op.rhs.slot_index is not None:
-            rhs_line += f' ; [{binary_op.rhs.slot_index}]'
+        # Pop right operand (top of stack)
+        rhs_load = 'rhs = STACK[--sp]'
+        if isinstance(binary_op.rhs, LowLevelILStackLoad) and hasattr(binary_op.rhs, 'slot_index') and binary_op.rhs.slot_index is not None:
+            rhs_load += f' ; [{binary_op.rhs.slot_index}]'
+        lines.append(rhs_load)
 
-        if isinstance(binary_op.lhs, LowLevelILStackPop) and binary_op.lhs.slot_index is not None:
-            lhs_line += f' ; [{binary_op.lhs.slot_index}]'
+        # Pop left operand (below it)
+        lhs_load = 'lhs = STACK[--sp]'
+        if isinstance(binary_op.lhs, LowLevelILStackLoad) and hasattr(binary_op.lhs, 'slot_index') and binary_op.lhs.slot_index is not None:
+            lhs_load += f' ; [{binary_op.lhs.slot_index}]'
+        lines.append(lhs_load)
 
-        return [
-            f'; expand {binary_op.operation_name}',
-            rhs_line,  # First pop gets right operand (top of stack)
-            lhs_line,  # Second pop gets left operand (below it)
-            f'STACK[sp++] = {expr}'
-        ]
+        # Compute and push result
+        lines.append(f'STACK[sp] = {expr}')
+
+        return lines
 
     @staticmethod
     def _format_unary_op_expanded(unary_op: 'LowLevelILUnaryOp') -> List[str]:
@@ -669,16 +677,20 @@ class LLILFormatter:
 
         expr = unary_expr_map.get(unary_op.operation, f'UNARY_OP({unary_op.operation})(operand)')
 
-        # Get slot index from operand if it's StackPop
-        operand_line = 'operand = STACK[--sp]'
-        if isinstance(unary_op.operand, LowLevelILStackPop) and unary_op.operand.slot_index is not None:
-            operand_line += f' ; [{unary_op.operand.slot_index}]'
+        # Build expanded lines
+        lines = [f'; expand {unary_op.operation_name}']
 
-        return [
-            f'; expand {unary_op.operation_name}',
-            operand_line,
-            f'STACK[sp++] = {expr}'
-        ]
+        # Pop operand
+        lines.append('sp--')
+        operand_load = 'operand = STACK[sp]'
+        if isinstance(unary_op.operand, LowLevelILStackLoad) and hasattr(unary_op.operand, 'slot_index') and unary_op.operand.slot_index is not None:
+            operand_load += f' ; [{unary_op.operand.slot_index}]'
+        lines.append(operand_load)
+
+        # Compute and push result
+        lines.append(f'STACK[sp] = {expr}')
+
+        return lines
 
     @staticmethod
     def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
@@ -692,12 +704,12 @@ class LLILFormatter:
         '''
         from .llil import LowLevelILUnaryOp
 
-        # StackPush containing a binary operation: expand the binary op
-        if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILBinaryOp):
+        # StackStore containing a binary operation: expand the binary op
+        if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILBinaryOp):
             return LLILFormatter._format_binary_op_expanded(instr.value)
 
-        # StackPush containing a unary operation: expand the unary op
-        if isinstance(instr, LowLevelILStackPush) and isinstance(instr.value, LowLevelILUnaryOp):
+        # StackStore containing a unary operation: expand the unary op
+        if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILUnaryOp):
             return LLILFormatter._format_unary_op_expanded(instr.value)
 
         # Binary operations: pop 2, compute, push 1
@@ -750,7 +762,7 @@ class LLILFormatter:
                 # Single line instruction - add slot comment if applicable
                 line = expanded[0]
                 # Add slot comment for StackPush and StackPop
-                if isinstance(instr, (LowLevelILStackPush, LowLevelILStackPop)) and instr.slot_index is not None:
+                if isinstance(instr, (LowLevelILStackStore, LowLevelILStackLoad)) and hasattr(instr, 'slot_index') and instr.slot_index is not None:
                     line = f'{line} ; [{instr.slot_index}]'
 
                 result.append(f'{indent}{line}')

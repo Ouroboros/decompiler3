@@ -3,15 +3,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
 from typing import Union
-from ir.llil import (
-    LowLevelILEq,
-    LowLevelILNe,
-    LowLevelILIf,
-    LowLevelILFunction,
-    LowLevelILBasicBlock,
-    LowLevelILStackStore,
-    WORD_SIZE,
-)
+from ir.llil import *
 
 from ir.llil_builder import LowLevelILBuilder
 from .constants import FalcomConstants
@@ -414,14 +406,8 @@ class FalcomVMBuilder(LowLevelILBuilder):
             true_target: Block to jump to if value is not zero
             false_target: Block to jump to if value is zero
         '''
-        # Pop from stack using StackPop expression
-        cond = self.pop()
-        # Create NE(cond, 0) without adding as instruction
-        # This is just used as the branch condition expression
-        zero = self.const_int(0)
-        is_not_zero = LowLevelILNe(cond, zero)
-        # Create If with both targets explicitly specified
-        self.add_instruction(LowLevelILIf(is_not_zero, true_target, false_target))
+        # NOT_ZERO is the inverse of ZERO, so swap the targets
+        self.pop_jmp_zero(false_target, true_target)
 
     def pop_bytes(self, num_bytes: int):
         '''POP operation - discard N bytes from stack

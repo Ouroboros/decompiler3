@@ -12,6 +12,8 @@ from ir.llil import *
 from ir.llil_builder import LLILFormatter
 from falcom import FalcomVMBuilder
 
+DOT_FILE_NAME = 'cfg.dot'
+
 
 def create_AV_04_0017():
     '''
@@ -178,7 +180,7 @@ def create_DOF_ON():
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
     # PUSH_RET_ADDR('loc_1FFDCB')
-    builder.push_ret_addr('loc_1FFDCB')
+    builder.push_ret_addr(loc_1FFDCB)
     # PUSH_INT(1)
     builder.push_int(1)
     # CALL(screen_dof_set_enable)
@@ -204,7 +206,7 @@ def create_DOF_ON():
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
     # PUSH_RET_ADDR('loc_1FFE02')
-    builder.push_ret_addr('loc_1FFE02')
+    builder.push_ret_addr(loc_1FFE02)
     # LOAD_STACK(-12)
     builder.load_stack(-12)
     # LOAD_STACK(-16)
@@ -233,7 +235,7 @@ def create_DOF_ON():
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
     # PUSH_RET_ADDR('loc_1FFE20')
-    builder.push_ret_addr('loc_1FFE20')
+    builder.push_ret_addr(loc_1FFE20)
     # LOAD_STACK(-12)
     builder.load_stack(-12)
     # LOAD_STACK(-20)
@@ -248,7 +250,7 @@ def create_DOF_ON():
     # PUSH_CURRENT_FUNC_ID()
     builder.push_func_id()
     # PUSH_RET_ADDR('loc_1FFE35')
-    builder.push_ret_addr('loc_1FFE35')
+    builder.push_ret_addr(loc_1FFE35)
     # PUSH_INT(3)
     builder.push_int(3)
     # CALL(screen_dof_set_blur_level)
@@ -654,7 +656,7 @@ def test_AV_04_0017():
 
     func1 = create_AV_04_0017()
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
-    with open('AV_04_0017_cfg.dot', 'w') as f:
+    with open(DOT_FILE_NAME, 'w') as f:
         f.write(LLILFormatter.to_dot(func1))
 
 
@@ -670,7 +672,7 @@ def test_DOF_ON():
 
     # Generate CFG visualization
     dot = LLILFormatter.to_dot(func2)
-    with open('DOF_ON_cfg.dot', 'w') as f:
+    with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
     print('\n📊 CFG saved to DOF_ON_cfg.dot')
     print('   View online: https://dreampuf.github.io/GraphvizOnline/')
@@ -700,7 +702,7 @@ def test_Dummy_m3010_talk0():
 
     # Generate CFG visualization
     dot = LLILFormatter.to_dot(func4)
-    with open('Dummy_m3010_talk0_cfg.dot', 'w') as f:
+    with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
     print('\n📊 CFG saved to Dummy_m3010_talk0_cfg.dot')
     print('   View online: https://dreampuf.github.io/GraphvizOnline/')
@@ -835,7 +837,7 @@ def test_TALK_BEGIN():
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
 
     dot = LLILFormatter.to_dot(func5)
-    with open('TALK_BEGIN_cfg.dot', 'w') as f:
+    with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
 
 
@@ -853,7 +855,7 @@ def test_conditional():
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
 
     dot = LLILFormatter.to_dot(func5)
-    with open('test_conditional_cfg.dot', 'w') as f:
+    with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
 
 
@@ -871,7 +873,7 @@ def test_EV_06_37_00():
     print('\n' + '\n'.join(LLILFormatter.format_llil_function(func6)))
 
     dot = LLILFormatter.to_dot(func6)
-    with open('EV_06_37_00_cfg.dot', 'w') as f:
+    with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
 
 

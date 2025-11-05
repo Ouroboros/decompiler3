@@ -6,11 +6,8 @@ Defines Falcom VM-specific instructions that extend the generic LLIL.
 
 from enum import IntEnum
 from typing import Optional, Union, List, TYPE_CHECKING
-from ir.llil import LowLevelILStatement, LowLevelILExpr, LowLevelILOperation, LowLevelILConst
-
-if TYPE_CHECKING:
-    from falcom.constants import LowLevelILConstFuncId, LowLevelILConstRetAddr, LowLevelILConstRetAddrBlock, LowLevelILConstScript
-    from ir.llil import LowLevelILBasicBlock
+from ir.llil import *
+from falcom.constants import *
 
 
 class LowLevelILFalcomOperation(IntEnum):
