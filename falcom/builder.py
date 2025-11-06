@@ -4,10 +4,9 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 
 from typing import Union
 from ir.llil import *
-
-from ir.llil_builder import LowLevelILBuilder
+from ir.llil_builder import *
 from .constants import FalcomConstants
-from .llil_ext import LowLevelILGlobalLoad, LowLevelILGlobalStore, LowLevelILPushCallerFrame, LowLevelILCallModule
+from .llil_ext import *
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
@@ -221,7 +220,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.add_instruction(push_frame_instr)
 
         # Emit SpAdd to represent the 4 values pushed
-        self.emit_sp_add(4)
+        self.emit_sp_add(4, hidden_for_formatter = False)
 
         # Save reference for call_module to use
         self.caller_frame_instr = push_frame_instr
@@ -319,7 +318,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
         # Emit SpAdd to represent stack cleanup (arg_count + 4 caller frame values)
         cleanup_count = arg_count + 4
-        self.emit_sp_add(-cleanup_count)
+        self.emit_sp_add(-cleanup_count, hidden_for_formatter = False)
 
         # Verify stack is balanced
         if self.sp_get() != self.sp_before_call:
@@ -409,34 +408,36 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # NOT_ZERO is the inverse of ZERO, so swap the targets
         self.pop_jmp_zero(false_target, true_target)
 
-    def pop_bytes(self, num_bytes: int):
+    def pop_bytes(self, num_bytes: int, *, hidden_for_formatter: bool = False):
         '''POP operation - discard N bytes from stack
 
         VM instruction: POP(size)
 
         Args:
             num_bytes: Number of bytes to pop (e.g., 4 to pop 1 word, 16 to pop 4 words)
+            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
         '''
         # Convert bytes to words
         if num_bytes % WORD_SIZE != 0:
             raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
 
         num_words = num_bytes // WORD_SIZE
-        self.emit_sp_add(-num_words)
+        self.emit_sp_add(-num_words, hidden_for_formatter = hidden_for_formatter)
 
-    def pop_n(self, count: int):
+    def pop_n(self, count: int, *, hidden_for_formatter: bool = False):
         '''POP_N operation - discard N slots from stack
 
         VM instruction: POP_N(count)
 
         Args:
             count: Number of slots to pop (e.g., 1 to pop 1 slot)
+            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
         '''
 
         if count <= 0:
             raise ValueError(f'count ({count}) must be positive')
 
-        self.emit_sp_add(-count)
+        self.emit_sp_add(-count, hidden_for_formatter = hidden_for_formatter)
 
     def load_global(self, index: int):
         '''LOAD_GLOBAL operation - push global variable onto stack
@@ -453,5 +454,20 @@ class FalcomVMBuilder(LowLevelILBuilder):
         Args:
             index: Global variable array index
         '''
-        val = self.pop()
+        val = self.pop(hidden_for_formatter = True)
         self.add_instruction(LowLevelILGlobalStore(index, val))
+
+class FalcomLLILFormatter(LLILFormatter):
+    @classmethod
+    def _format_global_store_expanded(cls, global_store: 'LowLevelILGlobalStore') -> List[str]:
+        '''Format global store with expanded pseudo-code'''
+        return [
+            f'GLOBAL[{global_store.index}] = STACK[--sp] ; {global_store.value}',
+        ]
+
+    @classmethod
+    def format_instruction_expanded(cls, instr: LowLevelILInstruction) -> List[str]:
+        if isinstance(instr, LowLevelILGlobalStore):
+            return cls._format_global_store_expanded(instr)
+
+        return super().format_instruction_expanded(instr)

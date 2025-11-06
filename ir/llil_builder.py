@@ -3,6 +3,7 @@ LLIL v2 Builder - Layered architecture for convenience
 '''
 
 from typing import Union, Optional, List
+
 from .llil import *
 
 
@@ -58,7 +59,7 @@ class LowLevelILBuilder:
             for _ in range(argc):
                 self.vstack_pop()
 
-    def emit_sp_add(self, delta: int) -> LowLevelILSpAdd:
+    def emit_sp_add(self, delta: int, *, hidden_for_formatter: bool = False) -> LowLevelILSpAdd:
         '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)
 
         This is the ONLY method that should be used to modify SP.
@@ -66,11 +67,13 @@ class LowLevelILBuilder:
 
         Args:
             delta: Number of words to add to sp (can be positive or negative)
+            hidden_for_formatter: If True, hide this instruction in formatted output (default: False)
 
         Returns:
             The emitted LowLevelILSpAdd instruction
         '''
         sp_add = LowLevelILSpAdd(delta)
+        sp_add.options.hidden_for_formatter = hidden_for_formatter
         self.add_instruction(sp_add)
         # Note: add_instruction will handle the sp update via its existing logic
         return sp_add
@@ -168,7 +171,7 @@ class LowLevelILBuilder:
         else:
             raise TypeError(f'Cannot convert {type(value)} to expression')
 
-    def push(self, value: Union[LowLevelILExpr, int, float, str], size: int = 4) -> LowLevelILExpr:
+    def push(self, value: Union[LowLevelILExpr, int, float, str], size: int = 4, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
         '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)
 
         Generates:
@@ -178,6 +181,7 @@ class LowLevelILBuilder:
         Args:
             value: Expression or primitive value to push (must be LowLevelILExpr or int/float/str)
             size: Size in bytes
+            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
 
         Returns:
             The expression that was pushed (LowLevelILExpr)
@@ -186,17 +190,21 @@ class LowLevelILBuilder:
         # 1. StackStore(sp+0, value)
         self.add_instruction(LowLevelILStackStore(expr, offset=0, size=size))
         # 2. SpAdd(+1)
-        self.emit_sp_add(1)
+        self.emit_sp_add(1, hidden_for_formatter = hidden_for_formatter)
         # Track on vstack for expression tracking
         self.vstack_push(expr)
         return expr
 
-    def pop(self, size: int = 4) -> LowLevelILExpr:
-        '''Pop value from stack
+    def pop(self, size: int = 4, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
+        '''Pop value from stack and emit SpAdd
 
-        Returns the expression from vstack (will raise if empty).
+        Emits SpAdd(-1) and returns the expression from vstack.
+
+        Args:
+            size: Size in bytes
+            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
         '''
-        self.__sp_adjust(-1)
+        self.emit_sp_add(-1, hidden_for_formatter = hidden_for_formatter)
         return self.vstack_pop()
 
     # === Legacy Stack Operations (kept for compatibility) ===
@@ -344,7 +352,7 @@ class LowLevelILBuilder:
 
     # === Binary Operations ===
 
-    def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, size: int = 4) -> LowLevelILExpr:
+    def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = False) -> LowLevelILExpr:
         '''Generic binary operation handler
 
         Stack operation order (for implicit mode):
@@ -358,15 +366,16 @@ class LowLevelILBuilder:
             rhs: Right operand (None = pop from vstack) - must be expr or primitive
             push: Whether to push result back to vstack
             size: Operation size
+            hidden_for_formatter: If True, hide SpAdd operations in formatted output (default: False)
 
         Returns:
             The operation expression (LowLevelILExpr)
         '''
         # Get operands - both must be None or both must be provided
         if lhs is None and rhs is None:
-            # Implicit mode: pop both from vstack
-            rhs = self.pop(size)  # First pop gets right operand (top of stack)
-            lhs = self.pop(size)  # Second pop gets left operand (below it)
+            # Implicit mode: pop both from vstack (emit SpAdd for each)
+            rhs = self.pop(hidden_for_formatter = hidden_for_formatter)  # First pop gets right operand (top of stack)
+            lhs = self.pop(hidden_for_formatter = hidden_for_formatter)  # Second pop gets left operand (below it)
         elif lhs is not None and rhs is not None:
             # Explicit mode: both provided
             lhs = self._to_expr(lhs)
@@ -381,112 +390,112 @@ class LowLevelILBuilder:
         # Only add as instruction if we're pushing (making it a statement via StackPush)
         if push:
             # Use push() to properly set slot_index and maintain sp
-            self.push(op, size)
+            self.push(op, size, hidden_for_formatter = hidden_for_formatter)
         else:
             # If not pushing, add the operation itself (e.g., for comparisons in branches)
             self.add_instruction(op)
 
         return op
 
-    def add(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def add(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''ADD operation - computes lhs + rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILAdd, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILAdd, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def sub(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def sub(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''SUB operation - computes lhs - rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILSub, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILSub, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def mul(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def mul(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''MUL operation - computes lhs * rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILMul, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILMul, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def div(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def div(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''DIV operation - computes lhs / rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
     # === Comparison Operations ===
 
-    def eq(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def eq(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''EQ operation - computes lhs == rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILEq, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILEq, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def ne(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def ne(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''NE operation - computes lhs != rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILNe, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILNe, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def lt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def lt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''LT operation - computes lhs < rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILLt, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILLt, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def le(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def le(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''LE operation - computes lhs <= rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILLe, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILLe, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def gt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def gt(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''GT operation - computes lhs > rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILGt, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILGt, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def ge(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def ge(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''GE operation - computes lhs >= rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILGe, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
     # === Bitwise Operations ===
 
-    def bitwise_and(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def bitwise_and(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''Bitwise AND operation - computes lhs & rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILAnd, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILAnd, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def bitwise_or(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def bitwise_or(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''Bitwise OR operation - computes lhs | rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILOr, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILOr, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
     # === Logical Operations ===
 
-    def logical_and(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def logical_and(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''Logical AND operation - computes lhs && rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILLogicalAnd, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILLogicalAnd, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
-    def logical_or(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4):
+    def logical_or(self, lhs = None, rhs = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''Logical OR operation - computes lhs || rhs (pops rhs first, then lhs)'''
-        return self._binary_op(LowLevelILLogicalOr, lhs, rhs, push = push, size = size)
+        return self._binary_op(LowLevelILLogicalOr, lhs, rhs, push = push, size = size, hidden_for_formatter = hidden_for_formatter)
 
     # === Unary Operations ===
 
-    def neg(self, operand = None, *, push: bool = True, size: int = 4):
+    def neg(self, operand = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''NEG operation - arithmetic negation -x (pops operand if not provided)'''
         if operand is None:
-            operand = self.pop(size)
+            operand = self.pop(size, hidden_for_formatter = hidden_for_formatter)
         else:
             operand = self._to_expr(operand)
         op = LowLevelILNeg(operand, size)
         if push:
-            self.push(op, size)
+            self.push(op, size, hidden_for_formatter = hidden_for_formatter)
         else:
             self.add_instruction(op)
         return op
 
-    def logical_not(self, operand = None, *, push: bool = True, size: int = 4):
+    def logical_not(self, operand = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''NOT operation - logical NOT !x (pops operand if not provided)'''
         if operand is None:
-            operand = self.pop(size)
+            operand = self.pop(size, hidden_for_formatter = hidden_for_formatter)
         else:
             operand = self._to_expr(operand)
         op = LowLevelILNot(operand, size)
         if push:
-            self.push(op, size)
+            self.push(op, size, hidden_for_formatter = hidden_for_formatter)
         else:
             self.add_instruction(op)
         return op
 
-    def test_zero(self, operand = None, *, push: bool = True, size: int = 4):
+    def test_zero(self, operand = None, *, push: bool = True, size: int = 4, hidden_for_formatter: bool = True):
         '''TEST_ZERO operation - test if x == 0 (pops operand if not provided)'''
         if operand is None:
-            operand = self.pop(size)
+            operand = self.pop(size, hidden_for_formatter = hidden_for_formatter)
         else:
             operand = self._to_expr(operand)
         op = LowLevelILTestZero(operand, size)
         if push:
-            self.push(op, size)
+            self.push(op, size, hidden_for_formatter = hidden_for_formatter)
         else:
             self.add_instruction(op)
         return op
@@ -579,8 +588,8 @@ class LowLevelILBuilder:
 class LLILFormatter:
     '''Formatting layer for beautiful output'''
 
-    @staticmethod
-    def indent_lines(lines: List[str], indent: str) -> List[str]:
+    @classmethod
+    def indent_lines(cls, lines: List[str], indent: str) -> List[str]:
         '''Add indentation to multiple lines
 
         Args:
@@ -592,8 +601,8 @@ class LLILFormatter:
         '''
         return [indent + line for line in lines]
 
-    @staticmethod
-    def format_instruction(instr: LowLevelILInstruction) -> str:
+    @classmethod
+    def format_instruction(cls, instr: LowLevelILInstruction) -> str:
         '''Format a single instruction - can be customized per instruction type
 
         Returns a single line for simple instructions.
@@ -621,23 +630,22 @@ class LLILFormatter:
         LowLevelILOperation.LLIL_LOGICAL_OR: '({lhs} || {rhs}) ? 1 : 0',
     }
 
-    @staticmethod
-    def _format_binary_op_expanded(binary_op: LowLevelILBinaryOp) -> List[str]:
+    @classmethod
+    def _format_binary_op_expanded(cls, binary_op: LowLevelILBinaryOp) -> List[str]:
         '''Format binary operation with expanded pseudo-code'''
 
-        template = LLILFormatter.__expr_templates[binary_op.operation]
+        template = cls.__expr_templates[binary_op.operation]
         expr = template.format(lhs = 'lhs', rhs = 'rhs')
 
         lines = []
         lines.append(f'rhs = STACK[--sp]  ; {binary_op.rhs}')
         lines.append(f'lhs = STACK[--sp]  ; {binary_op.lhs}')
-        lines.append(f'STACK[sp] = {expr}')
-        lines.append('sp++')
+        lines.append(f'STACK[sp++] = {expr}')
 
         return lines
 
-    @staticmethod
-    def _format_unary_op_expanded(unary_op: 'LowLevelILUnaryOp') -> List[str]:
+    @classmethod
+    def _format_unary_op_expanded(cls, unary_op: 'LowLevelILUnaryOp') -> List[str]:
         '''Format unary operation with expanded pseudo-code'''
         from .llil import LowLevelILUnaryOp
 
@@ -653,13 +661,12 @@ class LLILFormatter:
 
         lines = []
         lines.append(f'operand = STACK[--sp]  ; {unary_op.operand}')
-        lines.append(f'STACK[sp] = {expr}')
-        lines.append('sp++')
+        lines.append(f'STACK[sp++] = {expr}')
 
         return lines
 
-    @staticmethod
-    def format_instruction_expanded(instr: LowLevelILInstruction) -> List[str]:
+    @classmethod
+    def format_instruction_expanded(cls, instr: LowLevelILInstruction) -> List[str]:
         '''Format instruction with expanded stack operations (multi-line)
 
         Returns a list of lines showing explicit stack behavior.
@@ -671,19 +678,19 @@ class LLILFormatter:
 
         # StackStore containing a binary operation: expand the binary op
         if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILBinaryOp):
-            return LLILFormatter._format_binary_op_expanded(instr.value)
+            return cls._format_binary_op_expanded(instr.value)
 
         # StackStore containing a unary operation: expand the unary op
         if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILUnaryOp):
-            return LLILFormatter._format_unary_op_expanded(instr.value)
+            return cls._format_unary_op_expanded(instr.value)
 
         # Binary operations: pop 2, compute, push 1
         if isinstance(instr, LowLevelILBinaryOp):
-            return LLILFormatter._format_binary_op_expanded(instr)
+            return cls._format_binary_op_expanded(instr)
 
         # Unary operations: pop 1, compute, push 1
         if isinstance(instr, LowLevelILUnaryOp):
-            return LLILFormatter._format_unary_op_expanded(instr)
+            return cls._format_unary_op_expanded(instr)
 
         # StackStore: show store operation
         # if isinstance(instr, LowLevelILStackStore):
@@ -700,8 +707,8 @@ class LLILFormatter:
         # For non-binary operations, return single line
         return [str(instr)]
 
-    @staticmethod
-    def format_instruction_sequence(instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
+    @classmethod
+    def format_instruction_sequence(cls, instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
         '''Format sequence of instructions - returns list of lines
 
         Args:
@@ -714,11 +721,15 @@ class LLILFormatter:
         result = []
 
         for instr in instructions:
+            # Skip instructions marked as hidden for formatter
+            if instr.options.hidden_for_formatter:
+                continue
+
             # Use expanded format for multi-line instructions
-            expanded = LLILFormatter.format_instruction_expanded(instr)
+            expanded = cls.format_instruction_expanded(instr)
             if len(expanded) > 1:
                 # Multi-line instruction
-                result.extend(LLILFormatter.indent_lines(expanded, indent))
+                result.extend(cls.indent_lines(expanded, indent))
             else:
                 # Single line instruction - add slot comment if applicable
                 line = expanded[0]
@@ -730,8 +741,8 @@ class LLILFormatter:
 
         return result
 
-    @staticmethod
-    def format_llil_function(func: LowLevelILFunction) -> list[str]:
+    @classmethod
+    def format_llil_function(cls, func: LowLevelILFunction) -> list[str]:
         assert isinstance(func, LowLevelILFunction)
 
         '''Format entire LLIL function with beautiful output - returns list of lines'''
@@ -763,13 +774,13 @@ class LLILFormatter:
 
             # Format instructions - now returns list
             indent = '  '
-            result.extend(LLILFormatter.format_instruction_sequence(instructions_to_format, indent))
+            result.extend(cls.format_instruction_sequence(instructions_to_format, indent))
             result.append('')
 
         return result
 
-    @staticmethod
-    def to_dot(func: LowLevelILFunction) -> str:
+    @classmethod
+    def to_dot(cls, func: LowLevelILFunction) -> str:
         '''Generate Graphviz DOT format for CFG visualization
 
         Args:
@@ -822,7 +833,7 @@ class LLILFormatter:
                 instructions_to_format = block.instructions
 
             # Use format_instruction_sequence to get expanded format
-            formatted_lines = LLILFormatter.format_instruction_sequence(instructions_to_format, '')
+            formatted_lines = cls.format_instruction_sequence(instructions_to_format, '')
             for line in formatted_lines:
                 # Escape for DOT format
                 escaped = line.replace('\\', '\\\\').replace('"', '\\"')

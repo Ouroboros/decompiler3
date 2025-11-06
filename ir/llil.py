@@ -8,6 +8,8 @@ from typing import Any, List, Optional, Union, TYPE_CHECKING
 from enum import IntEnum
 import uuid
 
+from .il_options import ILOptions
+
 if TYPE_CHECKING:
     # Forward declaration for type hints
     pass
@@ -85,6 +87,7 @@ class LowLevelILInstruction(ABC):
         self.size = size
         self.address = 0
         self.instr_index = 0
+        self.options = ILOptions()  # Formatting and processing options
 
     @property
     def operation_name(self) -> str:

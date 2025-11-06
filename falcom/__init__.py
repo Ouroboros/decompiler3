@@ -2,7 +2,11 @@
 Falcom VM specific builders and utilities
 '''
 
-from .builder import FalcomVMBuilder
+from .builder import (
+    FalcomVMBuilder,
+    FalcomLLILFormatter,
+)
+
 from .constants import (
     LowLevelILConstFuncId,
     LowLevelILConstRetAddr,
@@ -11,6 +15,7 @@ from .constants import (
 
 __all__ = [
     'FalcomVMBuilder',
+    'FalcomLLILFormatter',
     'LowLevelILConstFuncId',
     'LowLevelILConstRetAddr',
     'FalcomConstants',

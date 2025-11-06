@@ -9,8 +9,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from ir.llil import *
-from ir.llil_builder import LLILFormatter
-from falcom import FalcomVMBuilder
+from ir.llil_builder import *
+from falcom import *
 
 DOT_FILE_NAME = 'cfg.dot'
 
@@ -655,9 +655,9 @@ def test_AV_04_0017():
     print('3 blocks, no branching, 2 function calls')
 
     func1 = create_AV_04_0017()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func1)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func1)))
     with open(DOT_FILE_NAME, 'w') as f:
-        f.write(LLILFormatter.to_dot(func1))
+        f.write(FalcomLLILFormatter.to_dot(func1))
 
 
 def test_DOF_ON():
@@ -668,10 +668,10 @@ def test_DOF_ON():
     print('7 blocks, conditional branching, merge points')
 
     func2 = create_DOF_ON()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func2)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func2)))
 
     # Generate CFG visualization
-    dot = LLILFormatter.to_dot(func2)
+    dot = FalcomLLILFormatter.to_dot(func2)
     with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
     print('\n📊 CFG saved to DOF_ON_cfg.dot')
@@ -687,7 +687,7 @@ def test_sound_play_se():
     print('8 parameters, 1 block, demonstrates SYSCALL and parameter loading')
 
     func3 = create_sound_play_se()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func3)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func3)))
 
 
 def test_Dummy_m3010_talk0():
@@ -698,10 +698,10 @@ def test_Dummy_m3010_talk0():
     print('Multiple conditional branches, menu system, nested if-else')
 
     func4 = create_Dummy_m3010_talk0()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func4)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func4)))
 
     # Generate CFG visualization
-    dot = LLILFormatter.to_dot(func4)
+    dot = FalcomLLILFormatter.to_dot(func4)
     with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
     print('\n📊 CFG saved to Dummy_m3010_talk0_cfg.dot')
@@ -834,9 +834,9 @@ def test_TALK_BEGIN():
     print()
 
     func5 = create_TALK_BEGIN()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func5)))
 
-    dot = LLILFormatter.to_dot(func5)
+    dot = FalcomLLILFormatter.to_dot(func5)
     with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
 
@@ -852,9 +852,9 @@ def test_conditional():
     print()
 
     func5 = create_test_conditional()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func5)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func5)))
 
-    dot = LLILFormatter.to_dot(func5)
+    dot = FalcomLLILFormatter.to_dot(func5)
     with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
 
@@ -870,9 +870,9 @@ def test_EV_06_37_00():
     print()
 
     func6 = create_EV_06_37_00()
-    print('\n' + '\n'.join(LLILFormatter.format_llil_function(func6)))
+    print('\n' + '\n'.join(FalcomLLILFormatter.format_llil_function(func6)))
 
-    dot = LLILFormatter.to_dot(func6)
+    dot = FalcomLLILFormatter.to_dot(func6)
     with open(DOT_FILE_NAME, 'w') as f:
         f.write(dot)
 
@@ -880,12 +880,12 @@ def test_EV_06_37_00():
 def main():
     # Test individual functions (comment/uncomment as needed)
     # test_AV_04_0017()
-    test_DOF_ON()
+    # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
     # test_TALK_BEGIN()
     # test_conditional()
-    # test_EV_06_37_00()
+    test_EV_06_37_00()
 
 
 if __name__ == '__main__':
