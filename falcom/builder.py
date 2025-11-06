@@ -509,8 +509,8 @@ class FalcomLLILFormatter(LLILFormatter):
         ]
 
     @classmethod
-    def format_instruction_expanded(cls, instr: LowLevelILInstruction) -> List[str]:
-        if isinstance(instr, LowLevelILGlobalStore):
-            return cls._format_global_store_expanded(instr)
+    def format_instruction_expanded(cls, inst: LowLevelILInstruction) -> List[str]:
+        if isinstance(inst, LowLevelILGlobalStore):
+            return cls._format_global_store_expanded(inst)
 
-        return super().format_instruction_expanded(instr)
+        return super().format_instruction_expanded(inst)

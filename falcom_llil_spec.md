@@ -62,7 +62,7 @@
   class LowLevelILInstruction(ABC):
       operation: LowLevelILOperation
       address: int
-      instr_index: int
+      inst_index: int
   ```
 
 - 在其基础上分为两类：
@@ -214,10 +214,10 @@ class LowLevelILSpAdd(LowLevelILStatement):
 
 ```python
 def sp_add(self, delta: int) -> LowLevelILSpAdd:
-    instr = LowLevelILSpAdd(delta)
-    self.add_instruction(instr)
+    inst = LowLevelILSpAdd(delta)
+    self.add_instruction(inst)
     self._sp_offset += delta
-    return instr
+    return inst
 ```
 
 不允许写法示例：

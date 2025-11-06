@@ -6,8 +6,8 @@ Following the confirmed VM semantics with layered architecture
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Union, TYPE_CHECKING
 from enum import IntEnum
-import uuid
 
+from .il_base import ILInstruction, ControlFlow, Terminal, Constant, BinaryOperation, UnaryOperation
 from .il_options import ILOptions
 
 if TYPE_CHECKING:
@@ -79,13 +79,14 @@ class LowLevelILOperation(IntEnum):
     LLIL_USER_DEFINED = 1002    # Start of user-defined operations
 
 
-class LowLevelILInstruction(ABC):
+class LowLevelILInstruction(ILInstruction):
     '''Base class for all LLIL instructions'''
 
     def __init__(self, operation: LowLevelILOperation):
-        self.operation = operation
+        super().__init__()
         self.address = 0
-        self.instr_index = 0
+        self.inst_index = 0
+        self.operation = operation
         self.options = ILOptions()  # Formatting and processing options
 
     @property
@@ -123,24 +124,6 @@ class LowLevelILStatement(LowLevelILInstruction):
     Basic blocks only store LowLevelILStatement instances.
     '''
     pass
-
-
-class ControlFlow(LowLevelILStatement):
-    '''Base class for control flow instructions'''
-    pass
-
-
-class LowLevelILTerminal(ControlFlow):
-    '''Base class for terminal control flow instructions (goto, ret, etc)
-
-    Terminal instructions end a basic block and transfer control elsewhere.
-    No more instructions can be added to a block after a terminal.
-    '''
-    pass
-
-
-# Alias for compatibility
-Terminal = LowLevelILTerminal
 
 
 # === Atomic Stack Operations ===
@@ -310,7 +293,7 @@ class LowLevelILRegLoad(LowLevelILExpr):
 
 # === Arithmetic Operations ===
 
-class LowLevelILBinaryOp(LowLevelILExpr):
+class LowLevelILBinaryOp(LowLevelILExpr, BinaryOperation):
     '''Base for binary operations (expression)'''
 
     def __init__(
@@ -405,12 +388,17 @@ class LowLevelILLogicalOr(LowLevelILBinaryOp):
 
 # === Unary Operations ===
 
-class LowLevelILUnaryOp(LowLevelILExpr):
+class LowLevelILUnaryOp(LowLevelILExpr, UnaryOperation):
     '''Base class for unary operations (expression)'''
 
     def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILExpr' = None):
         super().__init__(operation)
         self.operand = operand
+
+    def __str__(self) -> str:
+        if self.operand:
+            return f'{self.operation_name}({self.operand})'
+        return self.operation_name
 
 
 class LowLevelILNeg(LowLevelILUnaryOp):
@@ -433,7 +421,7 @@ class LowLevelILTestZero(LowLevelILUnaryOp):
 
 # === Control Flow ===
 
-class LowLevelILGoto(LowLevelILTerminal):
+class LowLevelILGoto(LowLevelILStatement, Terminal):
     '''Unconditional jump - target must be a BasicBlock (terminal)'''
 
     def __init__(self, target: 'LowLevelILBasicBlock'):
@@ -449,7 +437,7 @@ class LowLevelILJmp(LowLevelILGoto):
     pass
 
 
-class LowLevelILIf(LowLevelILTerminal):
+class LowLevelILIf(LowLevelILStatement, Terminal):
     '''Conditional branch - targets must be BasicBlocks (terminal)
 
     condition: LowLevelILInstruction that evaluates to true/false
@@ -474,7 +462,7 @@ class LowLevelILIf(LowLevelILTerminal):
             return f'if {self.condition} goto {true_name}'
 
 
-class LowLevelILCall(LowLevelILTerminal):
+class LowLevelILCall(LowLevelILStatement, Terminal):
     '''Function call (terminal)
 
     In Falcom VM, call is a terminal instruction because control transfers
@@ -492,7 +480,7 @@ class LowLevelILCall(LowLevelILTerminal):
         return f'call {self.target}'
 
 
-class LowLevelILRet(LowLevelILTerminal):
+class LowLevelILRet(LowLevelILStatement, Terminal):
     '''Return from function (terminal)'''
 
     def __init__(self):
@@ -504,7 +492,7 @@ class LowLevelILRet(LowLevelILTerminal):
 
 # === Constants and Special ===
 
-class LowLevelILConst(LowLevelILExpr):
+class LowLevelILConst(LowLevelILExpr, Constant):
     '''Constant value (int, float, or string) (expression)'''
 
     def __init__(self, value: Union[int, float, str], is_hex: bool = False, is_raw: bool = False):
@@ -627,7 +615,7 @@ class LowLevelILBasicBlock:
                 f'Cannot add instruction to {self.block_name}: '
                 f'block already has terminal instruction {self.instructions[-1]}'
             )
-        inst.instr_index = len(self.instructions)
+        inst.inst_index = len(self.instructions)
         self.instructions.append(inst)
 
     def add_outgoing_edge(self, target: 'LowLevelILBasicBlock'):
@@ -662,8 +650,8 @@ class LowLevelILBasicBlock:
 
     def __str__(self) -> str:
         result = f'{self.block_name} @ {hex(self.start)}: [sp={self.sp_in}]\n'
-        for i, instr in enumerate(self.instructions):
-            result += f'  {instr}\n'
+        for i, inst in enumerate(self.instructions):
+            result += f'  {inst}\n'
         if self.outgoing_edges:
             targets = [b.block_name for b in self.outgoing_edges]
             result += f'  -> {', '.join(targets)}\n'

@@ -684,7 +684,7 @@ class LLILFormatter:
             lhs = cond.lhs
             opr = cond.operation_name
 
-            if not isinstance(lhs, LowLevelILConst):
+            if not isinstance(lhs, Constant):
                 lhs = f'STACK[--sp]'
 
             return [f'if ({lhs} {opr} {rhs}) goto {true_name} else {false_name}']
@@ -729,7 +729,7 @@ class LLILFormatter:
 
         return None
         # # For non-binary operations, return single line
-        # return [str(instr)]
+        # return [str(inst)]
 
     @classmethod
     def format_instruction_sequence(cls, instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
