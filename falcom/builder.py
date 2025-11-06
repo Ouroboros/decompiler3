@@ -133,7 +133,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     # === Virtual Stack Management ===
 
-    def push(self, value: Union[LowLevelILExpr, int, float, str], size: int = 4, *, hidden_for_formatter: bool = False):
+    def push(self, value: Union[LowLevelILExpr, int, float, str], *, hidden_for_formatter: bool = False):
         '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)
 
         Generates:
@@ -142,7 +142,6 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
         Args:
             value: Expression or primitive value to push (must be LowLevelILExpr or int/float/str)
-            size: Size in bytes
             hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
 
         Returns:
@@ -151,20 +150,19 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
         if isinstance(value, LowLevelILConstScript):
             # 8 bytes script pointer
-            super().push(value, size, hidden_for_formatter = hidden_for_formatter)
+            super().push(value, hidden_for_formatter = hidden_for_formatter)
 
-        return super().push(value, size, hidden_for_formatter = hidden_for_formatter)
+        return super().push(value, hidden_for_formatter = hidden_for_formatter)
 
-    def pop(self, size: int = 4, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
+    def pop(self, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
         '''Pop value from stack and emit SpAdd
 
         Emits SpAdd(-1) and returns the expression from vstack.
 
         Args:
-            size: Size in bytes
             hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
         '''
-        expr = super().pop(size, hidden_for_formatter = hidden_for_formatter)
+        expr = super().pop(hidden_for_formatter = hidden_for_formatter)
 
         if isinstance(expr, LowLevelILConstScript):
             # 8 bytes script pointer

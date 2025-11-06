@@ -82,9 +82,8 @@ class LowLevelILOperation(IntEnum):
 class LowLevelILInstruction(ABC):
     '''Base class for all LLIL instructions'''
 
-    def __init__(self, operation: LowLevelILOperation, size: int = 4):
+    def __init__(self, operation: LowLevelILOperation):
         self.operation = operation
-        self.size = size
         self.address = 0
         self.instr_index = 0
         self.options = ILOptions()  # Formatting and processing options
@@ -152,8 +151,8 @@ class LowLevelILStackStore(LowLevelILStatement):
     Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
 
-    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, slot_index: int = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_STACK_STORE, size)
+    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, slot_index: int = None):
+        super().__init__(LowLevelILOperation.LLIL_STACK_STORE)
         self.value = value
         self.offset = offset  # Byte offset
         self.slot_index = slot_index  # Absolute stack slot index
@@ -175,8 +174,8 @@ class LowLevelILStackLoad(LowLevelILExpr):
     Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
 
-    def __init__(self, offset: int, slot_index: int, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_STACK_LOAD, size)
+    def __init__(self, offset: int, slot_index: int):
+        super().__init__(LowLevelILOperation.LLIL_STACK_LOAD)
         self.offset = offset  # Byte offset
         self.slot_index = slot_index  # Absolute stack slot index
 
@@ -206,8 +205,8 @@ class LowLevelILFrameLoad(LowLevelILExpr):
     Note: offset is in bytes, converted to word offset for display
     '''
 
-    def __init__(self, offset: int = 0, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_FRAME_LOAD, size)
+    def __init__(self, offset: int = 0):
+        super().__init__(LowLevelILOperation.LLIL_FRAME_LOAD)
         self.offset = offset  # Byte offset relative to frame
 
     def __str__(self) -> str:
@@ -229,8 +228,8 @@ class LowLevelILFrameStore(LowLevelILStatement):
     Note: offset is in bytes, converted to word offset for display
     '''
 
-    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_FRAME_STORE, size)
+    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0):
+        super().__init__(LowLevelILOperation.LLIL_FRAME_STORE)
         self.value = value
         self.offset = offset  # Byte offset relative to frame
 
@@ -248,7 +247,7 @@ class LowLevelILSpAdd(LowLevelILStatement):
     '''sp = sp + delta (statement)'''
 
     def __init__(self, delta: int):
-        super().__init__(LowLevelILOperation.LLIL_SP_ADD, 0)
+        super().__init__(LowLevelILOperation.LLIL_SP_ADD)
         self.delta = delta
 
     def __str__(self) -> str:
@@ -272,8 +271,8 @@ class LowLevelILStackAddr(LowLevelILExpr):
     of subsequent sp changes.
     '''
 
-    def __init__(self, slot_index: int, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_STACK_ADDR, size)
+    def __init__(self, slot_index: int):
+        super().__init__(LowLevelILOperation.LLIL_STACK_ADDR)
         self.slot_index = slot_index  # Absolute stack slot index
 
     def __str__(self) -> str:
@@ -289,8 +288,8 @@ LowLevelILVspAdd = LowLevelILSpAdd
 class LowLevelILRegStore(LowLevelILStatement):
     '''REG[index] = value (statement)'''
 
-    def __init__(self, reg_index: int, value: Union['LowLevelILInstruction', int], size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_REG_STORE, size)
+    def __init__(self, reg_index: int, value: Union['LowLevelILInstruction', int]):
+        super().__init__(LowLevelILOperation.LLIL_REG_STORE)
         self.reg_index = reg_index
         self.value = value
 
@@ -301,8 +300,8 @@ class LowLevelILRegStore(LowLevelILStatement):
 class LowLevelILRegLoad(LowLevelILExpr):
     '''load REG[index] (expression)'''
 
-    def __init__(self, reg_index: int, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_REG_LOAD, size)
+    def __init__(self, reg_index: int):
+        super().__init__(LowLevelILOperation.LLIL_REG_LOAD)
         self.reg_index = reg_index
 
     def __str__(self) -> str:
@@ -318,10 +317,9 @@ class LowLevelILBinaryOp(LowLevelILExpr):
         self,
         operation: LowLevelILOperation,
         lhs: 'LowLevelILExpr' = None,
-        rhs: 'LowLevelILExpr' = None,
-        size: int = 4
+        rhs: 'LowLevelILExpr' = None
     ):
-        super().__init__(operation, size)
+        super().__init__(operation)
         self.lhs = lhs  # Left operand expression
         self.rhs = rhs  # Right operand expression
 
@@ -332,77 +330,77 @@ class LowLevelILBinaryOp(LowLevelILExpr):
 
 
 class LowLevelILAdd(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_ADD, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_ADD, lhs, rhs)
 
 
 class LowLevelILMul(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_MUL, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_MUL, lhs, rhs)
 
 
 class LowLevelILSub(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_SUB, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_SUB, lhs, rhs)
 
 
 class LowLevelILDiv(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_DIV, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_DIV, lhs, rhs)
 
 
 class LowLevelILEq(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_EQ, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_EQ, lhs, rhs)
 
 
 class LowLevelILNe(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_NE, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_NE, lhs, rhs)
 
 
 class LowLevelILLt(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_LT, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_LT, lhs, rhs)
 
 
 class LowLevelILLe(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_LE, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_LE, lhs, rhs)
 
 
 class LowLevelILGt(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_GT, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_GT, lhs, rhs)
 
 
 class LowLevelILGe(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_GE, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_GE, lhs, rhs)
 
 
 class LowLevelILAnd(LowLevelILBinaryOp):
     '''Bitwise AND'''
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_AND, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_AND, lhs, rhs)
 
 
 class LowLevelILOr(LowLevelILBinaryOp):
     '''Bitwise OR'''
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_OR, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_OR, lhs, rhs)
 
 
 class LowLevelILLogicalAnd(LowLevelILBinaryOp):
     '''Logical AND (&&)'''
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_LOGICAL_AND, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_LOGICAL_AND, lhs, rhs)
 
 
 class LowLevelILLogicalOr(LowLevelILBinaryOp):
     '''Logical OR (||)'''
-    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_LOGICAL_OR, lhs, rhs, size)
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_LOGICAL_OR, lhs, rhs)
 
 
 # === Unary Operations ===
@@ -410,27 +408,27 @@ class LowLevelILLogicalOr(LowLevelILBinaryOp):
 class LowLevelILUnaryOp(LowLevelILExpr):
     '''Base class for unary operations (expression)'''
 
-    def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(operation, size)
+    def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILExpr' = None):
+        super().__init__(operation)
         self.operand = operand
 
 
 class LowLevelILNeg(LowLevelILUnaryOp):
     '''Arithmetic negation (-x)'''
-    def __init__(self, operand: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_NEG, operand, size)
+    def __init__(self, operand: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_NEG, operand)
 
 
 class LowLevelILNot(LowLevelILUnaryOp):
     '''Logical NOT (!x)'''
-    def __init__(self, operand: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_NOT, operand, size)
+    def __init__(self, operand: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_NOT, operand)
 
 
 class LowLevelILTestZero(LowLevelILUnaryOp):
     '''Test if zero (x == 0)'''
-    def __init__(self, operand: 'LowLevelILExpr' = None, size: int = 4):
-        super().__init__(LowLevelILOperation.LLIL_TEST_ZERO, operand, size)
+    def __init__(self, operand: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_TEST_ZERO, operand)
 
 
 # === Control Flow ===
@@ -509,8 +507,8 @@ class LowLevelILRet(LowLevelILTerminal):
 class LowLevelILConst(LowLevelILExpr):
     '''Constant value (int, float, or string) (expression)'''
 
-    def __init__(self, value: Union[int, float, str], size: int = 4, is_hex: bool = False, is_raw: bool = False):
-        super().__init__(LowLevelILOperation.LLIL_CONST, size)
+    def __init__(self, value: Union[int, float, str], is_hex: bool = False, is_raw: bool = False):
+        super().__init__(LowLevelILOperation.LLIL_CONST)
         self.value = value
         self.is_hex = is_hex  # True to display as hex, False for decimal (default)
         self.is_raw = is_raw  # True for raw values (type-less), False for typed constants

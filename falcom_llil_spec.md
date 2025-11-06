@@ -61,7 +61,6 @@
   ```python
   class LowLevelILInstruction(ABC):
       operation: LowLevelILOperation
-      size: int
       address: int
       instr_index: int
   ```
@@ -259,7 +258,7 @@ class LowLevelILFrameStore(LowLevelILStatement):
 push：
 
 ```python
-def push(self, value: LowLevelILExpr, size: int = 4) -> LowLevelILExpr:
+def push(self, value: LowLevelILExpr) -> LowLevelILExpr:
     # 1) 写当前栈顶 slot
     store = LowLevelILStackStore(offset=0, value=value)
     self.add_instruction(store)
@@ -273,7 +272,7 @@ def push(self, value: LowLevelILExpr, size: int = 4) -> LowLevelILExpr:
 pop：
 
 ```python
-def pop(self, size: int = 4) -> LowLevelILExpr:
+def pop(self) -> LowLevelILExpr:
     if self.vstack_size() > 0:
         self.vstack_pop()
 
