@@ -52,7 +52,7 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
         return f'push_caller_frame({self.ret_addr})'
 
 
-class LowLevelILCallModule(LowLevelILStatement):
+class LowLevelILCallModule(LowLevelILCall):
     '''CALL_MODULE - Call a module function with automatic stack cleanup (statement)
 
     Calls a module function and cleans up arguments + caller frame from stack.
@@ -71,13 +71,14 @@ class LowLevelILCallModule(LowLevelILStatement):
         args: List['LowLevelILExpr'],
         return_target: 'LowLevelILBasicBlock'
     ):
-        super().__init__(LowLevelILFalcomOperation.LLIL_CALL_MODULE)
-        self.module = module                            # Module name (e.g., 'system')
-        self.func = func                                # Function name (e.g., 'OnTalkBegin')
-        self.caller_frame = caller_frame                # Caller frame (popped from vstack)
-        self.args = args                                # Arguments (popped from vstack)
-        self.return_target = return_target              # Return target block
-        self.arg_count = len(args)                      # Number of arguments
+        target = f'{module}.{func}'
+        super().__init__(target, return_target)
+        self.operation    = LowLevelILFalcomOperation.LLIL_CALL_MODULE
+        self.module       = module          # Module name (e.g., 'system')
+        self.func         = func            # Function name (e.g., 'OnTalkBegin')
+        self.caller_frame = caller_frame    # Caller frame (popped from vstack)
+        self.args         = args            # Arguments (popped from vstack)
+        self.arg_count    = len(args)       # Number of arguments
 
     def __str__(self) -> str:
         args_str = ', '.join(str(arg) for arg in self.args)

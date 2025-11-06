@@ -369,9 +369,6 @@ class FalcomVMBuilder(LowLevelILBuilder):
                 f'current_sp={self.sp_get()} but expected sp_before_call={self.sp_before_call}'
             )
 
-        # Add terminal instruction to jump to return block
-        self.jmp(return_block)
-
         # Clean up state
         self.return_target_block = None
         self.sp_before_call = None

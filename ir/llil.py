@@ -471,7 +471,7 @@ class LowLevelILCall(LowLevelILStatement, Terminal):
     '''
 
     def __init__(self, target: Union[str, 'LowLevelILInstruction'],
-                 return_target: Optional[Union[str, 'LowLevelILBasicBlock']] = None):
+                 return_target: Union[str, 'LowLevelILBasicBlock']):
         super().__init__(LowLevelILOperation.LLIL_CALL)
         self.target = target
         self.return_target = return_target  # Where to return after call (label or block)
