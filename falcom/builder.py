@@ -2,6 +2,7 @@
 Falcom VM Builder - High-level builder with Falcom VM patterns
 '''
 
+from math import exp
 from typing import Union
 from ir.llil import *
 from ir.llil_builder import *
@@ -40,7 +41,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         super().__init__(None)
         self.sp_before_call = None  # Track sp before call for automatic cleanup
         self.return_target_block = None  # Track return target basic block for next call
-        self.caller_frame_instr = None  # Track PUSH_CALLER_FRAME instruction for call_module
+        self.caller_frame_inst = None  # Track PUSH_CALLER_FRAME instruction for call_module
         self._finalized = False
 
     def create_function(self, name: str, start_addr: int = 0, num_params: int = 0):
@@ -65,18 +66,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def add_instruction(self, inst):
         '''Override to handle Falcom-specific instructions'''
-        # Handle Falcom-specific instructions BEFORE calling parent
-        if isinstance(inst, LowLevelILPushCallerFrame):
-            # PUSH_CALLER_FRAME pushes 4 values (occupies 4 stack slots)
-            inst.slot_index = self.sp_get()  # Record starting slot
-            # No sp adjustment here - push_caller_frame will emit SpAdd explicitly
 
-        elif isinstance(inst, LowLevelILCallModule):
-            # CALL_MODULE cleans up args + 4 caller frame values
-            # No sp adjustment here - call_module will emit SpAdd explicitly
-            pass
-
-        # Call parent to add instruction to block and handle SpAdd
         super().add_instruction(inst)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
@@ -140,6 +130,49 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
         self._finalized = True
         return self.function
+
+    # === Virtual Stack Management ===
+
+    def push(self, value: Union[LowLevelILExpr, int, float, str], size: int = 4, *, hidden_for_formatter: bool = False):
+        '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)
+
+        Generates:
+          1. StackStore(sp+0, value)
+          2. SpAdd(+1)
+
+        Args:
+            value: Expression or primitive value to push (must be LowLevelILExpr or int/float/str)
+            size: Size in bytes
+            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
+
+        Returns:
+            The expression that was pushed (LowLevelILExpr)
+        '''
+
+        if isinstance(value, LowLevelILConstScript):
+            # 8 bytes script pointer
+            super().push(value, size, hidden_for_formatter = hidden_for_formatter)
+
+        return super().push(value, size, hidden_for_formatter = hidden_for_formatter)
+
+    def pop(self, size: int = 4, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
+        '''Pop value from stack and emit SpAdd
+
+        Emits SpAdd(-1) and returns the expression from vstack.
+
+        Args:
+            size: Size in bytes
+            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
+        '''
+        expr = super().pop(size, hidden_for_formatter = hidden_for_formatter)
+
+        if isinstance(expr, LowLevelILConstScript):
+            # 8 bytes script pointer
+            expr_clone = super().pop()
+            if not expr_clone is expr:
+                raise RuntimeError(f'Script pointer mismatch: {expr_clone} != {expr}')
+
+        return expr
 
     # === Falcom Specific Constants ===
 
@@ -217,14 +250,17 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
         # Create and add the atomic PUSH_CALLER_FRAME instruction
         # This occupies 4 stack slots
-        push_frame_instr = LowLevelILPushCallerFrame(func_id, ret_addr, script, context_marker)
-        self.add_instruction(push_frame_instr)
+        push_frame_inst = LowLevelILPushCallerFrame(func_id, ret_addr, script, context_marker)
+        push_frame_inst.slot_index = self.sp_get()
+        # self.add_instruction(push_frame_instr)
 
-        # Emit SpAdd to represent the 4 values pushed
-        self.emit_sp_add(4, hidden_for_formatter = False)
+        self.push(func_id)
+        self.push(ret_addr)
+        self.push(script)
+        self.push(context_marker)
 
         # Save reference for call_module to use
-        self.caller_frame_instr = push_frame_instr
+        self.caller_frame_inst = push_frame_inst
 
     def call(self, target):
         '''Falcom VM call - automatically cleans up stack (callee cleanup convention)'''
@@ -293,7 +329,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             raise RuntimeError(
                 'No call setup found. Did you forget to call push_caller_frame()?'
             )
-        if self.caller_frame_instr is None:
+        if self.caller_frame_inst is None:
             raise RuntimeError(
                 'No caller frame instruction found. Did you forget to call push_caller_frame()?'
             )
@@ -302,24 +338,31 @@ class FalcomVMBuilder(LowLevelILBuilder):
         return_block = self.return_target_block
 
         # Pop arguments from vstack (in reverse order: last arg first)
-        args = []
-        for _ in range(arg_count):
-            if self.vstack_size() == 0:
-                raise RuntimeError(
-                    f'Vstack underflow: trying to pop {arg_count} args but only {len(args)} available'
-                )
-            args.append(self.vstack_pop())
-        # Reverse to get correct order (first arg first)
-        args.reverse()
+        offset = -1
+        args = [self.vstack_peek(offset - i) for i in range(arg_count)]
+
+        func_id         = self.vstack_peek(offset - arg_count - 4)
+        ret_addr        = self.vstack_peek(offset - arg_count - 3)
+        script          = self.vstack_peek(offset - arg_count - 1)  # 8 bytes
+        context_marker  = self.vstack_peek(offset - arg_count - 0)
+
+        if not all([
+            func_id         is self.caller_frame_inst.func_id,
+            ret_addr        is self.caller_frame_inst.ret_addr,
+            script          is self.caller_frame_inst.script_ptr,
+            context_marker  is self.caller_frame_inst.context_marker,
+        ]):
+            raise RuntimeError(f'Caller frame mismatch')
 
         # Create and add CALL_MODULE instruction
         # This represents the call that cleans up args + 4 caller frame values
-        call_instr = LowLevelILCallModule(module, func, self.caller_frame_instr, args, return_block)
-        self.add_instruction(call_instr)
+        call_inst = LowLevelILCallModule(module, func, self.caller_frame_inst, args, return_block)
+        self.add_instruction(call_inst)
 
         # Emit SpAdd to represent stack cleanup (arg_count + 4 caller frame values)
-        cleanup_count = arg_count + 4
-        self.emit_sp_add(-cleanup_count, hidden_for_formatter = False)
+
+        cleanup_count = arg_count + (1 + 1 + 2 + 1)
+        self._cleanup_stack(cleanup_count)
 
         # Verify stack is balanced
         if self.sp_get() != self.sp_before_call:
@@ -334,7 +377,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Clean up state
         self.return_target_block = None
         self.sp_before_call = None
-        self.caller_frame_instr = None
+        self.caller_frame_inst = None
 
     # === VM Operations ===
 

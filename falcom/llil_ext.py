@@ -38,15 +38,15 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
         self,
         func_id: 'LowLevelILConstFuncId',
         ret_addr: Union['LowLevelILConstRetAddr', 'LowLevelILConstRetAddrBlock'],
-        script: 'LowLevelILConstScript',
+        script_ptr: 'LowLevelILConstScript',
         context_marker: LowLevelILConst
     ):
         super().__init__(LowLevelILFalcomOperation.LLIL_PUSH_CALLER_FRAME)
-        self.func_id = func_id                  # FalcomConstants.current_func_id()
-        self.ret_addr = ret_addr                # FalcomConstants.ret_addr() or ret_addr_block()
-        self.script_id = script                 # FalcomConstants.current_script()
-        self.context_marker = context_marker    # Raw value (0xF0000000)
-        self.slot_index: Optional[int] = None   # Will be set by builder to track stack position
+        self.func_id          = func_id                     # FalcomConstants.current_func_id()
+        self.ret_addr         = ret_addr                    # FalcomConstants.ret_addr() or ret_addr_block()
+        self.script_ptr       = script_ptr                  # FalcomConstants.current_script()
+        self.context_marker   = context_marker              # Raw value (0xF0000000)
+        self.slot_index       : Optional[int] = None        # Will be set by builder to track stack position
 
     def __str__(self) -> str:
         return f'push_caller_frame({self.ret_addr})'

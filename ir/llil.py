@@ -175,19 +175,20 @@ class LowLevelILStackLoad(LowLevelILExpr):
     Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
 
-    def __init__(self, offset: int = 0, size: int = 4):
+    def __init__(self, offset: int, slot_index: int, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_LOAD, size)
         self.offset = offset  # Byte offset
+        self.slot_index = slot_index  # Absolute stack slot index
 
     def __str__(self) -> str:
         # Convert byte offset to word offset for display
         word_offset = self.offset // WORD_SIZE
         if word_offset == 0:
-            return 'STACK[sp]'
+            return f'STACK[sp<{self.slot_index}>]'
         elif word_offset > 0:
-            return f'STACK[sp + {word_offset}]'
+            return f'STACK[sp + {word_offset}<{self.slot_index}>]'
         else:
-            return f'STACK[sp - {-word_offset}]'
+            return f'STACK[sp - {-word_offset}<{self.slot_index}>]'
 
 
 class LowLevelILFrameLoad(LowLevelILExpr):
@@ -313,8 +314,13 @@ class LowLevelILRegLoad(LowLevelILExpr):
 class LowLevelILBinaryOp(LowLevelILExpr):
     '''Base for binary operations (expression)'''
 
-    def __init__(self, operation: LowLevelILOperation, lhs: 'LowLevelILInstruction' = None,
-                 rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(
+        self,
+        operation: LowLevelILOperation,
+        lhs: 'LowLevelILExpr' = None,
+        rhs: 'LowLevelILExpr' = None,
+        size: int = 4
+    ):
         super().__init__(operation, size)
         self.lhs = lhs  # Left operand expression
         self.rhs = rhs  # Right operand expression
@@ -326,76 +332,76 @@ class LowLevelILBinaryOp(LowLevelILExpr):
 
 
 class LowLevelILAdd(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_ADD, lhs, rhs, size)
 
 
 class LowLevelILMul(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_MUL, lhs, rhs, size)
 
 
 class LowLevelILSub(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_SUB, lhs, rhs, size)
 
 
 class LowLevelILDiv(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_DIV, lhs, rhs, size)
 
 
 class LowLevelILEq(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_EQ, lhs, rhs, size)
 
 
 class LowLevelILNe(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_NE, lhs, rhs, size)
 
 
 class LowLevelILLt(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_LT, lhs, rhs, size)
 
 
 class LowLevelILLe(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_LE, lhs, rhs, size)
 
 
 class LowLevelILGt(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_GT, lhs, rhs, size)
 
 
 class LowLevelILGe(LowLevelILBinaryOp):
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_GE, lhs, rhs, size)
 
 
 class LowLevelILAnd(LowLevelILBinaryOp):
     '''Bitwise AND'''
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_AND, lhs, rhs, size)
 
 
 class LowLevelILOr(LowLevelILBinaryOp):
     '''Bitwise OR'''
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_OR, lhs, rhs, size)
 
 
 class LowLevelILLogicalAnd(LowLevelILBinaryOp):
     '''Logical AND (&&)'''
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_LOGICAL_AND, lhs, rhs, size)
 
 
 class LowLevelILLogicalOr(LowLevelILBinaryOp):
     '''Logical OR (||)'''
-    def __init__(self, lhs: 'LowLevelILInstruction' = None, rhs: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_LOGICAL_OR, lhs, rhs, size)
 
 
@@ -404,26 +410,26 @@ class LowLevelILLogicalOr(LowLevelILBinaryOp):
 class LowLevelILUnaryOp(LowLevelILExpr):
     '''Base class for unary operations (expression)'''
 
-    def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, operation: LowLevelILOperation, operand: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(operation, size)
         self.operand = operand
 
 
 class LowLevelILNeg(LowLevelILUnaryOp):
     '''Arithmetic negation (-x)'''
-    def __init__(self, operand: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, operand: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_NEG, operand, size)
 
 
 class LowLevelILNot(LowLevelILUnaryOp):
     '''Logical NOT (!x)'''
-    def __init__(self, operand: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, operand: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_NOT, operand, size)
 
 
 class LowLevelILTestZero(LowLevelILUnaryOp):
     '''Test if zero (x == 0)'''
-    def __init__(self, operand: 'LowLevelILInstruction' = None, size: int = 4):
+    def __init__(self, operand: 'LowLevelILExpr' = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_TEST_ZERO, operand, size)
 
 
@@ -454,7 +460,7 @@ class LowLevelILIf(LowLevelILTerminal):
     to the block after an If instruction.
     '''
 
-    def __init__(self, condition: 'LowLevelILInstruction', true_target: 'LowLevelILBasicBlock',
+    def __init__(self, condition: 'LowLevelILBinaryOp', true_target: 'LowLevelILBasicBlock',
                  false_target: Optional['LowLevelILBasicBlock'] = None):
         super().__init__(LowLevelILOperation.LLIL_BRANCH)
         self.condition = condition  # An instruction that produces a boolean value

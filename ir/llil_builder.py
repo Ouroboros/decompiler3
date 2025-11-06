@@ -44,7 +44,7 @@ class LowLevelILBuilder:
         '''
         self.__current_sp += delta
 
-    def __cleanup_stack(self, argc: int):
+    def _cleanup_stack(self, argc: int):
         '''Clean up stack and vstack without emitting IL - PRIVATE
 
         Adjusts shadow SP and pops from vstack.
@@ -57,7 +57,7 @@ class LowLevelILBuilder:
             self.__sp_adjust(-argc)
             # Pop from vstack (will raise if underflow - indicates bug in caller)
             for _ in range(argc):
-                self.vstack_pop()
+                self.__vstack_pop()
 
     def emit_sp_add(self, delta: int, *, hidden_for_formatter: bool = False) -> LowLevelILSpAdd:
         '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)
@@ -80,23 +80,24 @@ class LowLevelILBuilder:
 
     # === Virtual Stack Management (Public Interface) ===
 
-    def vstack_push(self, expr: LowLevelILExpr):
+    def __vstack_push(self, expr: LowLevelILExpr):
         '''Push expression to vstack (only accepts LowLevelILExpr)'''
         if not isinstance(expr, LowLevelILExpr):
             raise TypeError(f'vstack only accepts LowLevelILExpr, got {type(expr).__name__}')
         self.__vstack.append(expr)
 
-    def vstack_pop(self) -> LowLevelILExpr:
+    def __vstack_pop(self) -> LowLevelILExpr:
         '''Pop expression from vstack (returns LowLevelILExpr)'''
         if not self.__vstack:
             raise RuntimeError('Vstack underflow: attempting to pop from empty vstack')
         return self.__vstack.pop()
 
-    def vstack_peek(self) -> LowLevelILExpr:
+    def vstack_peek(self, offset: int = -1) -> LowLevelILExpr:
         '''Peek at top of vstack without popping (returns LowLevelILExpr)'''
         if not self.__vstack:
             raise RuntimeError('Vstack empty: cannot peek')
-        return self.__vstack[-1]
+
+        return self.__vstack[offset]
 
     def vstack_size(self) -> int:
         '''Get current vstack size'''
@@ -159,15 +160,20 @@ class LowLevelILBuilder:
         '''Convert value to expression (always returns LowLevelILExpr)'''
         if isinstance(value, LowLevelILExpr):
             return value
+
         elif isinstance(value, LowLevelILInstruction):
             # Should not happen - only Expr should be passed
             raise TypeError(f'Expected LowLevelILExpr, got {type(value).__name__}. Statements cannot be used as expressions.')
+
         elif isinstance(value, int):
             return self.const_int(value)
+
         elif isinstance(value, float):
             return self.const_float(value)
+
         elif isinstance(value, str):
             return self.const_str(value)
+
         else:
             raise TypeError(f'Cannot convert {type(value)} to expression')
 
@@ -193,7 +199,7 @@ class LowLevelILBuilder:
         # 2. SpAdd(+1)
         self.emit_sp_add(1, hidden_for_formatter = hidden_for_formatter)
         # Track on vstack for expression tracking
-        self.vstack_push(expr)
+        self.__vstack_push(expr)
         return expr
 
     def pop(self, size: int = 4, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
@@ -206,7 +212,7 @@ class LowLevelILBuilder:
             hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
         '''
         self.emit_sp_add(-1, hidden_for_formatter = hidden_for_formatter)
-        return self.vstack_pop()
+        return self.__vstack_pop()
 
     # === Legacy Stack Operations (kept for compatibility) ===
 
@@ -218,9 +224,9 @@ class LowLevelILBuilder:
         '''STACK[--sp] (legacy, use pop() instead)'''
         return self.pop(size)
 
-    def stack_load(self, offset: int, size: int = 4) -> LowLevelILStackLoad:
+    def stack_load(self, offset: int, slot_index: int, size: int = 4) -> LowLevelILStackLoad:
         '''STACK[sp + offset] (no sp change) - returns expression'''
-        return LowLevelILStackLoad(offset, size)
+        return LowLevelILStackLoad(offset = offset, slot_index = slot_index, size = size)
 
     def stack_store(self, value: Union[LowLevelILExpr, int, str], offset: int, size: int = 4):
         '''STACK[sp + offset] = value (no sp change)'''
@@ -275,11 +281,12 @@ class LowLevelILBuilder:
         # Calculate word offset
         word_offset = offset // WORD_SIZE
         # Calculate absolute stack position
-        absolute_pos = self.sp_get() + word_offset
+        sp = self.sp_get()
+        absolute_pos = sp + word_offset
 
         # Check if accessing parameter area
         # New scheme: fp = 0, parameters at STACK[0..num_params-1]
-        num_params = self.function.num_params if hasattr(self.function, 'num_params') else 0
+        num_params = self.function.num_params
         if absolute_pos >= 0 and absolute_pos < num_params:
             # Accessing parameters - use fp-relative
             # absolute_pos = fp + fp_offset, and fp = 0, so fp_offset = absolute_pos
@@ -287,7 +294,7 @@ class LowLevelILBuilder:
             self.load_frame(fp_offset)
         else:
             # Accessing within current stack frame (temporaries/locals) - use sp-relative
-            stack_val = self.stack_load(offset)
+            stack_val = self.stack_load(offset, slot_index = absolute_pos)
             self.stack_push(stack_val)
 
     def push_stack_addr(self, offset: int):
@@ -552,7 +559,7 @@ class LowLevelILBuilder:
         # If argc provided, clean up stack (without emitting IL)
         # This is for Falcom VM callee cleanup convention
         if argc is not None:
-            self.__cleanup_stack(argc)
+            self._cleanup_stack(argc)
 
         self.add_instruction(LowLevelILCall(target, return_target))
 
@@ -677,7 +684,17 @@ class LLILFormatter:
         if isinstance(inst, LowLevelILIf):
             true_name = inst.true_target.block_name
             false_name = inst.false_target.block_name
-            return [f'if (STACK[--sp] != 0) goto {true_name} else {false_name}']
+
+            cond = inst.condition
+
+            rhs = cond.rhs
+            lhs = cond.lhs
+            opr = cond.operation_name
+
+            if not isinstance(lhs, LowLevelILConst):
+                lhs = f'STACK[--sp]'
+
+            return [f'if ({lhs} {opr} {rhs}) goto {true_name} else {false_name}']
 
         line = str(inst)
 
