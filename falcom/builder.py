@@ -63,20 +63,21 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Create and set the function
         self.function = LowLevelILFunction(name, start_addr, num_params)
 
-    def add_instruction(self, instr):
+    def add_instruction(self, inst):
         '''Override to handle Falcom-specific instructions'''
         # Handle Falcom-specific instructions BEFORE calling parent
-        if isinstance(instr, LowLevelILPushCallerFrame):
+        if isinstance(inst, LowLevelILPushCallerFrame):
             # PUSH_CALLER_FRAME pushes 4 values (occupies 4 stack slots)
-            instr.slot_index = self.sp_get()  # Record starting slot
+            inst.slot_index = self.sp_get()  # Record starting slot
             # No sp adjustment here - push_caller_frame will emit SpAdd explicitly
-        elif isinstance(instr, LowLevelILCallModule):
+
+        elif isinstance(inst, LowLevelILCallModule):
             # CALL_MODULE cleans up args + 4 caller frame values
             # No sp adjustment here - call_module will emit SpAdd explicitly
             pass
 
         # Call parent to add instruction to block and handle SpAdd
-        super().add_instruction(instr)
+        super().add_instruction(inst)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
         '''Create basic block and automatically add to function
@@ -379,7 +380,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
               to the new sp position. For example, POP_TO(-WORD_SIZE) stores the
               popped value to STACK[sp - 1] where sp is the post-pop value.
         '''
-        val = self.pop()
+        val = self.pop(hidden_for_formatter = True)
         slot_index = self.sp_get() + offset // WORD_SIZE
         self.add_instruction(LowLevelILStackStore(val, offset = offset, slot_index = slot_index))
 
@@ -391,7 +392,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             false_target: Block to jump to if value is not zero
         '''
         # Pop from stack using StackPop expression
-        cond = self.pop()
+        cond = self.pop(hidden_for_formatter = True)
         # Create EQ(cond, 0) without adding as instruction
         # This is just used as the branch condition expression
         zero = self.const_int(0)

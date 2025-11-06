@@ -143,15 +143,15 @@ class LowLevelILBuilder:
         '''Get block by label name'''
         return self.function.get_block_by_label(label)
 
-    def add_instruction(self, instr: LowLevelILInstruction):
+    def add_instruction(self, inst: LowLevelILInstruction):
         '''Add instruction to current block and update stack pointer tracking'''
         if self.current_block is None:
             raise RuntimeError('No current basic block set')
-        self.current_block.add_instruction(instr)
+        self.current_block.add_instruction(inst)
 
         # Update stack pointer based on instruction type
-        if isinstance(instr, LowLevelILSpAdd):
-            self.__sp_adjust(instr.delta)
+        if isinstance(inst, LowLevelILSpAdd):
+            self.__sp_adjust(inst.delta)
 
     # === Virtual Stack Management ===
 
@@ -604,7 +604,7 @@ class LLILFormatter:
         return [indent + line for line in lines]
 
     @classmethod
-    def format_instruction(cls, instr: LowLevelILInstruction) -> str:
+    def format_instruction(cls, inst: LowLevelILInstruction) -> str:
         '''Format a single instruction - can be customized per instruction type
 
         Returns a single line for simple instructions.
@@ -612,7 +612,7 @@ class LLILFormatter:
         '''
         # For now, use the instruction's __str__ method
         # This can be extended with custom formatting logic for specific instruction types
-        return str(instr)
+        return str(inst)
 
     # Map operation to expression template
     __expr_templates = {
@@ -664,30 +664,34 @@ class LLILFormatter:
         return lines
 
     @classmethod
-    def _format_simplified(cls, instr: LowLevelILInstruction) -> List[str]:
+    def _format_simplified(cls, inst: LowLevelILInstruction) -> List[str]:
         '''Format instruction with simplified display (not expanded, just cleaner)
 
         Returns None if no simplified format available.
         '''
         # RegStore: show as pop from stack
-        if isinstance(instr, LowLevelILRegStore):
-            return [f'REG[{instr.reg_index}] = STACK[--sp]  ; {instr.value}']
+        if isinstance(inst, LowLevelILRegStore):
+            return [f'REG[{inst.reg_index}] = STACK[--sp]  ; {inst.value}']
 
         # If instruction: simplify condition display
-        if isinstance(instr, LowLevelILIf):
-            true_name = instr.true_target.block_name
-            false_name = instr.false_target.block_name
+        if isinstance(inst, LowLevelILIf):
+            true_name = inst.true_target.block_name
+            false_name = inst.false_target.block_name
             return [f'if (STACK[--sp] != 0) goto {true_name} else {false_name}']
 
-        line = str(instr)
+        line = str(inst)
 
-        if isinstance(instr, (LowLevelILStackStore, LowLevelILStackLoad)):
-            line = f'{line} ; [{instr.slot_index}]'
+        if isinstance(inst, LowLevelILStackStore) and inst.offset != 0:
+            line = f'STACK[sp + {inst.offset // WORD_SIZE}] = STACK[sp--] ; {inst.value}'
+            line = f'STACK[{inst.slot_index}] = STACK[--sp] ; {inst.value}'
+
+        elif isinstance(inst, (LowLevelILStackStore, LowLevelILStackLoad)):
+            line = f'{line} ; [{inst.slot_index}]'
 
         return [line]
 
     @classmethod
-    def format_instruction_expanded(cls, instr: LowLevelILInstruction) -> List[str]:
+    def format_instruction_expanded(cls, inst: LowLevelILInstruction) -> List[str]:
         '''Format instruction with expanded stack operations (multi-line)
 
         Returns a list of lines showing explicit stack behavior.
@@ -698,20 +702,20 @@ class LLILFormatter:
         '''
 
         # StackStore containing a binary operation: expand the binary op
-        if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILBinaryOp):
-            return cls._format_binary_op_expanded(instr.value)
+        if isinstance(inst, LowLevelILStackStore) and isinstance(inst.value, LowLevelILBinaryOp):
+            return cls._format_binary_op_expanded(inst.value)
 
         # StackStore containing a unary operation: expand the unary op
-        if isinstance(instr, LowLevelILStackStore) and isinstance(instr.value, LowLevelILUnaryOp):
-            return cls._format_unary_op_expanded(instr.value)
+        if isinstance(inst, LowLevelILStackStore) and isinstance(inst.value, LowLevelILUnaryOp):
+            return cls._format_unary_op_expanded(inst.value)
 
         # Binary operations: pop 2, compute, push 1
-        if isinstance(instr, LowLevelILBinaryOp):
-            return cls._format_binary_op_expanded(instr)
+        if isinstance(inst, LowLevelILBinaryOp):
+            return cls._format_binary_op_expanded(inst)
 
         # Unary operations: pop 1, compute, push 1
-        if isinstance(instr, LowLevelILUnaryOp):
-            return cls._format_unary_op_expanded(instr)
+        if isinstance(inst, LowLevelILUnaryOp):
+            return cls._format_unary_op_expanded(inst)
 
         return None
         # # For non-binary operations, return single line
@@ -730,18 +734,22 @@ class LLILFormatter:
         '''
         result = []
 
-        for instr in instructions:
+        for inst in instructions:
             # Skip instructions marked as hidden for formatter
-            if instr.options.hidden_for_formatter:
+            if inst.options.hidden_for_formatter:
                 continue
 
+            if result and isinstance(inst, LowLevelILDebug):
+                result.append('')
+
             # Use expanded format for multi-line instructions
-            expanded = cls.format_instruction_expanded(instr)
+            expanded = cls.format_instruction_expanded(inst)
             if expanded:
                 # Multi-line instruction
                 result.extend(cls.indent_lines(expanded, indent))
+
             else:
-                lines = cls._format_simplified(instr)
+                lines = cls._format_simplified(inst)
                 result.extend(cls.indent_lines(lines, indent))
 
         return result
@@ -863,25 +871,25 @@ class LLILFormatter:
             if not block.outgoing_edges:
                 continue
 
-            last_instr = block.instructions[-1] if block.instructions else None
+            last_inst = block.instructions[-1] if block.instructions else None
 
             for target in block.outgoing_edges:
                 # Determine edge label and style
                 edge_label = ''
                 edge_style = ''
 
-                if isinstance(last_instr, LowLevelILIf):
+                if isinstance(last_inst, LowLevelILIf):
                     # Conditional branch
-                    if target == last_instr.true_target:
+                    if target == last_inst.true_target:
                         edge_label = 'true'
                         edge_style = ', color=green'
-                    elif last_instr.false_target and target == last_instr.false_target:
+                    elif last_inst.false_target and target == last_inst.false_target:
                         edge_label = 'false'
                         edge_style = ', color=red'
                     else:
                         edge_label = 'fall-through'
                         edge_style = ', style=dashed'
-                elif isinstance(last_instr, LowLevelILGoto):
+                elif isinstance(last_inst, LowLevelILGoto):
                     edge_label = 'goto'
                     edge_style = ', color=blue'
                 else:

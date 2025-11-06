@@ -612,7 +612,7 @@ class LowLevelILBasicBlock:
         self.outgoing_edges: List['LowLevelILBasicBlock'] = []
         self.incoming_edges: List['LowLevelILBasicBlock'] = []
 
-    def add_instruction(self, instr: LowLevelILInstruction):
+    def add_instruction(self, inst: LowLevelILInstruction):
         '''Add instruction to this block
 
         Raises:
@@ -623,8 +623,8 @@ class LowLevelILBasicBlock:
                 f'Cannot add instruction to {self.block_name}: '
                 f'block already has terminal instruction {self.instructions[-1]}'
             )
-        instr.instr_index = len(self.instructions)
-        self.instructions.append(instr)
+        inst.instr_index = len(self.instructions)
+        self.instructions.append(inst)
 
     def add_outgoing_edge(self, target: 'LowLevelILBasicBlock'):
         '''Add outgoing edge to another block'''
@@ -703,36 +703,36 @@ class LowLevelILFunction:
             if not block.instructions:
                 continue
 
-            last_instr = block.instructions[-1]
+            last_inst = block.instructions[-1]
 
             # Terminal instructions already have their edges set via block references
-            if isinstance(last_instr, LowLevelILGoto):
+            if isinstance(last_inst, LowLevelILGoto):
                 # Edge already created: block -> target
-                block.add_outgoing_edge(last_instr.target)
+                block.add_outgoing_edge(last_inst.target)
 
-            elif isinstance(last_instr, LowLevelILIf):
+            elif isinstance(last_inst, LowLevelILIf):
                 # Both targets must be explicitly specified
                 if any([
-                    last_instr.true_target is None,
-                    last_instr.false_target is None,
+                    last_inst.true_target is None,
+                    last_inst.false_target is None,
                 ]):
                     raise RuntimeError(
                         f'Block {block.index} has If instruction with no true_target or false_target. '
                         f'Both true_target and false_target must be explicitly specified.'
                     )
 
-                block.add_outgoing_edge(last_instr.true_target)
-                block.add_outgoing_edge(last_instr.false_target)
+                block.add_outgoing_edge(last_inst.true_target)
+                block.add_outgoing_edge(last_inst.false_target)
 
-            elif isinstance(last_instr, LowLevelILCall):
+            elif isinstance(last_inst, LowLevelILCall):
                 # Call returns to explicit return target
-                if last_instr.return_target is not None:
-                    return_block = last_instr.return_target
+                if last_inst.return_target is not None:
+                    return_block = last_inst.return_target
                     # Resolve label if needed
                     if isinstance(return_block, str):
                         return_block = self.get_block_by_label(return_block)
                         if return_block is None:
-                            raise RuntimeError(f'Undefined return label: {last_instr.return_target}')
+                            raise RuntimeError(f'Undefined return label: {last_inst.return_target}')
 
                     block.add_outgoing_edge(return_block)
 
@@ -742,10 +742,10 @@ class LowLevelILFunction:
                     # if next_idx < len(self.basic_blocks):
                     #     block.add_outgoing_edge(self.basic_blocks[next_idx])
 
-            elif not isinstance(last_instr, Terminal):
+            elif not isinstance(last_inst, Terminal):
                 # Should not happen - all blocks must end with terminal
                 raise RuntimeError(
-                    f'Block {block.index} ends with non-terminal instruction: {last_instr}'
+                    f'Block {block.index} ends with non-terminal instruction: {last_inst}'
                 )
 
     def __str__(self) -> str:
