@@ -152,10 +152,11 @@ class LowLevelILStackStore(LowLevelILStatement):
     Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
     '''
 
-    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, size: int = 4):
+    def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, slot_index: int = None, size: int = 4):
         super().__init__(LowLevelILOperation.LLIL_STACK_STORE, size)
         self.value = value
         self.offset = offset  # Byte offset
+        self.slot_index = slot_index  # Absolute stack slot index
 
     def __str__(self) -> str:
         # Convert byte offset to word offset for display
@@ -711,11 +712,15 @@ class LowLevelILFunction:
 
             elif isinstance(last_instr, LowLevelILIf):
                 # Both targets must be explicitly specified
-                if last_instr.false_target is None:
+                if any([
+                    last_instr.true_target is None,
+                    last_instr.false_target is None,
+                ]):
                     raise RuntimeError(
-                        f'Block {block.index} has If instruction with no false_target. '
+                        f'Block {block.index} has If instruction with no true_target or false_target. '
                         f'Both true_target and false_target must be explicitly specified.'
                     )
+
                 block.add_outgoing_edge(last_instr.true_target)
                 block.add_outgoing_edge(last_instr.false_target)
 

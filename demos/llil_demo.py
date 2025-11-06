@@ -265,7 +265,7 @@ def create_DOF_ON():
     # SET_REG(0)
     builder.set_reg(0)
     # POP(8) - pops 8 bytes from stack
-    builder.emit_sp_add(-2)  # 8 bytes = 2 words
+    builder.pop_n(2)  # 8 bytes = 2 words
     # RETURN()
     builder.ret()
 
@@ -322,7 +322,7 @@ def create_sound_play_se():
     builder.syscall(6, 0x10, 0x08)
 
     # POP(32) - Clean up 8 words pushed by syscall
-    builder.emit_sp_add(-8)
+    builder.pop_n(8)
 
     # PUSH(0x00000000)
     builder.push_int(0)
@@ -330,7 +330,7 @@ def create_sound_play_se():
     builder.set_reg(0)
 
     # POP(32) - Clean up 8 parameters (8 words = 32 bytes)
-    builder.emit_sp_add(-8)
+    builder.pop_n(8)
 
     # RETURN()
     builder.ret()
@@ -388,7 +388,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(entry)
     builder.debug_line(10792)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8ACE5')
+    builder.push_ret_addr(loc_8ACE5)
     builder.push(builder.const_float(4.0))
     builder.push_int(0)
     builder.call('TALK_BEGIN')
@@ -397,7 +397,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8ACE5)
     builder.debug_line(10795)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AD0F')
+    builder.push_ret_addr(loc_8AD0F)
     builder.push_int(24)
     builder.push_int(0)
     builder.push_int(0)
@@ -408,7 +408,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AD0F)
     builder.debug_line(10796)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AD33')
+    builder.push_ret_addr(loc_8AD33)
     builder.push_int(2)
     builder.push_str('ボス戦前')
     builder.push_int(0)
@@ -418,7 +418,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AD33)
     builder.debug_line(10797)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AD57')
+    builder.push_ret_addr(loc_8AD57)
     builder.push_int(1)
     builder.push_str('中間地点②')
     builder.push_int(0)
@@ -428,7 +428,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AD57)
     builder.debug_line(10798)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AD7B')
+    builder.push_ret_addr(loc_8AD7B)
     builder.push_int(0)
     builder.push_str('中間地点①')
     builder.push_int(0)
@@ -438,7 +438,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AD7B)
     builder.debug_line(10800)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8ADA5')
+    builder.push_ret_addr(loc_8ADA5)
     builder.push_int(1)
     builder.push_int(-1)
     builder.push_int(-1)
@@ -450,7 +450,7 @@ def create_Dummy_m3010_talk0():
     builder.debug_line(10802)
     builder.push_int(0)  # PUSH(0x00000000)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8ADC3')
+    builder.push_ret_addr(loc_8ADC3)
     builder.push_int(0)
     builder.call('menu_wait')
 
@@ -462,7 +462,7 @@ def create_Dummy_m3010_talk0():
     builder.pop_to(-4)
     builder.debug_line(10803)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8ADE2')
+    builder.push_ret_addr(loc_8ADE2)
     builder.push_int(0)
     builder.call('menu_close')
 
@@ -479,7 +479,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(fade_out_block)
     builder.debug_line(10807)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AE20')
+    builder.push_ret_addr(loc_8AE20)
     builder.push_int(0)
     builder.push(builder.const_float(1.0))
     builder.push_int(0)
@@ -490,7 +490,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AE20)
     builder.debug_line(10808)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AE38')
+    builder.push_ret_addr(loc_8AE38)
     builder.push_int(0)
     builder.call('fade_wait')
 
@@ -507,7 +507,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(case_0_chr_set_pos)
     builder.debug_line(10811)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AE7C')
+    builder.push_ret_addr(loc_8AE7C)
     builder.push(builder.const_float(188.359))
     builder.push(builder.const_float(122.862))
     builder.push(builder.const_float(1.918))
@@ -519,7 +519,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AE7C)
     builder.debug_line(10812)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AEB8')
+    builder.push_ret_addr(loc_8AEB8)
     builder.push_int(-1)
     builder.push_int(3)
     builder.push_int(0)
@@ -546,7 +546,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(case_1_chr_set_pos)
     builder.debug_line(10815)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AF01')
+    builder.push_ret_addr(loc_8AF01)
     builder.push(builder.const_float(62.994))
     builder.push(builder.const_float(-62.892))
     builder.push(builder.const_float(-0.297))
@@ -558,7 +558,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AF01)
     builder.debug_line(10816)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AF3D')
+    builder.push_ret_addr(loc_8AF3D)
     builder.push_int(-1)
     builder.push_int(3)
     builder.push_int(0)
@@ -585,7 +585,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AFAA)
     builder.debug_line(10819)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AF86')  # Return to loc_8AF86 for second call
+    builder.push_ret_addr(loc_8AF86)  # Return to loc_8AF86 for second call
     builder.push(builder.const_float(112.963))
     builder.push(builder.const_float(-157.72))
     builder.push(builder.const_float(-0.283))
@@ -597,7 +597,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AF86)
     builder.debug_line(10820)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AFC2')
+    builder.push_ret_addr(loc_8AFC2)
     builder.push_int(-1)
     builder.push_int(3)
     builder.push_int(0)
@@ -611,7 +611,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(loc_8AFC2)
     builder.debug_line(10824)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8AFD4')
+    builder.push_ret_addr(loc_8AFD4)
     builder.call('TALK_END')
 
     # === BLOCK 21: loc_8AFD4 - Check if selection >= 0 for fade_in ===
@@ -627,7 +627,7 @@ def create_Dummy_m3010_talk0():
     builder.set_current_block(check_fade_in)
     builder.debug_line(10827)
     builder.push_func_id()
-    builder.push_ret_addr('loc_8B012')
+    builder.push_ret_addr(loc_8B012)
     builder.push_int(0)
     builder.push(builder.const_float(0.0))
     builder.push_int(0)
@@ -640,7 +640,7 @@ def create_Dummy_m3010_talk0():
     builder.push_int(0)
     builder.set_reg(0)
     # POP(4) - pop 4 bytes (1 word) from stack
-    builder.emit_sp_add(-1)
+    builder.pop_n(1)
     builder.ret()
 
     # Finalize and return function
@@ -880,9 +880,9 @@ def test_EV_06_37_00():
 def main():
     # Test individual functions (comment/uncomment as needed)
     # test_AV_04_0017()
-    test_DOF_ON()
+    # test_DOF_ON()
     # test_sound_play_se()
-    # test_Dummy_m3010_talk0()
+    test_Dummy_m3010_talk0()
     # test_TALK_BEGIN()
     # test_conditional()
     # test_EV_06_37_00()

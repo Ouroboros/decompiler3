@@ -361,7 +361,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     def set_reg(self, reg_index: int):
         '''SET_REG operation'''
         # Pop from stack using StackPop expression
-        stack_val = self.pop()
+        stack_val = self.pop(hidden_for_formatter = True)
         self.reg_store(reg_index, stack_val)
 
     def get_reg(self, reg_index: int):
@@ -380,7 +380,8 @@ class FalcomVMBuilder(LowLevelILBuilder):
               popped value to STACK[sp - 1] where sp is the post-pop value.
         '''
         val = self.pop()
-        self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
+        slot_index = self.sp_get() + offset // WORD_SIZE
+        self.add_instruction(LowLevelILStackStore(val, offset = offset, slot_index = slot_index))
 
     def pop_jmp_zero(self, true_target, false_target):
         '''POP_JMP_ZERO operation - branch if popped value is zero

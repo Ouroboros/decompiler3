@@ -187,8 +187,9 @@ class LowLevelILBuilder:
             The expression that was pushed (LowLevelILExpr)
         '''
         expr = self._to_expr(value)
+        slot_index = self.sp_get()
         # 1. StackStore(sp+0, value)
-        self.add_instruction(LowLevelILStackStore(expr, offset=0, size=size))
+        self.add_instruction(LowLevelILStackStore(expr, offset = 0, slot_index = slot_index, size = size))
         # 2. SpAdd(+1)
         self.emit_sp_add(1, hidden_for_formatter = hidden_for_formatter)
         # Track on vstack for expression tracking
@@ -224,7 +225,8 @@ class LowLevelILBuilder:
     def stack_store(self, value: Union[LowLevelILExpr, int, str], offset: int, size: int = 4):
         '''STACK[sp + offset] = value (no sp change)'''
         expr = self._to_expr(value)
-        self.add_instruction(LowLevelILStackStore(expr, offset, size))
+        slot_index = self.sp_get() + offset // WORD_SIZE
+        self.add_instruction(LowLevelILStackStore(expr, offset = offset, slot_index = slot_index, size = size))
 
     def frame_load(self, offset: int, size: int = 4) -> 'LowLevelILFrameLoad':
         '''STACK[frame + offset] - Frame-relative load (for function parameters/locals)
@@ -614,20 +616,24 @@ class LLILFormatter:
 
     # Map operation to expression template
     __expr_templates = {
-        LowLevelILOperation.LLIL_ADD: '{lhs} + {rhs}',
-        LowLevelILOperation.LLIL_SUB: '{lhs} - {rhs}',
-        LowLevelILOperation.LLIL_MUL: '{lhs} * {rhs}',
-        LowLevelILOperation.LLIL_DIV: '{lhs} / {rhs}',
-        LowLevelILOperation.LLIL_EQ: '({lhs} == {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_NE: '({lhs} != {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_LT: '({lhs} < {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_LE: '({lhs} <= {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_GT: '({lhs} > {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_GE: '({lhs} >= {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_AND: '{lhs} & {rhs}',
-        LowLevelILOperation.LLIL_OR: '{lhs} | {rhs}',
-        LowLevelILOperation.LLIL_LOGICAL_AND: '({lhs} && {rhs}) ? 1 : 0',
-        LowLevelILOperation.LLIL_LOGICAL_OR: '({lhs} || {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_ADD            : '{lhs} + {rhs}',
+        LowLevelILOperation.LLIL_SUB            : '{lhs} - {rhs}',
+        LowLevelILOperation.LLIL_MUL            : '{lhs} * {rhs}',
+        LowLevelILOperation.LLIL_DIV            : '{lhs} / {rhs}',
+        LowLevelILOperation.LLIL_EQ             : '({lhs} == {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_NE             : '({lhs} != {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_LT             : '({lhs} < {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_LE             : '({lhs} <= {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_GT             : '({lhs} > {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_GE             : '({lhs} >= {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_AND            : '{lhs} & {rhs}',
+        LowLevelILOperation.LLIL_OR             : '{lhs} | {rhs}',
+        LowLevelILOperation.LLIL_LOGICAL_AND    : '({lhs} && {rhs}) ? 1 : 0',
+        LowLevelILOperation.LLIL_LOGICAL_OR     : '({lhs} || {rhs}) ? 1 : 0',
+
+        LowLevelILOperation.LLIL_NEG            : '-{operand}',
+        LowLevelILOperation.LLIL_NOT            : '!{operand} ? 1 : 0',
+        LowLevelILOperation.LLIL_TEST_ZERO      : '({operand} == 0) ? 1 : 0',
     }
 
     @classmethod
@@ -647,16 +653,8 @@ class LLILFormatter:
     @classmethod
     def _format_unary_op_expanded(cls, unary_op: 'LowLevelILUnaryOp') -> List[str]:
         '''Format unary operation with expanded pseudo-code'''
-        from .llil import LowLevelILUnaryOp
 
-        # Map operation to expression template
-        expr_templates = {
-            LowLevelILOperation.LLIL_NEG: '-{operand}',
-            LowLevelILOperation.LLIL_NOT: '!{operand} ? 1 : 0',
-            LowLevelILOperation.LLIL_TEST_ZERO: '({operand} == 0) ? 1 : 0',
-        }
-
-        template = expr_templates.get(unary_op.operation, f'UNARY_OP({unary_op.operation})({{operand}})')
+        template = cls.__expr_templates[unary_op.operation]
         expr = template.format(operand = 'operand')
 
         lines = []
@@ -664,6 +662,29 @@ class LLILFormatter:
         lines.append(f'STACK[sp++] = {expr}')
 
         return lines
+
+    @classmethod
+    def _format_simplified(cls, instr: LowLevelILInstruction) -> List[str]:
+        '''Format instruction with simplified display (not expanded, just cleaner)
+
+        Returns None if no simplified format available.
+        '''
+        # RegStore: show as pop from stack
+        if isinstance(instr, LowLevelILRegStore):
+            return [f'REG[{instr.reg_index}] = STACK[--sp]  ; {instr.value}']
+
+        # If instruction: simplify condition display
+        if isinstance(instr, LowLevelILIf):
+            true_name = instr.true_target.block_name
+            false_name = instr.false_target.block_name
+            return [f'if (STACK[--sp] != 0) goto {true_name} else {false_name}']
+
+        line = str(instr)
+
+        if isinstance(instr, (LowLevelILStackStore, LowLevelILStackLoad)):
+            line = f'{line} ; [{instr.slot_index}]'
+
+        return [line]
 
     @classmethod
     def format_instruction_expanded(cls, instr: LowLevelILInstruction) -> List[str]:
@@ -692,8 +713,9 @@ class LLILFormatter:
         if isinstance(instr, LowLevelILUnaryOp):
             return cls._format_unary_op_expanded(instr)
 
-        # For non-binary operations, return single line
-        return [str(instr)]
+        return None
+        # # For non-binary operations, return single line
+        # return [str(instr)]
 
     @classmethod
     def format_instruction_sequence(cls, instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
@@ -715,17 +737,12 @@ class LLILFormatter:
 
             # Use expanded format for multi-line instructions
             expanded = cls.format_instruction_expanded(instr)
-            if len(expanded) > 1:
+            if expanded:
                 # Multi-line instruction
                 result.extend(cls.indent_lines(expanded, indent))
             else:
-                # Single line instruction - add slot comment if applicable
-                line = expanded[0]
-                # Add slot comment for StackPush and StackPop
-                if isinstance(instr, (LowLevelILStackStore, LowLevelILStackLoad)) and hasattr(instr, 'slot_index') and instr.slot_index is not None:
-                    line = f'{line} ; [{instr.slot_index}]'
-
-                result.append(f'{indent}{line}')
+                lines = cls._format_simplified(instr)
+                result.extend(cls.indent_lines(lines, indent))
 
         return result
 
