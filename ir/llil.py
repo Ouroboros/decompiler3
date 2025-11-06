@@ -728,12 +728,14 @@ class LowLevelILFunction:
                         return_block = self.get_block_by_label(return_block)
                         if return_block is None:
                             raise RuntimeError(f'Undefined return label: {last_instr.return_target}')
+
                     block.add_outgoing_edge(return_block)
-                # If no return target specified, fall through (for compatibility)
+
                 else:
-                    next_idx = block.index + 1
-                    if next_idx < len(self.basic_blocks):
-                        block.add_outgoing_edge(self.basic_blocks[next_idx])
+                    raise NotImplementedError('Fall through is not supported')
+                    # next_idx = block.index + 1
+                    # if next_idx < len(self.basic_blocks):
+                    #     block.add_outgoing_edge(self.basic_blocks[next_idx])
 
             elif not isinstance(last_instr, Terminal):
                 # Should not happen - all blocks must end with terminal
