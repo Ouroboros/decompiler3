@@ -1,0 +1,10 @@
+{
+  // Decompiler3 Configuration File
+  // This file uses JSON5 format (https://json5.org/)
+
+  // Byte order for binary parsing
+  // Values: "little" or "big"
+  endian: "little",
+
+  // Add more configuration options here as needed
+}
