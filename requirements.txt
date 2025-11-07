@@ -1,6 +1,0 @@
-# No external dependencies required
-# This project uses only Python standard library:
-# - typing (for type hints)
-# - dataclasses (Python 3.7+)
-# - enum (standard library)
-# - abc (abstract base classes)

@@ -6,18 +6,8 @@ This module provides option classes that can be used across all IL levels
 metadata without affecting IR semantics.
 '''
 
-class StrictBase:
-    _allowed_attrs_: frozenset[str]
+from common import *
 
-    def __init_subclass__(cls) -> None:
-        ann = getattr(cls, '__annotations__', {})
-        cls._allowed_attrs_ = frozenset(ann.keys())
-
-    def __setattr__(self, name, value):
-        if name not in self._allowed_attrs_:
-            raise AttributeError(f"Unknown attribute {name!r}")
-
-        return object.__setattr__(self, name, value)
 
 class ILOptions(StrictBase):
     '''
