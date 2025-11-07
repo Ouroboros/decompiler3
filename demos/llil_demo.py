@@ -9,7 +9,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from ir.llil import *
-from ir.llil_builder import *
 from falcom import *
 
 DOT_FILE_NAME = 'cfg.dot'
@@ -728,7 +727,7 @@ def create_EV_06_37_00():
     # PUSH_INT(10000)
     builder.push_int(10000)
     # EQ()
-    builder.eq()
+    builder.bitwise_or()
     # POP(4)
     builder.pop_bytes(4)
 
@@ -883,9 +882,9 @@ def main():
     # test_DOF_ON()
     # test_sound_play_se()
     # test_Dummy_m3010_talk0()
-    test_TALK_BEGIN()
+    # test_TALK_BEGIN()
     # test_conditional()
-    # test_EV_06_37_00()
+    test_EV_06_37_00()
 
 
 if __name__ == '__main__':

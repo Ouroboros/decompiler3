@@ -5,8 +5,7 @@ Falcom VM Builder - High-level builder with Falcom VM patterns
 from math import exp
 from typing import Union
 from ir.llil import *
-from ir.llil_builder import *
-from .constants import FalcomConstants
+from .constants import *
 from .llil_ext import *
 
 

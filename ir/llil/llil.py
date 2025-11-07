@@ -7,8 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Union, TYPE_CHECKING
 from enum import IntEnum
 
-from .il_base import ILInstruction, ControlFlow, Terminal, Constant, BinaryOperation, UnaryOperation
-from .il_options import ILOptions
+from ir.core import *
 
 if TYPE_CHECKING:
     # Forward declaration for type hints

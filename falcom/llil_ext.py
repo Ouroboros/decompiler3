@@ -82,7 +82,7 @@ class LowLevelILCallModule(LowLevelILCall):
 
     def __str__(self) -> str:
         args_str = ', '.join(str(arg) for arg in self.args)
-        return f'call_module({self.module}.{self.func}, [{args_str}]) -> {self.return_target.label}'
+        return f'call_module(`{self.module}.{self.func}`, [{args_str}]) -> {self.return_target.label}'
 
 
 class LowLevelILGlobalLoad(LowLevelILExpr):

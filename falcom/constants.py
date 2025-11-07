@@ -3,10 +3,7 @@ Falcom VM specific constants and types
 '''
 
 from typing import TYPE_CHECKING
-from ir.llil import LowLevelILConst, WORD_SIZE
-
-if TYPE_CHECKING:
-    from ir.llil import LowLevelILBasicBlock
+from ir.llil.llil import *
 
 
 class LowLevelILConstFuncId(LowLevelILConst):
@@ -52,7 +49,7 @@ class LowLevelILConstScript(LowLevelILConst):
         super().__init__(None, WORD_SIZE, False)
 
     def __str__(self) -> str:
-        return '<script_id>'
+        return '<script_ptr>'
 
 
 class FalcomConstants:
