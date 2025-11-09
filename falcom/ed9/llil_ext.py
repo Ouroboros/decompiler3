@@ -16,7 +16,7 @@ class LowLevelILFalcomOperation(IntEnum):
     Independent enum that starts from LLIL_USER_DEFINED to avoid conflicts.
     '''
     LLIL_PUSH_CALLER_FRAME = LowLevelILOperation.LLIL_PUSH_CALLER_FRAME  # Push caller frame (4 values)
-    LLIL_CALL_MODULE = LowLevelILOperation.LLIL_CALL_MODULE              # Call module function
+    LLIL_CALL_SCRIPT = LowLevelILOperation.LLIL_CALL_SCRIPT              # Call script function
     LLIL_GLOBAL_LOAD = LowLevelILOperation.LLIL_USER_DEFINED     # Load from global variable array
     LLIL_GLOBAL_STORE = LowLevelILOperation.LLIL_USER_DEFINED + 1  # Store to global variable array
 
@@ -31,7 +31,7 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
       4. context_marker (0xF0000000)
 
     This is an atomic operation that occupies 4 stack slots.
-    Saves the caller frame so the module call can return properly.
+    Saves the caller frame so the script call can return properly.
     '''
 
     def __init__(
@@ -52,10 +52,10 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
         return f'push_caller_frame({self.ret_addr})'
 
 
-class LowLevelILCallModule(LowLevelILCall):
-    '''CALL_MODULE - Call a module function with automatic stack cleanup (statement)
+class LowLevelILCallScript(LowLevelILCall):
+    '''CALL_SCRIPT - Call a script function with automatic stack cleanup (statement)
 
-    Calls a module function and cleans up arguments + caller frame from stack.
+    Calls a script function and cleans up arguments + caller frame from stack.
     All operands (caller frame + arguments) are popped from vstack.
 
     Stack layout (bottom to top):
@@ -73,8 +73,8 @@ class LowLevelILCallModule(LowLevelILCall):
     ):
         target = f'{module}.{func}'
         super().__init__(target, return_target)
-        self.operation    = LowLevelILFalcomOperation.LLIL_CALL_MODULE
-        self.module       = module          # Module name (e.g., 'system')
+        self.operation    = LowLevelILFalcomOperation.LLIL_CALL_SCRIPT
+        self.module       = module          # Script module name (e.g., 'system')
         self.func         = func            # Function name (e.g., 'OnTalkBegin')
         self.caller_frame = caller_frame    # Caller frame (popped from vstack)
         self.args         = args            # Arguments (popped from vstack)
@@ -82,7 +82,7 @@ class LowLevelILCallModule(LowLevelILCall):
 
     def __str__(self) -> str:
         args_str = ', '.join(str(arg) for arg in self.args)
-        return f'call_module(`{self.module}.{self.func}`, [{args_str}]) -> {self.return_target.label}'
+        return f'call_script(`{self.module}.{self.func}`, [{args_str}]) -> {self.return_target.label}'
 
 
 class LowLevelILGlobalLoad(LowLevelILExpr):

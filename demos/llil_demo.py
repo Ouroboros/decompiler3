@@ -843,8 +843,8 @@ def create_TALK_BEGIN():
     # LOAD_STACK(-32)
     builder.load_stack(-32)
 
-    # CALL_MODULE('system', 'OnTalkBegin', 3)
-    builder.call_module('system', 'OnTalkBegin', 3)
+    # CALL_SCRIPT('system', 'OnTalkBegin', 3)
+    builder.call_script('system', 'OnTalkBegin', 3)
 
     # === BLOCK 1: loc_54F6B ===
     builder.set_current_block(loc_54F6B)
@@ -867,7 +867,7 @@ def test_TALK_BEGIN():
     print('\n🧪 Test 5: TALK_BEGIN - Module Calls')
     print('-' * 60)
     print('Function demonstrating:')
-    print('- CALL_MODULE: call external module function')
+    print('- CALL_SCRIPT: call external script function')
     print('- LOAD_STACK: load from stack with negative offset (parameters)')
     print('- Function parameters and caller context')
     print()

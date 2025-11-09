@@ -40,7 +40,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         super().__init__(None)
         self.sp_before_call_stack = []  # Stack of sp values before calls for nested calls
         self.return_target_stack = []  # Stack of return target blocks for nested calls
-        self.caller_frame_inst = None  # Track PUSH_CALLER_FRAME instruction for call_module
+        self.caller_frame_inst = None  # Track PUSH_CALLER_FRAME instruction for call_script
         self._finalized = False
 
     def create_function(self, name: str, start_addr: int = 0, num_params: int = 0):
@@ -238,7 +238,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.push(script)
         self.push(context_marker)
 
-        # Save reference for call_module to use
+        # Save reference for call_script to use
         self.caller_frame_inst = push_frame_inst
 
     def call(self, target):
@@ -291,16 +291,16 @@ class FalcomVMBuilder(LowLevelILBuilder):
         call: LowLevelILCall = self.current_block.instructions[-1]
         call.args = args
 
-    def call_module(self, module: str, func: str, arg_count: int):
-        '''CALL_MODULE operation - call a module function
+    def call_script(self, module: str, func: str, arg_count: int):
+        '''CALL_SCRIPT operation - call a script function
 
         Args:
-            module: Module name (e.g., 'system')
+            module: Script module name (e.g., 'system')
             func: Function name (e.g., 'OnTalkBegin')
             arg_count: Number of arguments on vstack
 
         Note: Assumes push_caller_frame() was already called.
-        Pops arg_count arguments from vstack and creates CALL_MODULE IL.
+        Pops arg_count arguments from vstack and creates CALL_SCRIPT IL.
         The IL includes the caller_frame and arguments, representing the complete call operation.
         Automatically cleans up arg_count + 4 caller frame values from stack.
         '''
@@ -339,9 +339,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
         ]):
             raise RuntimeError(f'Caller frame mismatch')
 
-        # Create and add CALL_MODULE instruction
+        # Create and add CALL_SCRIPT instruction
         # This represents the call that cleans up args + 4 caller frame values
-        call_inst = LowLevelILCallModule(module, func, self.caller_frame_inst, args, return_block)
+        call_inst = LowLevelILCallScript(module, func, self.caller_frame_inst, args, return_block)
         self.add_instruction(call_inst)
 
         # Emit SpAdd to represent stack cleanup (arg_count + 4 caller frame values)
@@ -352,7 +352,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # Verify stack is balanced
         if self.sp_get() != sp_before_call:
             raise RuntimeError(
-                f'Stack imbalance in call_module: after cleaning up {arg_count} args + 4 caller frame, '
+                f'Stack imbalance in call_script: after cleaning up {arg_count} args + 4 caller frame, '
                 f'current_sp={self.sp_get()} but expected sp_before_call={sp_before_call}'
             )
 
