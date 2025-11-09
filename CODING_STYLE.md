@@ -127,9 +127,11 @@ lhs = stack_pop()  # Second pop gets left operand (below it)
 
 ### 6. Concise Git Commit Messages
 
-Keep commit messages **short and focused** (1-2 sentences).
+**Requirements:**
+- Keep messages **short and focused** (1-2 sentences)
+- **NO signatures, attributions, or tool metadata**
 
-#### ❌ WRONG:
+#### ❌ WRONG (too verbose):
 ```
 Fix binary operation operand order in expand format
 
@@ -151,11 +153,23 @@ Changes:
 - Update all operations: ADD, SUB, MUL, DIV, EQ, NE, LT, LE, GT, GE
 ```
 
+#### ❌ WRONG (with signatures):
+```
+Add disassembler framework
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
 #### ✅ CORRECT:
 ```
 Fix binary operation operand order
+```
 
-Corrected lhs/rhs pop order based on VM C code analysis.
+#### ✅ CORRECT:
+```
+Add disassembler framework
 ```
 
 ## Enforcement
@@ -170,3 +184,4 @@ All code must follow these rules.
 - [ ] All assignments have spaces: `x = value` (not `x=value`)
 - [ ] All comments are in English (no Chinese or other languages)
 - [ ] Commit messages are concise (1-2 sentences)
+- [ ] No Claude Code signatures or tool attributions in commits

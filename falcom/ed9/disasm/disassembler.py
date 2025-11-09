@@ -1,0 +1,185 @@
+"""
+Generic recursive descent disassembler
+"""
+
+from common import *
+from ml import fileio
+
+from .instruction_table import *
+from .instruction import *
+from .basic_block import *
+
+
+class Disassembler:
+    """
+    Generic recursive descent disassembler.
+
+    Works with any instruction set via pluggable InstructionTable.
+    """
+
+    def __init__(self, instruction_table: InstructionTable):
+        self.instruction_table = instruction_table
+
+        # Tracking dictionaries
+        self.disassembled_blocks: dict[int, BasicBlock] = {}   # offset -> completed block
+        self.disassembled_offset: dict[int, Instruction] = {}  # offset -> instruction
+        self.allocated_blocks: dict[int, BasicBlock] = {}      # offset -> allocated block
+
+        # Current state
+        self.current_block: BasicBlock | None = None
+
+    def disasm_function(
+        self,
+        bytecode: bytes | BinaryIO,
+        offset: int = 0,
+        name: str = ''
+    ) -> BasicBlock:
+        """
+        Disassemble a function starting at offset.
+
+        Args:
+            bytecode: Function bytecode or stream
+            offset: Starting offset in bytecode
+            name: Optional function name
+
+        Returns:
+            Entry basic block
+        """
+        # Create FileStream from bytecode
+        fs = fileio.FileStream()
+        if isinstance(bytecode, bytes):
+            fs.OpenMemory(bytecode)
+        else:
+            fs._stream = bytecode
+        fs.Position = offset
+
+        entry_block = self.disasm_block(fs)
+
+        if name:
+            entry_block.name = name
+
+        return entry_block
+
+    def disasm_block(self, fs) -> BasicBlock:
+        """
+        Recursively disassemble a basic block.
+
+        Args:
+            fs: File stream positioned at block start
+
+        Returns:
+            Disassembled basic block
+        """
+        offset = fs.Position
+
+        # Check if already disassembled
+        if offset in self.disassembled_blocks:
+            return self.disassembled_blocks[offset]
+
+        # Create new block
+        block = self.create_block(offset)
+
+        # Mark as disassembled (prevents infinite recursion)
+        self.disassembled_blocks[offset] = block
+
+        # Save previous block context
+        previous_block = self.current_block
+        self.current_block = block
+
+        # Disassemble instructions in this block
+        while True:
+            pos = fs.Position
+
+            # Check if we've reached another block's instructions
+            if pos in self.disassembled_offset:
+                # Reached an instruction that's part of another block
+                break
+
+            # Decode instruction
+            inst = self.instruction_table.decode_instruction(fs, pos)
+
+            # Record instruction
+            self.disassembled_offset[pos] = inst
+            block.instructions.append(inst)
+
+            # Get descriptor
+            desc = inst.descriptor
+
+            # Check for block termination
+            if desc.is_end_block():
+                # Extract branch targets before ending block
+                targets = desc.get_branch_targets(inst, fs.Position)
+                for target in targets:
+                    target_block = self.create_block(target.offset)
+                    block.add_branch(target_block, target.kind)
+                # Terminal instruction - block ends here
+                break
+
+            if desc.is_start_block():
+                # This instruction starts a new block at target offset
+                # Extract branch targets (e.g., return address for PUSH_CALLER_FRAME)
+                targets = desc.get_branch_targets(inst, fs.Position)
+                for target in targets:
+                    # Create block at target, but don't add as branch (no control flow transfer)
+                    self.create_block(target.offset)
+
+            # Check if next position is an allocated block
+            if fs.Position in self.allocated_blocks:
+                # Next instruction belongs to a pre-allocated block
+                break
+
+        # Recursively disassemble all branches
+        for i, branch in enumerate(block.branches):
+            saved_pos = fs.Position
+            fs.Position = branch.offset
+            block.branches[i] = self.disasm_block(fs)
+            fs.Position = saved_pos
+
+        # Restore previous block context
+        self.current_block = previous_block
+
+        return block
+
+    def create_block(self, offset: int) -> BasicBlock:
+        """
+        Create or get a basic block at offset.
+
+        Args:
+            offset: Block starting offset
+
+        Returns:
+            BasicBlock instance
+        """
+        if offset in self.allocated_blocks:
+            return self.allocated_blocks[offset]
+
+        block = BasicBlock(offset=offset)
+        self.allocated_blocks[offset] = block
+
+        return block
+
+    def add_branch(self, offset: int, kind: BranchKind | None = None) -> BasicBlock:
+        """
+        Add a branch from current block to target offset.
+
+        Args:
+            offset: Target offset
+            kind: Branch kind (for conditional branches)
+
+        Returns:
+            Target basic block
+        """
+        target = self.create_block(offset)
+
+        if self.current_block:
+            self.current_block.add_branch(target, kind)
+
+        return target
+
+    def get_instruction(self, offset: int) -> Instruction | None:
+        """Get instruction at offset, if disassembled"""
+        return self.disassembled_offset.get(offset)
+
+    def get_block(self, offset: int) -> BasicBlock | None:
+        """Get basic block at offset, if disassembled"""
+        return self.disassembled_blocks.get(offset)

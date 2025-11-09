@@ -17,9 +17,7 @@ class ScpParser(StrictBase):
 
     def read_header(self):
         fs = self.fs
-
-        hdr = ScpHeader(fs = fs)
-        self.header = hdr
+        self.header = ScpHeader(fs = fs)
 
         func_entries        = self.read_function_entries(fs)
         self.functions      = self.read_functions(fs, func_entries)
