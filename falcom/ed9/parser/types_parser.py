@@ -37,9 +37,9 @@ class FunctionParam:
 
     def __str__(self) -> str:
         if self.default_value is not None:
-            return f'param({self.type}, default = {self.default_value})'
+            return f'param({self.type.get_python_type()}, default = {self.default_value})'
         else:
-            return f'param({self.type})'
+            return f'param({self.type.get_python_type()})'
 
     __repr__ = __str__
 

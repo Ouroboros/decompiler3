@@ -105,7 +105,7 @@ class ScpValue:
         return v
 
     def __str__(self) -> str:
-        return f'ScenaValue<{self.value}>'
+        return f'ScpValue<{self.value!r}>'
 
     __repr__ = __str__
 

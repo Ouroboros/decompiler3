@@ -469,14 +469,21 @@ class LowLevelILCall(LowLevelILStatement, Terminal):
     (not fall-through).
     '''
 
-    def __init__(self, target: Union[str, 'LowLevelILInstruction'],
-                 return_target: Union[str, 'LowLevelILBasicBlock']):
+    def __init__(
+        self,
+        target: Union[str, 'LowLevelILInstruction'],
+        return_target: Union[str, 'LowLevelILBasicBlock'],
+    ):
         super().__init__(LowLevelILOperation.LLIL_CALL)
         self.target = target
         self.return_target = return_target  # Where to return after call (label or block)
+        self.args = []    # for debug only
 
     def __str__(self) -> str:
-        return f'call {self.target}'
+        if self.args:
+            return f'call {self.target}({', '.join(str(arg) for arg in self.args)})'
+        else:
+            return f'call {self.target}'
 
 
 class LowLevelILRet(LowLevelILStatement, Terminal):

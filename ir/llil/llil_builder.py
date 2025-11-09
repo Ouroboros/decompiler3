@@ -44,7 +44,7 @@ class LowLevelILBuilder:
         '''
         self.__current_sp += delta
 
-    def _cleanup_stack(self, argc: int):
+    def _cleanup_stack(self, argc: int) -> list[LowLevelILExpr]:
         '''Clean up stack and vstack without emitting IL - PRIVATE
 
         Adjusts shadow SP and pops from vstack.
@@ -53,11 +53,16 @@ class LowLevelILBuilder:
         Args:
             argc: Number of stack slots to clean up
         '''
+
+        popped_values = []
+
         if argc > 0:
             self.__sp_adjust(-argc)
             # Pop from vstack (will raise if underflow - indicates bug in caller)
             for _ in range(argc):
-                self.__vstack_pop()
+                popped_values.append(self.__vstack_pop())
+
+        return popped_values
 
     def emit_sp_add(self, delta: int, *, hidden_for_formatter: bool = False) -> LowLevelILSpAdd:
         '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)
@@ -549,10 +554,6 @@ class LowLevelILBuilder:
             return_target: Block or label to return to after call (resolved in build_cfg)
             argc: Number of stack slots to clean up (includes func_id + ret_addr + args)
         '''
-        # If argc provided, clean up stack (without emitting IL)
-        # This is for Falcom VM callee cleanup convention
-        if argc is not None:
-            self._cleanup_stack(argc)
 
         self.add_instruction(LowLevelILCall(target, return_target))
 
