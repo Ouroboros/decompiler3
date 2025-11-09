@@ -4,7 +4,8 @@
 
   // Byte order for binary parsing
   // Values: "little" or "big"
-  endian: "little",
+  "endian": "little",
+  "encoding": "UTF8",
 
   // Add more configuration options here as needed
 }

@@ -25,6 +25,7 @@ class Config:
     # Default configuration values
     _defaults = {
         'endian': 'little',
+        'encoding': 'UTF8',
     }
 
     def __new__(cls):
@@ -118,6 +119,11 @@ class Config:
         '''Get byte order configuration'''
         return self.get('endian', 'little')
 
+    @property
+    def encoding(self) -> str:
+        '''Get encoding configuration'''
+        return self.get('encoding', 'UTF8')
+
 
 # Global config instance
 _config = Config()
@@ -128,10 +134,19 @@ def get_config() -> Config:
     return _config
 
 
-def defaultEndian() -> str:
+def default_endian() -> str:
     '''Get default byte order (little/big)'''
     return _config.endian
 
+
+def default_encoding() -> str:
+    '''Get default encoding (UTF8/UTF16)'''
+    return _config.encoding
+
+
+def default_indent() -> str:
+    '''Get default indent'''
+    return '    '
 
 def init_config(args: list[str] = None):
     '''

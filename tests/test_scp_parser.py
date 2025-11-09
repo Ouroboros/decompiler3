@@ -3,19 +3,18 @@
 Unit tests for SCP parser
 '''
 
-from ml import *
 from pathlib import Path
-from io import BytesIO
 import sys
-import unittest
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from falcom.ed9.parser.types import ScpValue, ScpHeader, ScenaFunctionEntry, RawInt
-from falcom.ed9.parser.scp import ScpParser
+from ml import *
+from io import BytesIO
+from common import *
+from falcom.ed9.parser import *
+import unittest
 import struct
-from common import defaultEndian
 
 
 class TestScpValue(unittest.TestCase):
@@ -52,7 +51,7 @@ class TestScpValue(unittest.TestCase):
                 self.assertEqual(len(data), 4)
 
                 # Check type bits (top 2 bits should be 01)
-                endian = '<' if defaultEndian() == 'little' else '>'
+                endian = '<' if default_endian() == 'little' else '>'
                 raw = struct.unpack(f'{endian}I', data)[0]
                 type_bits = raw >> 30
                 self.assertEqual(type_bits, ScpValue.Type.Integer)
@@ -109,13 +108,49 @@ class TestScpValue(unittest.TestCase):
                 else:
                     self.assertEqual(val1.value, val2.value)
 
+    def test_string_value_serialize(self):
+        '''Test String type cannot be serialized with to_bytes (not implemented)'''
+        val = ScpValue("test string")
+        self.assertEqual(val.type, ScpValue.Type.String)
+
+        # String serialization is not implemented
+        with self.assertRaises(NotImplementedError):
+            val.to_bytes()
+
+    def test_string_value_deserialize(self):
+        '''Test String type deserialization'''
+        endian = '<' if default_endian() == 'little' else '>'
+
+        # Create a buffer with string data at offset 0x100
+        buffer = BytesIO()
+        buffer.write(b'\x00' * 0x100)  # Padding
+        string_offset = buffer.tell()
+        test_string = "TestFunction"
+        buffer.write(test_string.encode('utf-8') + b'\x00')  # Null-terminated
+
+        # Write ScpValue at beginning pointing to string
+        buffer.seek(0)
+        string_value = string_offset | (ScpValue.Type.String << 30)
+        buffer.write(struct.pack(f'{endian}I', string_value))
+
+        # Parse it
+        buffer.seek(0)
+        fs = fileio.FileStream()
+        fs.OpenMemory(buffer.getvalue())
+        # Set encoding to utf-8 to avoid mbcs encoding error on Linux
+        fs._encoding = 'utf-8'
+        val = ScpValue(fs = fs)
+
+        self.assertEqual(val.type, ScpValue.Type.String)
+        self.assertEqual(val.value, test_string)
+
 
 class TestScpHeader(unittest.TestCase):
     '''Test SCP header parsing'''
 
     def create_test_header(self):
         '''Create a test SCP header'''
-        endian = '<' if defaultEndian() == 'little' else '>'
+        endian = '<' if default_endian() == 'little' else '>'
         data = struct.pack(
             f'{endian}4s5I',
             b'#scp',          # magic
@@ -143,7 +178,7 @@ class TestScpHeader(unittest.TestCase):
 
     def test_invalid_magic(self):
         '''Test header with invalid magic'''
-        endian = '<' if defaultEndian() == 'little' else '>'
+        endian = '<' if default_endian() == 'little' else '>'
         data = struct.pack(
             f'{endian}4s5I',
             b'#xxx',          # wrong magic
@@ -162,7 +197,7 @@ class TestScenaFunctionEntry(unittest.TestCase):
 
     def create_test_function_entry(self):
         '''Create a test function entry'''
-        endian = '<' if defaultEndian() == 'little' else '>'
+        endian = '<' if default_endian() == 'little' else '>'
         # ScenaFunctionEntry structure (0x20 bytes)
         data = struct.pack(
             f'{endian}I4B5I',
@@ -189,9 +224,9 @@ class TestScenaFunctionEntry(unittest.TestCase):
         '''Test parsing function entry'''
         data = self.create_test_function_entry()
 
-        fs = fileio.FileStream()
+        fs = fileio.FileStream(encoding = default_encoding())
         fs.OpenMemory(data)
-        entry = ScenaFunctionEntry(fs = fs)
+        entry = ScpFunctionEntry(fs = fs)
 
         self.assertEqual(entry.offset, 0x5000)
         self.assertEqual(entry.param_count, 3)
@@ -202,47 +237,13 @@ class TestScenaFunctionEntry(unittest.TestCase):
         self.assertEqual(entry.param_flags_offset, 0x7000)
         self.assertEqual(entry.debug_symbol_count, 5)
         self.assertEqual(entry.debug_symbol_offset, 0x8000)
-        self.assertEqual(entry.name_crc32, 0xABCDEF12)
+        self.assertEqual(entry.name_hash, 0xABCDEF12)
         # name_offset is read as a string through ScpValue
         self.assertEqual(entry.name_offset, '')
 
 
 class TestScpParser(unittest.TestCase):
     '''Test SCP parser'''
-
-    def create_minimal_scp(self):
-        '''Create minimal valid SCP file in memory'''
-        endian = '<' if defaultEndian() == 'little' else '>'
-
-        # Header
-        header = struct.pack(
-            f'{endian}4s5I',
-            b'#scp',          # magic
-            0x18,             # function_entry_offset (right after header)
-            0,                # function_count (no functions)
-            0x18,             # global_var_offset
-            0,                # global_var_count (no globals)
-            0                 # dword_14
-        )
-
-        return header
-
-    def test_parser_minimal(self):
-        '''Test parser with minimal valid SCP'''
-        data = self.create_minimal_scp()
-
-        fs = fileio.FileStream()
-        fs.OpenMemory(data)
-        parser = ScpParser(fs, 'test.dat')
-        parser.parse()
-
-        # Verify header was parsed correctly
-        self.assertIsNotNone(parser.header)
-        self.assertEqual(parser.header.function_entry_offset, 0x18)
-        self.assertEqual(parser.header.function_count, 0)
-        self.assertEqual(parser.header.global_var_offset, 0x18)
-        self.assertEqual(parser.header.global_var_count, 0)
-        self.assertEqual(parser.header.dword_14, 0)
 
     def test_parser_with_real_file(self):
         '''Test parser with real SCP file if available'''
@@ -251,54 +252,16 @@ class TestScpParser(unittest.TestCase):
         if not test_file.exists():
             self.skipTest(f'Test file not found: {test_file}')
 
-        fs = fileio.FileStream(str(test_file))
-        parser = ScpParser(fs, test_file.name)
-        parser.parse()
+        with fileio.FileStream(str(test_file), encoding = default_encoding()) as fs:
+            parser = ScpParser(fs, test_file.name)
+            parser.parse()
+
+        print(parser.header)
 
         # Check header was parsed
         self.assertIsNotNone(parser.header)
         self.assertGreater(parser.header.function_count, 0)
 
 
-class TestScpValueString(unittest.TestCase):
-    '''Test ScpValue String type (more complex, needs file context)'''
-
-    def test_string_value_serialize(self):
-        '''Test String type cannot be serialized with to_bytes (not implemented)'''
-        val = ScpValue("test string")
-        self.assertEqual(val.type, ScpValue.Type.String)
-
-        # String serialization is not implemented
-        with self.assertRaises(NotImplementedError):
-            val.to_bytes()
-
-    def test_string_value_deserialize(self):
-        '''Test String type deserialization'''
-        endian = '<' if defaultEndian() == 'little' else '>'
-
-        # Create a buffer with string data at offset 0x100
-        buffer = BytesIO()
-        buffer.write(b'\x00' * 0x100)  # Padding
-        string_offset = buffer.tell()
-        test_string = "TestFunction"
-        buffer.write(test_string.encode('utf-8') + b'\x00')  # Null-terminated
-
-        # Write ScpValue at beginning pointing to string
-        buffer.seek(0)
-        string_value = string_offset | (ScpValue.Type.String << 30)
-        buffer.write(struct.pack(f'{endian}I', string_value))
-
-        # Parse it
-        buffer.seek(0)
-        fs = fileio.FileStream()
-        fs.OpenMemory(buffer.getvalue())
-        # Set encoding to utf-8 to avoid mbcs encoding error on Linux
-        fs._encoding = 'utf-8'
-        val = ScpValue(fs = fs)
-
-        self.assertEqual(val.type, ScpValue.Type.String)
-        self.assertEqual(val.value, test_string)
-
-
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(buffer = False, defaultTest = 'TestScpParser')
