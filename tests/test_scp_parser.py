@@ -247,7 +247,11 @@ class TestScpParser(unittest.TestCase):
 
     def test_parser_with_real_file(self):
         '''Test parser with real SCP file if available'''
+
+        ED9_DATA_DIR = Path(r'D:\Game\Steam\steamapps\common\THE LEGEND OF HEROES KURO NO KISEKI\decrypted\tc\f\script\scena')
+
         test_file = Path(__file__).parent / 'mp3010_01.dat'
+        # test_file = ED9_DATA_DIR / 'c0600.dat'
 
         if not test_file.exists():
             self.skipTest(f'Test file not found: {test_file}')
@@ -255,6 +259,16 @@ class TestScpParser(unittest.TestCase):
         with fileio.FileStream(str(test_file), encoding = default_encoding()) as fs:
             parser = ScpParser(fs, test_file.name)
             parser.parse()
+
+        for i, func in enumerate(parser.functions):
+            print(f'[{i}] {func}')
+            print()
+
+        print('global vars:')
+
+        for i, gvar in enumerate(parser.global_vars):
+            print(f'[{i}] {gvar}')
+            print()
 
         print(parser.header)
 

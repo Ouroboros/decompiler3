@@ -3,9 +3,11 @@ from .types_parser import *
 from pprint import pprint
 
 class ScpParser(StrictBase):
-    fs      : fileio.FileStream
-    name    : str
-    header  : ScpHeader
+    fs              : fileio.FileStream
+    name            : str
+    header          : ScpHeader
+    functions       : list[Function]
+    global_vars     : list[GlobalVar]
 
     def __init__(self, fs: fileio.FileStream, name: str = ''):
         self.fs = fs
@@ -19,8 +21,9 @@ class ScpParser(StrictBase):
         hdr = ScpHeader(fs = fs)
         self.header = hdr
 
-        func_entries    = self.read_function_entries(fs)
-        functions       = self.read_functions(fs, func_entries)
+        func_entries        = self.read_function_entries(fs)
+        self.functions      = self.read_functions(fs, func_entries)
+        self.global_vars    = self.read_global_vars(fs)
 
     def read_function_entries(self, fs: fileio.FileStream):
         return [ScpFunctionEntry(fs = fs) for _ in range(self.header.function_count)]
@@ -86,24 +89,7 @@ class ScpParser(StrictBase):
 
                 func.debug_info.append(info)
 
-            print(func)
-            print()
-
-            # debug_info_list = self.read_debug_info(fs, f) if f.debug_info_count != 0 else []
-            # for dbg_info in debug_info_list:
-            #     info = FunctionCallDebugInfo()
-
-        # for idx, f in enumerate(func_entries):
-        #     if f.debug_info_count == 0:
-        #         continue
-
-        #     print(f'[{idx}]')
-        #     print(f)
-        #     for d in f.debug_info:
-        #         s = [f'    {l}' for l in str(d).splitlines()]
-        #         print(f'{'\n'.join(s)}\n')
-
-        #     print()
+        return functions
 
     def read_debug_info(self, fs: fileio.FileStream, func_entry: ScpFunctionEntry) -> list[ScpFunctionCallDebugInfo]:
         debug_info_list = []
@@ -117,3 +103,24 @@ class ScpParser(StrictBase):
             debug_info_list.append(dbg_info)
 
         return debug_info_list
+
+    def read_global_vars(self, fs: fileio.FileStream) -> list[ScpGlobalVar]:
+        hdr = self.header
+        fs.Position = hdr.global_var_offset
+
+        global_vars: list[GlobalVar] = []
+
+        for i in range(hdr.global_var_count):
+            gvar_info = ScpGlobalVar(fs = fs)
+            var_name = ScpValue(fs = fs).value
+            var_type = gvar_info.type
+
+            global_var = GlobalVar(
+                index = i,
+                name = var_name,
+                type = var_type,
+            )
+
+            global_vars.append(global_var)
+
+        return global_vars

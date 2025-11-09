@@ -2,21 +2,85 @@ from ml import *
 from common import *
 from . import utils
 
-class ScenaFunctionParamFlags(IntEnum2):
+class ScpParamFlags(IntEnum2):
     Pointer     = 0x04
     Nullable    = 0x08
 
     Mask        = 0x0C
 
-class ScenaFunctionParamType(IntEnum2):
+
+class ScpParamType(IntEnum2):
     Value   = 0x01
     Offset  = 0x02
 
     Mask    = 0x03
 
-    Pointer         = Value | ScenaFunctionParamFlags.Pointer
-    NullableValue   = Value | ScenaFunctionParamFlags.Nullable
-    NullableOffset  = Offset | ScenaFunctionParamFlags.Nullable
+    Pointer         = Value | ScpParamFlags.Pointer
+    NullableValue   = Value | ScpParamFlags.Nullable
+    NullableOffset  = Offset | ScpParamFlags.Nullable
+
+
+class ScpParamFlags:
+    def __init__(self, typ: object = None, *, fs: fileio.FileStream = None):
+        self.flags = 0
+        self.defaultValue = None
+
+        if typ is not None:
+            if typ == Value32:
+                self.flags = ScpParamType.Value
+
+            elif typ == Nullable32:
+                self.flags = ScpParamType.NullableValue
+
+            elif typ == str:
+                self.flags = ScpParamType.Offset
+
+            elif typ == NullableStr:
+                self.flags = ScpParamType.NullableOffset
+
+            elif typ == Pointer:
+                self.flags = ScpParamType.Pointer
+
+            else:
+                raise NotImplementedError(f'unsupported type: {typ}')
+
+        self.from_stream(fs)
+
+    def from_stream(self, fs: fileio.FileStream):
+        if not fs:
+            return
+
+        self.flags = fs.ReadULong()
+
+    def to_bytes(self) -> bytes:
+        return utils.int_to_bytes(self.flags, 4)
+
+    def get_python_type(self) -> str:
+        # type = self.flags & ScenaFunctionParamType.Mask
+
+        match self.flags:
+            case ScpParamType.Value:
+                return 'Value32'
+
+            case ScpParamType.Offset:
+                return 'str'
+
+            case ScpParamType.NullableValue:
+                return 'Nullable32'
+
+            case ScpParamType.NullableOffset:
+                return 'NullableStr'
+
+            case ScpParamType.Pointer:
+                return 'Pointer'
+
+        raise NotImplementedError(str(self))
+
+    def __str__(self) -> str:
+        return f'flags = 0x{self.flags:08X}'
+
+    __repr__ =  __str__
+
 
 class RawInt(int):
     def __repr__(self) -> str:
@@ -26,6 +90,7 @@ Value32     = int | float
 Nullable32  = Value32 | None
 NullableStr = str | None
 Pointer     = object
+
 
 class ScpValue:
     class Type(IntEnum2):
@@ -201,77 +266,6 @@ class ScpFunctionEntry(StrictBase):
     __repr__ = __str__
 
 
-class ScpParamFlags:
-    def __init__(self, typ: object = None, *, fs: fileio.FileStream = None):
-        self.flags = 0
-        self.defaultValue = None
-
-        if typ is not None:
-            if typ == Value32:
-                self.flags = ScenaFunctionParamType.Value
-
-            elif typ == Nullable32:
-                self.flags = ScenaFunctionParamType.NullableValue
-
-            elif typ == str:
-                self.flags = ScenaFunctionParamType.Offset
-
-            elif typ == NullableStr:
-                self.flags = ScenaFunctionParamType.NullableOffset
-
-            elif typ == Pointer:
-                self.flags = ScenaFunctionParamType.Pointer
-
-            else:
-                raise NotImplementedError(f'unsupported type: {typ}')
-
-        self.from_stream(fs)
-
-    def from_stream(self, fs: fileio.FileStream):
-        if not fs:
-            return
-
-        self.flags = fs.ReadULong()
-
-    def to_bytes(self) -> bytes:
-        return utils.int_to_bytes(self.flags, 4)
-
-    def to_python(self) -> list[str]:
-        f = [
-            'ScenaParamFlags(',
-            f'{default_indent()}flags = 0x{self.flags:08X},',
-            ')',
-        ]
-
-        return f
-
-    def get_python_type(self) -> str:
-        # type = self.flags & ScenaFunctionParamType.Mask
-
-        match self.flags:
-            case ScenaFunctionParamType.Value:
-                return 'Value32'
-
-            case ScenaFunctionParamType.Offset:
-                return 'str'
-
-            case ScenaFunctionParamType.NullableValue:
-                return 'Nullable32'
-
-            case ScenaFunctionParamType.NullableOffset:
-                return 'NullableStr'
-
-            case ScenaFunctionParamType.Pointer:
-                return 'Pointer'
-
-        raise NotImplementedError(str(self))
-
-    def __str__(self) -> str:
-        return f'flags = 0x{self.flags:08X}'
-
-    __repr__ =  __str__
-
-
 class ScpFunctionCallDebugInfoArg(StrictBase):
     value : ScpValue
     type  : int
@@ -321,3 +315,24 @@ class ScpFunctionCallDebugInfo(StrictBase):
         ])
 
     __repr__ = __str__
+
+class ScpGlobalVar(StrictBase):
+    name_offset : int
+    type        : Type
+
+    class Type(IntEnum2):
+        Integer = 0
+        String  = 1
+
+    def __init__(self, *, fs: fileio.FileStream = None):
+        self.from_stream(fs)
+
+    def from_stream(self, fs: fileio.FileStream):
+        if not fs:
+            return
+
+        self.name_offset = fs.ReadULong()
+        self.type = ScpGlobalVar.Type(fs.ReadULong())
+
+    def to_bytes(self) -> bytes:
+        return utils.int_to_bytes(self.name_offset, 4) + utils.int_to_bytes(self.type, 4)

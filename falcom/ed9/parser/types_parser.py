@@ -1,6 +1,22 @@
 from .types_scp import *
 from .crc32 import hash_func_Name
 
+class GlobalVar:
+    index       : int
+    name        : str
+    type        : ScpGlobalVar.Type
+
+    def __init__(self, index: int, name: str, type: ScpGlobalVar.Type):
+        self.index = index
+        self.name = name
+        self.type = type
+
+    def __str__(self) -> str:
+        return f'global(index = {self.index}, name = {self.name!r}, type = {self.type})'
+
+    __repr__ = __str__
+
+
 class FunctionCallDebugInfo:
     class ArgInfo(StrictBase):
         value : ScpValue
@@ -26,6 +42,7 @@ class FunctionCallDebugInfo:
         return '\n'.join(lines)
 
     __repr__ = __str__
+
 
 class FunctionParam:
     type            : ScpParamFlags
@@ -57,19 +74,25 @@ class Function:
         return hash_func_Name(self.name)
 
     def __str__(self) -> str:
-        lines = [self.name]
+        params = ', '.join([
+            param.type.get_python_type() if param.default_value is None
+                else f'{param.type.get_python_type()} = {param.default_value.value!r}'
+            for param in self.params
+        ])
+
+        lines = [
+            f'{self.name}({params})',
+        ]
+
         indent = default_indent()
 
-        for param in self.params:
-            lines.append(f'{indent}{param}')
+        # if self.debug_info:
+        #     for dbg in self.debug_info:
+        #         dbg_lines = str(dbg).splitlines()
+        #         for dbg_line in dbg_lines:
+        #             lines.append(f'{indent}{dbg_line}')
 
-        if self.debug_info:
-            for dbg in self.debug_info:
-                dbg_lines = str(dbg).splitlines()
-                for dbg_line in dbg_lines:
-                    lines.append(f'{indent}{dbg_line}')
-
-                lines.append('')
+        #         lines.append('')
 
         return '\n'.join(lines)
 
