@@ -338,28 +338,6 @@ class ED9InstructionTable(InstructionTable):
 
         return operands
 
-    def decode_instruction(
-        self,
-        fs      : 'fileio.FileStream',
-        offset  : int
-    ) -> 'Instruction':
-        inst = super().decode_instruction(fs, offset)
-
-        # Replace descriptor for PUSH variants with new descriptor
-        if inst.opcode == ED9Opcode.PUSH:
-            # Get mnemonic from temporary attribute set by _decode_push
-            mnemonic = getattr(inst, '_push_mnemonic', 'PUSH')
-            if mnemonic != 'PUSH':
-                inst.descriptor = ED9InstructionDescriptor(
-                    opcode       = ED9Opcode.PUSH,
-                    mnemonic     = mnemonic,
-                    operand_fmt  = inst.descriptor.operand_fmt,
-                    flags        = InstructionFlags.NONE
-                )
-                delattr(inst, '_push_mnemonic')
-
-        return inst
-
     def _decode_push(self, inst: Instruction, operands: list[Operand]):
         """Decode PUSH instruction to specific variant based on value type"""
 

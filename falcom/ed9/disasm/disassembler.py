@@ -41,7 +41,7 @@ class Disassembler:
 
     def disasm_function(
         self,
-        bytecode: bytes | fileio.FileStream,
+        stream: bytes | fileio.FileStream,
         offset: int = 0,
         name: str = ''
     ) -> BasicBlock:
@@ -58,15 +58,15 @@ class Disassembler:
         """
         # Create FileStream from bytecode
 
-        if isinstance(bytecode, fileio.FileStream):
-            fs = bytecode
+        if isinstance(stream, fileio.FileStream):
+            fs = stream
 
-        elif isinstance(bytecode, bytes):
+        elif isinstance(stream, bytes):
             fs = fileio.FileStream(encoding = default_encoding())
-            fs.OpenMemory(bytecode)
+            fs.OpenMemory(stream)
 
         else:
-            raise ValueError(f'Invalid bytecode type: {type(bytecode)}')
+            raise ValueError(f'Invalid bytecode type: {type(stream)}')
 
         fs.Position = offset
 
