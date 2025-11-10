@@ -8,25 +8,37 @@ class ScpParser(StrictBase):
     header          : ScpHeader
     functions       : list[Function]
     global_vars     : list[GlobalVar]
+    function_map    : dict[str, Function]
 
     def __init__(self, fs: fileio.FileStream, name: str = ''):
         self.fs = fs
 
-    def parse(self):
-        self.read_header()
+    def get_func_by_name(self, name: str) -> Function:
+        return self.function_map[name]
 
-    def read_header(self):
+    def get_func_argc(self, func_id: int) -> int:
+        if func_id >= len(self.functions):
+            raise ValueError(f'func_id out of range: {func_id} >= {len(self.functions)}')
+
+        return len(self.functions[func_id].params)
+
+    def parse(self):
+        self._read_header()
+
+    def _read_header(self):
         fs = self.fs
         self.header = ScpHeader(fs = fs)
 
-        func_entries        = self.read_function_entries(fs)
-        self.functions      = self.read_functions(fs, func_entries)
-        self.global_vars    = self.read_global_vars(fs)
+        func_entries        = self._read_function_entries(fs)
+        self.functions      = self._read_functions(fs, func_entries)
+        self.global_vars    = self._read_global_vars(fs)
 
-    def read_function_entries(self, fs: fileio.FileStream):
+        self.function_map = {func.name: func for func in self.functions}
+
+    def _read_function_entries(self, fs: fileio.FileStream):
         return [ScpFunctionEntry(fs = fs) for _ in range(self.header.function_count)]
 
-    def read_functions(self, fs: fileio.FileStream, func_entries: list[ScpFunctionEntry]) -> list[Function]:
+    def _read_functions(self, fs: fileio.FileStream, func_entries: list[ScpFunctionEntry]) -> list[Function]:
         functions: list[Function] = []
 
         # load function
@@ -35,6 +47,7 @@ class ScpParser(StrictBase):
             func = Function()
 
             func.is_common_func = entry.is_common_func == 1
+            func.offset = entry.offset
 
             func_name = ScpValue().from_value(entry.name_offset, fs = fs)
             func.name = func_name.value
@@ -102,7 +115,7 @@ class ScpParser(StrictBase):
 
         return debug_info_list
 
-    def read_global_vars(self, fs: fileio.FileStream) -> list[ScpGlobalVar]:
+    def _read_global_vars(self, fs: fileio.FileStream) -> list[ScpGlobalVar]:
         hdr = self.header
         fs.Position = hdr.global_var_offset
 

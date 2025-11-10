@@ -4,10 +4,19 @@ Generic recursive descent disassembler
 
 from common import *
 from ml import fileio
+from typing import Callable
 
 from .instruction_table import *
 from .instruction import *
 from .basic_block import *
+
+
+@dataclass
+class DisassemblerContext:
+    """Context for disassembler with callbacks"""
+    instruction_table   : 'InstructionTable' = None
+    get_func_argc       : Callable[[int], int | None] = None  # func_id -> argc
+    optimize_instruction: Callable[['Instruction', 'BasicBlock', 'DisassemblerContext'], list[BranchTarget]] = None  # current_inst, block, context -> branch_targets
 
 
 class Disassembler:
@@ -17,8 +26,10 @@ class Disassembler:
     Works with any instruction set via pluggable InstructionTable.
     """
 
-    def __init__(self, instruction_table: InstructionTable):
+    def __init__(self, instruction_table: InstructionTable, context: DisassemblerContext = None):
         self.instruction_table = instruction_table
+        self.context = context or DisassemblerContext()
+        self.context.instruction_table = instruction_table
 
         # Tracking dictionaries
         self.disassembled_blocks: dict[int, BasicBlock] = {}   # offset -> completed block
@@ -30,7 +41,7 @@ class Disassembler:
 
     def disasm_function(
         self,
-        bytecode: bytes | BinaryIO,
+        bytecode: bytes | fileio.FileStream,
         offset: int = 0,
         name: str = ''
     ) -> BasicBlock:
@@ -46,11 +57,17 @@ class Disassembler:
             Entry basic block
         """
         # Create FileStream from bytecode
-        fs = fileio.FileStream()
-        if isinstance(bytecode, bytes):
+
+        if isinstance(bytecode, fileio.FileStream):
+            fs = bytecode
+
+        elif isinstance(bytecode, bytes):
+            fs = fileio.FileStream(encoding = default_encoding())
             fs.OpenMemory(bytecode)
+
         else:
-            fs._stream = bytecode
+            raise ValueError(f'Invalid bytecode type: {type(bytecode)}')
+
         fs.Position = offset
 
         entry_block = self.disasm_block(fs)
@@ -97,6 +114,7 @@ class Disassembler:
 
             # Decode instruction
             inst = self.instruction_table.decode_instruction(fs, pos)
+            print(f'[0x{pos:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
 
             # Record instruction
             self.disassembled_offset[pos] = inst
@@ -105,15 +123,27 @@ class Disassembler:
             # Get descriptor
             desc = inst.descriptor
 
+            # Call optimization callback for every instruction
+            opt_targets = []
+            if self.context.optimize_instruction:
+                opt_targets = self.context.optimize_instruction(inst, block, self.context)
+
             # Check for block termination
             if desc.is_end_block():
                 # Extract branch targets before ending block
                 targets = desc.get_branch_targets(inst, fs.Position)
+                targets.extend(opt_targets)
+
                 for target in targets:
                     target_block = self.create_block(target.offset)
                     block.add_branch(target_block, target.kind)
                 # Terminal instruction - block ends here
                 break
+
+            # Process optimization targets for non-END_BLOCK instructions
+            for target in opt_targets:
+                target_block = self.create_block(target.offset)
+                block.add_branch(target_block, target.kind)
 
             if desc.is_start_block():
                 # This instruction starts a new block at target offset

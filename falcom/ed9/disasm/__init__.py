@@ -21,7 +21,9 @@ __all__ = [
     'InstructionFlags',
     'BranchTarget',
     'Disassembler',
+    'DisassemblerContext',
     'ED9Opcode',
     'ED9InstructionTable',
     'ED9_INSTRUCTION_TABLE',
+    'ed9_optimize_instruction',
 ]

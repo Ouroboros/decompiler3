@@ -62,6 +62,7 @@ class FunctionParam:
 
 class Function:
     name            : str
+    offset          : int
     params          : list[FunctionParam]
     is_common_func  : bool
     debug_info      : list[FunctionCallDebugInfo]

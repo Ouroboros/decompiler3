@@ -7,10 +7,13 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+from ml import *
 from falcom.ed9.disasm import *
+from falcom.ed9.parser import *
+from pathlib import Path
 
 
-def print_block(block, visited=None, indent=0, all_blocks=None):
+def print_block(block: BasicBlock, visited=None, indent=0, all_blocks=None):
     """Recursively print basic block and its successors"""
     if visited is None:
         visited = set()
@@ -26,7 +29,7 @@ def print_block(block, visited=None, indent=0, all_blocks=None):
             if b.instructions:  # Skip empty blocks
                 print(f'Block {b.name}:')
                 for inst in b.instructions:
-                    print(f'  {inst.offset:08X}: {inst}')
+                    print(f'  {inst.offset:08X}: {inst.descriptor.format_instruction(inst)}')
                 if b.branches:
                     branch_names = ', '.join(br.name for br in b.branches)
                     print(f'  → {branch_names}')
@@ -45,7 +48,7 @@ def print_block(block, visited=None, indent=0, all_blocks=None):
 
     print(f'{"  " * indent}Block {block.name}:')
     for inst in block.instructions:
-        print(f'{"  " * indent}  {inst.offset:08X}: {inst}')
+        print(f'{"  " * indent}  {inst.offset:08X}: {inst.descriptor.format_instruction(inst)}')
 
     if block.branches:
         print(f'{"  " * indent}  Branches:')
@@ -167,18 +170,43 @@ def test_loop():
     # Disassemble
     disasm = Disassembler(ED9_INSTRUCTION_TABLE)
 
-    entry = disasm.disasm_function(bytecode, offset=0, name='loop_test')
+    entry = disasm.disasm_function(bytecode, offset = 0, name = 'loop_test')
 
     # Print result
     print_block(entry)
     print()
 
 
+def test_scp_parser():
+    DAT_PATH = Path(__file__).parent.parent / 'tests'
+    test_file = DAT_PATH / 'mp3010_01.dat'
+
+    with fileio.FileStream(str(test_file), encoding = default_encoding()) as fs:
+        parser = ScpParser(fs, test_file.name)
+        parser.parse()
+
+        func_init = parser.get_func_by_name('Init')
+
+        # Create context with callbacks
+        context = DisassemblerContext(
+            get_func_argc        = lambda func_id: parser.get_func_argc(func_id),
+            optimize_instruction = ed9_optimize_instruction
+        )
+
+        disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
+
+        entry = disasm.disasm_function(fs, offset = func_init.offset, name = func_init.name)
+
+        print_block(entry)
+        print()
+
+
 def main():
     # test_simple_function()
     # test_conditional()
     # test_caller_frame()
-    test_loop()  # TODO: Fix backward jump handling
+    # test_loop()
+    test_scp_parser()
 
 
 if __name__ == '__main__':

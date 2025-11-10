@@ -6,11 +6,66 @@ Based on Decompiler2/Falcom/ED9/InstructionTable/scena.py
 
 from common import *
 from ml import fileio
+from typing import TYPE_CHECKING
 
 from .instruction_table import *
 from .instruction import *
 from .basic_block import *
 from ..parser.types_scp import *
+
+# ED9-specific operand types
+class ED9OperandType(IntEnum2):
+    """ED9-specific operand types extending base OperandType"""
+    Func    = OperandType.UserDefined + 1  # Function ID
+    Value   = OperandType.UserDefined + 2  # ScpValue
+
+# ED9 operand descriptor with extended functionality
+class ED9OperandDescriptor(OperandDescriptor):
+    """ED9-specific operand descriptor"""
+
+    def read_value(self, fs: fileio.FileStream) -> Any:
+        """Read ED9-specific operand values"""
+        match self.format.type:
+            case ED9OperandType.Func:
+                return fs.ReadUShort()
+
+            case ED9OperandType.Value:
+                return ScpValue(fs=fs)
+
+            case _:
+                return super().read_value(fs)
+
+    @staticmethod
+    def format_operand(operand: Operand) -> str:
+        """Format ED9-specific operands"""
+        match operand.descriptor.format.type:
+            case ED9OperandType.Func:
+                return f'func_{operand.value}'
+
+            case ED9OperandType.Value:
+                return str(operand.value)
+
+            case OperandType.String:
+                return f'"{operand.value}"'
+
+            case _:
+                return OperandDescriptor.format_operand(operand)
+
+# ED9 operand descriptor factory
+def _ed9_oprdesc(oprType: OperandType | ED9OperandType, is_hex: bool = False):
+    return ED9OperandDescriptor(OperandFormat(oprType, is_hex=is_hex))
+
+# Extend format table with ED9-specific types
+ED9_FORMAT_TABLE = OperandDescriptor.formatTable.copy()
+ED9_FORMAT_TABLE.update({
+    'F' : _ed9_oprdesc(ED9OperandType.Func),
+    'V' : _ed9_oprdesc(ED9OperandType.Value),
+    'S' : _ed9_oprdesc(OperandType.String),
+    'L' : _ed9_oprdesc(OperandType.String),
+})
+
+if TYPE_CHECKING:
+    from .disassembler import DisassemblerContext
 
 
 @dataclass
@@ -25,7 +80,7 @@ class InstructionEntry:
 # ED9 Instruction Table
 ED9_OPCODE_TABLE = [
     # Stack operations
-    InstructionEntry(0x00, 'PUSH',                    'V'),       # Special: decoded to PUSH_INT/PUSH_FLOAT/PUSH_STR
+    InstructionEntry(0x00, 'PUSH',                    'CV'),       # Special: decoded to PUSH_INT/PUSH_FLOAT/PUSH_STR
     InstructionEntry(0x01, 'POP',                     'C'),
     InstructionEntry(0x02, 'LOAD_STACK',              'i'),
     InstructionEntry(0x03, 'LOAD_STACK_DEREF',        'i'),
@@ -84,6 +139,14 @@ ED9_OPCODE_TABLE = [
     InstructionEntry(0x26, 'DEBUG_SET_LINENO',        'H'),
     InstructionEntry(0x27, 'POPN',                    'C'),
     InstructionEntry(0x28, 'DEBUG_LOG',               'L'),
+
+    # Pseudo-instructions (optimized from other instructions)
+    InstructionEntry(0x1000, 'PUSH_CURRENT_FUNC_ID',  ''),
+    InstructionEntry(0x1001, 'PUSH_RET_ADDR',         'O'),
+    InstructionEntry(0x1002, 'PUSH_RAW',              'I'),
+    InstructionEntry(0x1003, 'PUSH_INT',              'I'),
+    InstructionEntry(0x1004, 'PUSH_FLOAT',            'f'),
+    InstructionEntry(0x1005, 'PUSH_STR',              'S'),
 ]
 
 # Helper to lookup opcode from table
@@ -156,9 +219,18 @@ class ED9Opcode(IntEnum2):
     POPN                    = _opcode('POPN')
     DEBUG_LOG               = _opcode('DEBUG_LOG')
 
+    # Pseudo-instructions
+    PUSH_CURRENT_FUNC_ID    = _opcode('PUSH_CURRENT_FUNC_ID')
+    PUSH_RET_ADDR           = _opcode('PUSH_RET_ADDR')
+    PUSH_RAW                = _opcode('PUSH_RAW')
+    PUSH_INT                = _opcode('PUSH_INT')
+    PUSH_FLOAT              = _opcode('PUSH_FLOAT')
+    PUSH_STR                = _opcode('PUSH_STR')
+
 
 class ED9InstructionDescriptor(InstructionDescriptor):
     """ED9-specific instruction descriptor with operand format"""
+    _allow_creation = True
 
     def __init__(
         self,
@@ -167,8 +239,14 @@ class ED9InstructionDescriptor(InstructionDescriptor):
         operand_fmt: str = '',
         flags: InstructionFlags = InstructionFlags.NONE
     ):
+        if not ED9InstructionDescriptor._allow_creation:
+            raise RuntimeError('Cannot create ED9InstructionDescriptor after ED9InstructionTable initialization')
         super().__init__(opcode, mnemonic, flags)
         self.operand_fmt = operand_fmt
+
+    def format_operands(self, operands: list[Operand]) -> str:
+        """Format operands for display (ED9-specific)"""
+        return ', '.join(ED9OperandDescriptor.format_operand(op) for op in operands)
 
     def get_branch_targets(self, inst, current_pos: int) -> list[BranchTarget]:
         """Extract branch targets from instruction"""
@@ -198,9 +276,10 @@ class ED9InstructionDescriptor(InstructionDescriptor):
     def _get_offset_operand(self, inst) -> int | None:
         """Extract offset operand from instruction"""
         for op in inst.operands:
-            if op.type == OperandType.OFFSET:
+            if op.descriptor.format.type == OperandType.Offset:
                 return op.value
         return None
+
 
 
 class ED9InstructionTable(InstructionTable):
@@ -209,6 +288,8 @@ class ED9InstructionTable(InstructionTable):
     def __init__(self):
         self.descriptors: dict[int, ED9InstructionDescriptor] = {}
         self._init_table()
+        # Disable further descriptor creation
+        ED9InstructionDescriptor._allow_creation = False
 
     def _init_table(self):
         """Initialize instruction table from ED9_OPCODE_TABLE"""
@@ -233,92 +314,177 @@ class ED9InstructionTable(InstructionTable):
 
     def read_operands(
         self,
-        fs: fileio.FileStream,
-        descriptor: InstructionDescriptor,
-        offset: int
+        fs          : fileio.FileStream,
+        inst        : Instruction,
+        offset      : int
     ) -> list[Operand]:
         """Read operands according to format string"""
+        descriptor = inst.descriptor
         if not isinstance(descriptor, ED9InstructionDescriptor):
             raise TypeError('Expected ED9InstructionDescriptor')
 
-        operands = []
-        fmt = descriptor.operand_fmt
+        # Get operand descriptors from format string
+        operand_descriptors = OperandDescriptor.fromFormatString(descriptor.operand_fmt, ED9_FORMAT_TABLE)
 
-        for ch in fmt:
-            op = self._read_operand(fs, ch)
-            operands.append(op)
+        operands = []
+        for op_desc in operand_descriptors:
+            value = op_desc.read_value(fs)
+            operands.append(Operand(descriptor=op_desc, value=value))
 
         # Special handling for PUSH instruction
         if descriptor.opcode == ED9Opcode.PUSH:
-            operands = self._decode_push(descriptor, operands)
+            self._decode_push(inst, operands)
+            return inst.operands
 
         return operands
 
-    def _read_operand(self, fs: fileio.FileStream, fmt: str) -> Operand:
-        """Read single operand based on format character"""
-        match fmt:
-            case 'C':  # Byte
-                return Operand(OperandType.BYTE, fs.ReadByte())
-
-            case 'H':  # Short
-                return Operand(OperandType.SHORT, fs.ReadUShort())
-
-            case 'i':  # Signed int
-                return Operand(OperandType.INT, fs.ReadLong())
-
-            case 'I':  # Unsigned int
-                return Operand(OperandType.UINT, fs.ReadULong())
-
-            case 'f':  # Float
-                return Operand(OperandType.FLOAT, fs.ReadFloat())
-
-            case 'O':  # Offset (code address)
-                return Operand(OperandType.OFFSET, fs.ReadULong())
-
-            case 'F':  # Function ID
-                return Operand(OperandType.FUNC, fs.ReadULong())
-
-            case 'V':  # ScpValue
-                value = ScpValue(fs = fs)
-                return Operand(OperandType.VALUE, value)
-
-            case 'S':  # String offset
-                return Operand(OperandType.STRING, fs.ReadULong())
-
-            case 'L':  # Log string (same as S)
-                return Operand(OperandType.STRING, fs.ReadULong())
-
-            case _:
-                raise ValueError(f'Unknown operand format: {fmt}')
-
-    def _decode_push(
+    def decode_instruction(
         self,
-        descriptor: ED9InstructionDescriptor,
-        operands: list[Operand]
-    ) -> list[Operand]:
+        fs      : 'fileio.FileStream',
+        offset  : int
+    ) -> 'Instruction':
+        inst = super().decode_instruction(fs, offset)
+
+        # Replace descriptor for PUSH variants with new descriptor
+        if inst.opcode == ED9Opcode.PUSH:
+            # Get mnemonic from temporary attribute set by _decode_push
+            mnemonic = getattr(inst, '_push_mnemonic', 'PUSH')
+            if mnemonic != 'PUSH':
+                inst.descriptor = ED9InstructionDescriptor(
+                    opcode       = ED9Opcode.PUSH,
+                    mnemonic     = mnemonic,
+                    operand_fmt  = inst.descriptor.operand_fmt,
+                    flags        = InstructionFlags.NONE
+                )
+                delattr(inst, '_push_mnemonic')
+
+        return inst
+
+    def _decode_push(self, inst: Instruction, operands: list[Operand]):
         """Decode PUSH instruction to specific variant based on value type"""
-        if not operands or operands[0].type != OperandType.VALUE:
-            return operands
 
-        value = operands[0].value
+        operand_size = operands[0]
+        operand_value = operands[1]
+
+        if operand_size.descriptor.format.type != OperandType.SInt8:
+            raise ValueError(f'Expected SInt8 operand for size, got {operand_size.descriptor.format.type}')
+
+        if operand_value.descriptor.format.type != ED9OperandType.Value:
+            raise ValueError(f'Expected Value operand, got {operand_value.descriptor.format.type}')
+
+        value = operand_value.value
         if not isinstance(value, ScpValue):
-            return operands
+            raise ValueError(f'Expected ScpValue, got {type(value)}')
 
-        # Change mnemonic based on value type
+        # Get operand descriptor for the decoded type
+        int_desc = OperandDescriptor.formatTable['I']
+        float_desc = OperandDescriptor.formatTable['f']
+        str_desc = ED9_FORMAT_TABLE['S']
+
+        # Replace descriptor and operands based on value type
         match value.type:
+            case ScpValue.Type.Raw:
+                inst.opcode = ED9Opcode.PUSH_RAW
+                inst.descriptor = self.descriptors[ED9Opcode.PUSH_RAW]
+                inst.operands = [Operand(descriptor=int_desc, value=value.value)]
+
             case ScpValue.Type.Integer:
-                descriptor.mnemonic = 'PUSH_INT'
-                return [Operand(OperandType.INT, value.value)]
+                inst.opcode = ED9Opcode.PUSH_INT
+                inst.descriptor = self.descriptors[ED9Opcode.PUSH_INT]
+                inst.operands = [Operand(descriptor=int_desc, value=value.value)]
 
             case ScpValue.Type.Float:
-                descriptor.mnemonic = 'PUSH_FLOAT'
-                return [Operand(OperandType.FLOAT, value.value)]
+                inst.opcode = ED9Opcode.PUSH_FLOAT
+                inst.descriptor = self.descriptors[ED9Opcode.PUSH_FLOAT]
+                inst.operands = [Operand(descriptor=float_desc, value=value.value)]
 
             case ScpValue.Type.String:
-                descriptor.mnemonic = 'PUSH_STR'
-                return [Operand(OperandType.STRING, value.value)]
+                inst.opcode = ED9Opcode.PUSH_STR
+                inst.descriptor = self.descriptors[ED9Opcode.PUSH_STR]
+                inst.operands = [Operand(descriptor=str_desc, value=value.value)]
 
-        return operands
+
+def ed9_optimize_instruction(current_inst: Instruction, block: BasicBlock, context: 'DisassemblerContext') -> list[BranchTarget]:
+    """
+    ED9 instruction optimization callback
+
+    Args:
+        current_inst: Current instruction just decoded
+        block: Current basic block
+        context: Disassembler context with callbacks
+
+    Called for every instruction to optimize patterns.
+    - Optimizes instructions in-place (modifies block.instructions)
+    - Returns branch targets only when current_inst is END_BLOCK
+
+    Optimizes instruction patterns:
+    - CALL pattern: PUSH(args...), PUSH(func_id), PUSH(ret_addr), CALL(func_id)
+
+    Returns:
+        List of branch targets (only when current_inst ends block)
+    """
+    # Only optimize and return targets when we have enough context
+    if current_inst.opcode == ED9Opcode.CALL:
+        return _optimize_call_pattern(block.instructions, context)
+
+    return []
+
+
+def _optimize_call_pattern(block_instructions: list[Instruction], context: 'DisassemblerContext') -> list[BranchTarget]:
+    """
+    Optimize CALL pattern: detect PUSH_RET_ADDR and PUSH_CURRENT_FUNC_ID
+
+    Pattern: PUSH(args...), PUSH(func_id), PUSH(ret_addr), CALL(func_id)
+    - Get argc from context.get_func_argc(func_id)
+    - Last 2 PUSHes are always func_id and ret_addr
+    - Previous argc PUSHes are function arguments
+
+    Returns:
+        List of branch targets from PUSH_RET_ADDR
+    """
+    if len(block_instructions) < 3:
+        return []
+
+    targets = []
+    call_inst = block_instructions[-1]
+
+    # Get function ID from CALL operand
+    if not call_inst.operands or call_inst.operands[0].descriptor.format.type != ED9OperandType.Func:
+        return []
+
+    func_id = call_inst.operands[0].value
+
+    argc = context.get_func_argc(func_id)
+
+    # Pattern: PUSH(func_id), PUSH(ret_addr), PUSH(arg1), ..., PUSH(argN), CALL
+    # CALL is block_instructions[-1]
+    # Calculate positions from end: CALL + argc + ret_addr + func_id
+    CALL_OFFSET = 1
+    ret_addr_inst = block_instructions[-(CALL_OFFSET + argc + 1)]
+    func_id_inst = block_instructions[-(CALL_OFFSET + argc + 2)]
+
+    # Check if instructions are PUSH variants (PUSH_INT/PUSH_FLOAT/PUSH_STR/PUSH_RAW)
+    PUSH_VARIANTS = (ED9Opcode.PUSH_INT, ED9Opcode.PUSH_RAW)
+
+    # Optimize func_id PUSH to PUSH_CURRENT_FUNC_ID (if not already optimized)
+    if func_id_inst.opcode in PUSH_VARIANTS:
+        func_id_inst.opcode = ED9Opcode.PUSH_CURRENT_FUNC_ID
+        func_id_inst.descriptor = context.instruction_table.get_descriptor(ED9Opcode.PUSH_CURRENT_FUNC_ID)
+        func_id_inst.operands.clear()
+
+    # Optimize ret_addr PUSH to PUSH_RET_ADDR (if not already optimized)
+    if ret_addr_inst.opcode in PUSH_VARIANTS:
+        if ret_addr_inst.operands and ret_addr_inst.operands[0].descriptor.format.type == OperandType.SInt32:
+            ret_addr = ret_addr_inst.operands[0].value
+            ret_addr_inst.opcode = ED9Opcode.PUSH_RET_ADDR
+            ret_addr_inst.descriptor = context.instruction_table.get_descriptor(ED9Opcode.PUSH_RET_ADDR)
+            # Change operand to OFFSET
+            offset_desc = OperandDescriptor.formatTable['O']
+            ret_addr_inst.operands = [Operand(descriptor=offset_desc, value=ret_addr)]
+            # Create branch target for return address
+            targets.append(BranchTarget.unconditional(ret_addr))
+
+    return targets
 
 
 # Global instruction table instance
