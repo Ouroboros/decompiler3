@@ -9,6 +9,7 @@ from .basic_block import *
 from .instruction_table import *
 from .disassembler import *
 from .ed9_optable import *
+from .formatter import *
 
 __all__ = [
     'Instruction',
@@ -26,4 +27,6 @@ __all__ = [
     'ED9InstructionTable',
     'ED9_INSTRUCTION_TABLE',
     'ed9_optimize_instruction',
+    'Formatter',
+    'FormatterContext',
 ]

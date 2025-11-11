@@ -6,11 +6,12 @@ from common import *
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from .basic_block import BranchKind
-from typing import TYPE_CHECKING, Callable, Any
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from ml import fileio
     from .instruction import Instruction, Operand
+    from .formatter import FormatterContext
 
 
 class OperandType(IntEnum2):
@@ -92,7 +93,7 @@ class OperandDescriptor:
             OperandType.Offset  : lambda: fs.ReadULong(),
         }[self.format.type]()
 
-    def format_operand(self, operand: 'Operand') -> str:
+    def format_operand(self, operand: 'Operand', context: 'FormatterContext') -> str:
         """Format operand for display"""
         return {
             OperandType.SInt8   : self.format_integer,
@@ -200,16 +201,16 @@ class InstructionDescriptor:
         """
         return []
 
-    def format_operands(self, operands: list['Operand']) -> str:
+    def format_operands(self, operands: list['Operand'], context: 'FormatterContext') -> list[str]:
         """
         Format operands for display.
 
         Returns:
-            Formatted operand string
+            List of formatted operand strings
         """
-        return ', '.join(OperandDescriptor.format_operand(op) for op in operands)
+        return [op.descriptor.format_operand(op, context) for op in operands]
 
-    def format_instruction(self, inst: 'Instruction') -> str:
+    def format_instruction(self, inst: 'Instruction', context: 'FormatterContext') -> str:
         """
         Format instruction for display.
 
@@ -219,8 +220,8 @@ class InstructionDescriptor:
         if not inst.operands:
             return self.mnemonic
 
-        ops = self.format_operands(inst.operands)
-        return f'{self.mnemonic}({ops})'
+        ops = self.format_operands(inst.operands, context)
+        return f'{self.mnemonic}({", ".join(ops)})'
 
 
 class InstructionTable(ABC):

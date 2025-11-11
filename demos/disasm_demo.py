@@ -197,8 +197,14 @@ def test_scp_parser():
 
         entry = disasm.disasm_function(fs, offset = func_init.offset, name = func_init.name)
 
-        print_block(entry)
-        print()
+        # Use formatter with context
+        formatter_context = FormatterContext(
+            get_func_name = lambda func_id: parser.get_func_name(func_id)
+        )
+
+        formatter = Formatter(formatter_context)
+        lines = formatter.format_function(entry)
+        print('\n'.join(lines))
 
 
 def main():

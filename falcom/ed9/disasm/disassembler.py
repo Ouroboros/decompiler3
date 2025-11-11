@@ -26,9 +26,9 @@ class Disassembler:
     Works with any instruction set via pluggable InstructionTable.
     """
 
-    def __init__(self, instruction_table: InstructionTable, context: DisassemblerContext = None):
+    def __init__(self, instruction_table: InstructionTable, context: DisassemblerContext):
         self.instruction_table = instruction_table
-        self.context = context or DisassemblerContext()
+        self.context = context
         self.context.instruction_table = instruction_table
 
         # Tracking dictionaries

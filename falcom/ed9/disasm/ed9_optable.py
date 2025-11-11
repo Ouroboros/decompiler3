@@ -13,6 +13,9 @@ from .instruction import *
 from .basic_block import *
 from ..parser.types_scp import *
 
+if TYPE_CHECKING:
+    from .formatter import FormatterContext
+
 # ED9-specific operand types
 class ED9OperandType(IntEnum2):
     """ED9-specific operand types extending base OperandType"""
@@ -35,10 +38,15 @@ class ED9OperandDescriptor(OperandDescriptor):
             case _:
                 return super().read_value(fs)
 
-    def format_operand(self, operand: Operand) -> str:
+    def format_operand(self, operand: Operand, context: 'FormatterContext') -> str:
         """Format ED9-specific operands"""
         match self.format.type:
             case ED9OperandType.Func:
+                # Try to get function name from context
+                if context.get_func_name:
+                    func_name = context.get_func_name(operand.value)
+                    if func_name:
+                        return func_name
                 return f'func_{operand.value}'
 
             case ED9OperandType.Value:
@@ -48,7 +56,7 @@ class ED9OperandDescriptor(OperandDescriptor):
                 return f'"{operand.value}"'
 
             case _:
-                return super().format_operand(operand)
+                return super().format_operand(operand, context)
 
 # ED9 operand descriptor factory
 def _ed9_oprdesc(oprType: OperandType | ED9OperandType, is_hex: bool = False):
@@ -243,9 +251,9 @@ class ED9InstructionDescriptor(InstructionDescriptor):
         super().__init__(opcode, mnemonic, flags)
         self.operand_fmt = operand_fmt
 
-    def format_operands(self, operands: list[Operand]) -> str:
+    def format_operands(self, operands: list[Operand], context: 'FormatterContext') -> list[str]:
         """Format operands for display (ED9-specific)"""
-        return ', '.join(op.descriptor.format_operand(op) for op in operands)
+        return [op.descriptor.format_operand(op, context) for op in operands]
 
     def get_branch_targets(self, inst, current_pos: int) -> list[BranchTarget]:
         """Extract branch targets from instruction"""
