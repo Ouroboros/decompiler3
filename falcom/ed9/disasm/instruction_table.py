@@ -92,41 +92,36 @@ class OperandDescriptor:
             OperandType.Offset  : lambda: fs.ReadULong(),
         }[self.format.type]()
 
-    @staticmethod
-    def format_operand(operand: 'Operand') -> str:
+    def format_operand(self, operand: 'Operand') -> str:
         """Format operand for display"""
         return {
-            OperandType.SInt8   : OperandDescriptor.format_integer,
-            OperandType.SInt16  : OperandDescriptor.format_integer,
-            OperandType.SInt32  : OperandDescriptor.format_integer,
-            OperandType.UInt8   : OperandDescriptor.format_integer,
-            OperandType.UInt16  : OperandDescriptor.format_integer,
-            OperandType.UInt32  : OperandDescriptor.format_integer,
-            OperandType.Float32 : OperandDescriptor.format_float,
-            OperandType.Offset  : OperandDescriptor.format_offset,
-        }[operand.descriptor.format.type](operand)
+            OperandType.SInt8   : self.format_integer,
+            OperandType.SInt16  : self.format_integer,
+            OperandType.SInt32  : self.format_integer,
+            OperandType.UInt8   : self.format_integer,
+            OperandType.UInt16  : self.format_integer,
+            OperandType.UInt32  : self.format_integer,
+            OperandType.Float32 : self.format_float,
+            OperandType.Offset  : self.format_offset,
+        }[self.format.type](operand)
 
-    @staticmethod
-    def format_integer(operand: 'Operand') -> str:
-        fmt = operand.descriptor.format
-        if fmt.is_hex:
-            if fmt.type in (OperandType.SInt8, OperandType.SInt16, OperandType.SInt32):
+    def format_integer(self, operand: 'Operand') -> str:
+        if self.format.is_hex:
+            if self.format.type in (OperandType.SInt8, OperandType.SInt16, OperandType.SInt32):
                 # Signed integer
                 if operand.value < 0:
-                    return f'-0x{-operand.value:0{fmt.size * 2}X}'
+                    return f'-0x{-operand.value:0{self.format.size * 2}X}'
                 else:
-                    return f'0x{operand.value:0{fmt.size * 2}X}'
+                    return f'0x{operand.value:0{self.format.size * 2}X}'
             else:
                 # Unsigned integer
-                return f'0x{operand.value:0{fmt.size * 2}X}'
+                return f'0x{operand.value:0{self.format.size * 2}X}'
         return str(operand.value)
 
-    @staticmethod
-    def format_float(operand: 'Operand') -> str:
+    def format_float(self, operand: 'Operand') -> str:
         return str(operand.value)
 
-    @staticmethod
-    def format_offset(operand: 'Operand') -> str:
+    def format_offset(self, operand: 'Operand') -> str:
         return f'loc_{operand.value:X}'
 
 

@@ -35,10 +35,9 @@ class ED9OperandDescriptor(OperandDescriptor):
             case _:
                 return super().read_value(fs)
 
-    @staticmethod
-    def format_operand(operand: Operand) -> str:
+    def format_operand(self, operand: Operand) -> str:
         """Format ED9-specific operands"""
-        match operand.descriptor.format.type:
+        match self.format.type:
             case ED9OperandType.Func:
                 return f'func_{operand.value}'
 
@@ -49,7 +48,7 @@ class ED9OperandDescriptor(OperandDescriptor):
                 return f'"{operand.value}"'
 
             case _:
-                return OperandDescriptor.format_operand(operand)
+                return super().format_operand(operand)
 
 # ED9 operand descriptor factory
 def _ed9_oprdesc(oprType: OperandType | ED9OperandType, is_hex: bool = False):
@@ -246,7 +245,7 @@ class ED9InstructionDescriptor(InstructionDescriptor):
 
     def format_operands(self, operands: list[Operand]) -> str:
         """Format operands for display (ED9-specific)"""
-        return ', '.join(ED9OperandDescriptor.format_operand(op) for op in operands)
+        return ', '.join(op.descriptor.format_operand(op) for op in operands)
 
     def get_branch_targets(self, inst, current_pos: int) -> list[BranchTarget]:
         """Extract branch targets from instruction"""

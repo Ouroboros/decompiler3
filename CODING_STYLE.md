@@ -125,7 +125,32 @@ lhs = stack_pop()  # Second pop gets left operand (below it)
 - International collaboration
 - Easier for tooling and static analysis
 
-### 6. Concise Git Commit Messages
+### 6. NO @staticmethod - Use @classmethod
+
+**NEVER** use `@staticmethod`. **ALWAYS** use `@classmethod` instead.
+
+#### ❌ WRONG:
+```python
+class MyClass:
+    @staticmethod
+    def helper(value):
+        return value * 2
+```
+
+#### ✅ CORRECT:
+```python
+class MyClass:
+    @classmethod
+    def helper(cls, value):
+        return value * 2
+```
+
+**Why?**
+- `@classmethod` allows subclass overriding and polymorphism
+- `@staticmethod` breaks inheritance and is harder to extend
+- `@classmethod` provides access to the class if needed later
+
+### 7. Concise Git Commit Messages
 
 **Requirements:**
 - Keep messages **short and focused** (1-2 sentences)
@@ -183,5 +208,6 @@ All code must follow these rules.
 - [ ] Comments reference constant names, not values
 - [ ] All assignments have spaces: `x = value` (not `x=value`)
 - [ ] All comments are in English (no Chinese or other languages)
+- [ ] No `@staticmethod` - use `@classmethod` instead
 - [ ] Commit messages are concise (1-2 sentences)
 - [ ] No Claude Code signatures or tool attributions in commits
