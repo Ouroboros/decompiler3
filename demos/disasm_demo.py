@@ -30,9 +30,9 @@ def print_block(block: BasicBlock, visited=None, indent=0, all_blocks=None):
                 print(f'Block {b.name}:')
                 for inst in b.instructions:
                     print(f'  {inst.offset:08X}: {inst.descriptor.format_instruction(inst)}')
-                if b.branches:
-                    branch_names = ', '.join(br.name for br in b.branches)
-                    print(f'  → {branch_names}')
+                if b.succs:
+                    succ_names = ', '.join(br.name for br in b.succs)
+                    print(f'  → {succ_names}')
                 print()
         return
 
@@ -50,10 +50,10 @@ def print_block(block: BasicBlock, visited=None, indent=0, all_blocks=None):
     for inst in block.instructions:
         print(f'{"  " * indent}  {inst.offset:08X}: {inst.descriptor.format_instruction(inst)}')
 
-    if block.branches:
-        print(f'{"  " * indent}  Branches:')
-        for branch in block.branches:
-            print_block(branch, visited, indent + 1, all_blocks)
+    if block.succs:
+        print(f'{"  " * indent}  Successors:')
+        for succ in block.succs:
+            print_block(succ, visited, indent + 1, all_blocks)
 
 
 def collect_blocks(block, result, visited):
@@ -62,8 +62,8 @@ def collect_blocks(block, result, visited):
         return
     visited.add(block.offset)
     result.append(block)
-    for branch in block.branches:
-        collect_blocks(branch, result, visited)
+    for succ in block.succs:
+        collect_blocks(succ, result, visited)
 
 
 def test_simple_function():
@@ -168,13 +168,75 @@ def test_loop():
     ])
 
     # Disassemble
-    disasm = Disassembler(ED9_INSTRUCTION_TABLE)
+    context = DisassemblerContext()
+    disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
 
     entry = disasm.disasm_function(bytecode, offset = 0, name = 'loop_test')
 
     # Print result
     print_block(entry)
     print()
+
+
+def test_jump_into_middle():
+    """Test jumping into the middle of a block (should split the block)"""
+    print('=== Test: Jump Into Middle of Block ===\n')
+
+    # Backward jump into the middle of a linear block
+    # Actual instruction offsets (calculated based on real sizes):
+    # PUSH = 6 bytes (0x00 opcode + 0x00 size + 4-byte value)
+    # SET_REG = 2 bytes (0x0A + reg)
+    # GET_REG = 2 bytes (0x09 + reg)
+    # LT = 1 byte (0x19)
+    # ADD = 1 byte (0x10)
+    # POP_JMP_ZERO = 5 bytes (0x0F + 4-byte offset)
+    # JMP = 5 bytes (0x0B + 4-byte offset)
+    # RETURN = 1 byte (0x0D)
+    bytecode = bytes([
+        # Entry block (0x00-0x0F)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x40,  # 0x00: PUSH int(0) [6 bytes]
+        0x0A, 0x00,                           # 0x06: SET_REG(0) [2 bytes]
+        0x00, 0x00, 0x01, 0x00, 0x00, 0x40,  # 0x08: PUSH int(1) [6 bytes]
+        0x0A, 0x01,                           # 0x0E: SET_REG(1) [2 bytes]
+
+        # Loop header - split point (0x10-)
+        0x09, 0x01,                           # 0x10: GET_REG(1) <- Backward jump target!
+        0x00, 0x00, 0x0A, 0x00, 0x00, 0x40,  # 0x12: PUSH int(10)
+        0x19,                                 # 0x18: LT
+        0x0F, 0x2C, 0x00, 0x00, 0x00,        # 0x19: POP_JMP_ZERO(0x2C) -> exit
+
+        # Loop body (fallthrough from POP_JMP_ZERO)
+        0x09, 0x01,                           # 0x1E: GET_REG(1)
+        0x00, 0x00, 0x01, 0x00, 0x00, 0x40,  # 0x20: PUSH int(1)
+        0x10,                                 # 0x26: ADD
+        0x0B, 0x10, 0x00, 0x00, 0x00,        # 0x27: JMP(0x10) -> backward jump!
+
+        # Exit
+        0x0D,                                 # 0x2C: RETURN
+    ])
+
+    # Disassemble
+    from falcom.ed9.disasm.ed9_optable import ed9_create_fallthrough_jump
+    context = DisassemblerContext(
+        create_fallthrough_jump = ed9_create_fallthrough_jump,
+    )
+
+    disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
+
+    entry = disasm.disasm_function(bytecode, offset=0, name='test_split')
+
+    # Print result
+    print('Expected behavior:')
+    print('  - Initial linear block should be split at 0x10')
+    print('  - Block starting at 0x10 should exist (loop header)')
+    print('  - Backward JMP(0x10) should target the split block\n')
+    # Use formatter with context
+    formatter_context = FormatterContext(
+    )
+
+    formatter = Formatter(formatter_context)
+    lines = formatter.format_function(entry)
+    print('\n'.join(lines))
 
 
 def test_scp_parser():
@@ -212,7 +274,8 @@ def main():
     # test_conditional()
     # test_caller_frame()
     # test_loop()
-    test_scp_parser()
+    test_jump_into_middle()
+    # test_scp_parser()
 
 
 if __name__ == '__main__':

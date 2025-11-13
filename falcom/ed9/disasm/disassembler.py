@@ -14,9 +14,10 @@ from .basic_block import *
 @dataclass
 class DisassemblerContext:
     """Context for disassembler with callbacks"""
-    instruction_table   : 'InstructionTable' = None
-    get_func_argc       : Callable[[int], int | None] = None  # func_id -> argc
-    optimize_instruction: Callable[['Instruction', 'BasicBlock', 'DisassemblerContext'], list[BranchTarget]] = None  # current_inst, block, context -> branch_targets
+    instruction_table      : 'InstructionTable' = None
+    get_func_argc          : Callable[[int], int | None] = None  # func_id -> argc
+    optimize_instruction   : Callable[['Instruction', 'BasicBlock', 'DisassemblerContext'], list[BranchTarget]] = None  # current_inst, block, context -> branch_targets
+    create_fallthrough_jump: Callable[[int, int, 'InstructionTable'], 'Instruction'] = None  # offset, target, inst_table -> synthetic_jmp
 
 
 class Disassembler:
@@ -35,6 +36,7 @@ class Disassembler:
         self.disassembled_blocks: dict[int, BasicBlock] = {}   # offset -> completed block
         self.disassembled_offset: dict[int, Instruction] = {}  # offset -> instruction
         self.allocated_blocks: dict[int, BasicBlock] = {}      # offset -> allocated block
+        self.offset_to_block: dict[int, BasicBlock] = {}       # instruction offset -> block
 
         # Current state
         self.current_block: BasicBlock | None = None
@@ -114,10 +116,10 @@ class Disassembler:
 
             # Decode instruction
             inst = self.instruction_table.decode_instruction(fs, pos)
-            print(f'[0x{pos:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
 
             # Record instruction
             self.disassembled_offset[pos] = inst
+            self.offset_to_block[pos] = block
             block.instructions.append(inst)
 
             # Get descriptor
@@ -135,14 +137,14 @@ class Disassembler:
                 targets.extend(opt_targets)
 
                 for target in targets:
-                    target_block = self.create_block(target.offset)
+                    target_block = self.ensure_block_at(target.offset)
                     block.add_branch(target_block, target.kind)
                 # Terminal instruction - block ends here
                 break
 
             # Process optimization targets for non-END_BLOCK instructions
             for target in opt_targets:
-                target_block = self.create_block(target.offset)
+                target_block = self.ensure_block_at(target.offset)
                 block.add_branch(target_block, target.kind)
 
             if desc.is_start_block():
@@ -150,19 +152,22 @@ class Disassembler:
                 # Extract branch targets (e.g., return address for PUSH_CALLER_FRAME)
                 targets = desc.get_branch_targets(inst, fs.Position)
                 for target in targets:
-                    # Create block at target, but don't add as branch (no control flow transfer)
-                    self.create_block(target.offset)
+                    # Ensure block at target (may split if target is in middle of block)
+                    self.ensure_block_at(target.offset)
 
             # Check if next position is an allocated block
             if fs.Position in self.allocated_blocks:
                 # Next instruction belongs to a pre-allocated block
                 break
 
-        # Recursively disassemble all branches
-        for i, branch in enumerate(block.branches):
+        # Recursively disassemble all successors
+        # Make a copy of succs list since split_block may modify it during iteration
+        succs_to_process = list(block.succs)
+        for succ in succs_to_process:
             saved_pos = fs.Position
-            fs.Position = branch.offset
-            block.branches[i] = self.disasm_block(fs)
+            fs.Position = succ.offset
+            # Recursively disassemble (modifies succ in place, no need to reassign)
+            self.disasm_block(fs)
             fs.Position = saved_pos
 
         # Restore previous block context
@@ -183,10 +188,105 @@ class Disassembler:
         if offset in self.allocated_blocks:
             return self.allocated_blocks[offset]
 
-        block = BasicBlock(offset=offset)
+        block = BasicBlock(start_offset=offset)
         self.allocated_blocks[offset] = block
 
         return block
+
+    def ensure_block_at(self, target_offset: int) -> BasicBlock:
+        """
+        Ensure target_offset is the start of a BasicBlock.
+
+        If target_offset is in the middle of an existing block, split that block.
+
+        Args:
+            target_offset: Target offset
+
+        Returns:
+            BasicBlock starting at target_offset
+        """
+        # Already a block start
+        if target_offset in self.allocated_blocks:
+            return self.allocated_blocks[target_offset]
+
+        # Check if target is in middle of existing block using offset_to_block
+        # This works even for blocks still being disassembled
+        if target_offset in self.offset_to_block:
+            owner = self.offset_to_block[target_offset]
+            # Target is in middle of owner block, need to split
+            if owner.start_offset != target_offset:
+                return self.split_block(owner, target_offset)
+            # Target is already at start of owner (shouldn't happen, but handle it)
+            return owner
+
+        # No existing block, create new empty block
+        block = BasicBlock(start_offset = target_offset)
+        self.allocated_blocks[target_offset] = block
+        return block
+
+    def split_block(self, owner: BasicBlock, split_offset: int) -> BasicBlock:
+        """
+        Split a block at split_offset.
+
+        Args:
+            owner: Block to split
+            split_offset: Offset to split at
+
+        Returns:
+            Tail block (starts at split_offset)
+        """
+        # Find split index
+        split_idx = None
+        for i, inst in enumerate(owner.instructions):
+            if inst.offset == split_offset:
+                split_idx = i
+                break
+
+        if split_idx is None:
+            inst_offsets = [f'0x{inst.offset:X}' for inst in owner.instructions]
+            raise ValueError(
+                f'No instruction at split_offset 0x{split_offset:X} in block {owner.name}\n'
+                f'Block range: 0x{owner.start_offset:X}-0x{owner.computed_end_offset:X}\n'
+                f'Instructions at: {", ".join(inst_offsets)}'
+            )
+
+        # Create tail block
+        tail = BasicBlock(
+            start_offset = split_offset,
+            end_offset   = owner.end_offset,
+        )
+        tail.instructions = owner.instructions[split_idx:]
+        tail.succs = owner.succs.copy()
+        tail.true_succs = owner.true_succs.copy()
+        tail.false_succs = owner.false_succs.copy()
+
+        # Update owner (head)
+        owner.end_offset = split_offset
+        owner.instructions = owner.instructions[:split_idx]
+
+        # Add synthetic fallthrough jump instruction to owner to make it terminate properly
+        # This is needed for LLIL conversion to ensure every block ends with a terminal instruction
+        if self.context.create_fallthrough_jump:
+            synthetic_jmp = self.context.create_fallthrough_jump(
+                split_offset,
+                tail.start_offset,
+                self.instruction_table
+            )
+            owner.instructions.append(synthetic_jmp)
+
+        owner.succs = [tail]
+        owner.true_succs = []
+        owner.false_succs = []
+
+        # Register tail in all tracking dictionaries
+        self.allocated_blocks[tail.start_offset] = tail
+        # Mark tail as disassembled since it already has all its instructions
+        self.disassembled_blocks[tail.start_offset] = tail
+        # Update offset_to_block mapping for all instructions in tail
+        for inst in tail.instructions:
+            self.offset_to_block[inst.offset] = tail
+
+        return tail
 
     def add_branch(self, offset: int, kind: BranchKind | None = None) -> BasicBlock:
         """

@@ -93,7 +93,7 @@ class Formatter:
 
             visited.add(block.offset)
             blocks.append(block)
-            todo.extend(block.branches)
+            todo.extend(block.succs)
 
         return blocks
 

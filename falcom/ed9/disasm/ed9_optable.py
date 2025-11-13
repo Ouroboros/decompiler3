@@ -389,6 +389,40 @@ class ED9InstructionTable(InstructionTable):
                 inst.operands = [Operand(descriptor=str_desc, value=value.value)]
 
 
+def ed9_create_fallthrough_jump(offset: int, target: int, inst_table: 'InstructionTable') -> Instruction:
+    """
+    Create a synthetic JMP instruction for split blocks.
+
+    Args:
+        offset: Instruction offset (split point)
+        target: Jump target offset
+        inst_table: Instruction table
+
+    Returns:
+        Synthetic JMP instruction
+    """
+
+    # Get JMP descriptor from instruction table
+    jmp_descriptor = inst_table.get_descriptor(ED9Opcode.JMP)
+
+    # Create offset operand
+    offset_desc = OperandDescriptor.formatTable['O']
+    operand = Operand(descriptor = offset_desc, value = target)
+
+    # Create synthetic instruction
+    # Use offset - 1 to avoid collision with tail block's first instruction
+    # Use size = 0 to indicate this is synthetic (not in original bytecode)
+    synthetic_inst = Instruction(
+        offset     = offset - 1,
+        opcode     = jmp_descriptor.opcode,
+        descriptor = jmp_descriptor,
+        operands   = [operand],
+        size       = 0  # Synthetic instruction, no actual bytes
+    )
+
+    return synthetic_inst
+
+
 def ed9_optimize_instruction(current_inst: Instruction, block: BasicBlock, context: 'DisassemblerContext') -> list[BranchTarget]:
     """
     ED9 instruction optimization callback
