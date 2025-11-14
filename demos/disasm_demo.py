@@ -235,7 +235,11 @@ def test_jump_into_middle():
     )
 
     formatter = Formatter(formatter_context)
-    lines = formatter.format_function(entry)
+    lines = formatter.format_entry_block(entry)
+
+    # Add function header manually for demo
+    func_name = entry.name or f'func_{entry.offset:X}'
+    print(f'def {func_name}():')
     print('\n'.join(lines))
 
 
@@ -247,26 +251,15 @@ def test_scp_parser():
         parser = ScpParser(fs, test_file.name)
         parser.parse()
 
-        func_init = parser.get_func_by_name('Init')
-
-        # Create context with callbacks
-        context = DisassemblerContext(
-            get_func_argc        = lambda func_id: parser.get_func_argc(func_id),
-            optimize_instruction = ed9_optimize_instruction
+        # Disassemble all functions
+        disassembled_functions = parser.disasm_all_functions(
+            filter_func = lambda f: f.name == 'Init'
         )
 
-        disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
-
-        entry = disasm.disasm_function(fs, offset = func_init.offset, name = func_init.name)
-
-        # Use formatter with context
-        formatter_context = FormatterContext(
-            get_func_name = lambda func_id: parser.get_func_name(func_id)
-        )
-
-        formatter = Formatter(formatter_context)
-        lines = formatter.format_function(entry)
-        print('\n'.join(lines))
+        # Format and print
+        for func in disassembled_functions:
+            lines = parser.format_function(func)
+            print('\n'.join(lines))
 
 
 def main():

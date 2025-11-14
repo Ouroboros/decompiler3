@@ -9,6 +9,7 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     from .basic_block import BasicBlock
     from .instruction import Instruction
+    from ..parser.types_parser import Function
 
 __all__ = (
     'Formatter',
@@ -31,15 +32,15 @@ class Formatter:
         self.formatted_offsets: set[int] = set()
         self.formatted_labels: set[str] = set()
 
-    def format_function(self, entry_block: 'BasicBlock') -> list[str]:
+    def format_entry_block(self, entry_block: 'BasicBlock') -> list[str]:
         """
-        Format a function starting from entry block.
+        Format blocks starting from entry block (without function header).
 
         Args:
             entry_block: Entry basic block
 
         Returns:
-            List of formatted lines
+            List of formatted block lines (indented)
         """
         # Reset formatted tracking
         self.formatted_offsets.clear()
@@ -53,9 +54,6 @@ class Formatter:
 
         # Format all blocks
         lines = []
-        func_name = entry_block.name or f'func_{entry_block.offset:X}'
-        lines.append(f'def {func_name}():')
-
         for i, block in enumerate(blocks):
             block_lines = self._format_block(block, gen_label = i != 0)
             lines.extend(self.indent + line for line in block_lines)
@@ -65,6 +63,26 @@ class Formatter:
         # Remove trailing empty line
         if lines and lines[-1] == '':
             lines.pop()
+
+        return lines
+
+    def format_function(self, func: 'Function') -> list[str]:
+        """
+        Format a complete function with header.
+
+        Args:
+            func: Function object
+
+        Returns:
+            List of formatted lines
+        """
+        lines = []
+        param_names = [f'arg{i + 1}: {param.type.get_python_type()}' for i, param in enumerate(func.params)]
+        param_str = ', '.join(param_names) if param_names else ''
+        lines.append(f'def {func.name}({param_str}):')
+
+        block_lines = self.format_entry_block(func.entry_block)
+        lines.extend(block_lines)
 
         return lines
 

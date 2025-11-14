@@ -398,8 +398,8 @@ class ScpParser(StrictBase):
 
         return disassembled_functions
 
-    def format_function(self, entry_block) -> list[str]:
+    def format_function(self, func: Function) -> list[str]:
         """Format a disassembled function"""
         formatter_context = FormatterContext(get_func_name = self.get_func_name)
         formatter = Formatter(formatter_context)
-        return formatter.format_function(entry_block)
+        return formatter.format_function(func)

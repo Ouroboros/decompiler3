@@ -31,7 +31,7 @@ def disasm_file(input_path: Path, output_path: Path):
         all_lines.append('')
 
         for func in disassembled_functions:
-            lines = parser.format_function(func.entry_block)
+            lines = parser.format_function(func)
             all_lines.extend(lines)
             all_lines.append('')
 

@@ -285,7 +285,7 @@ class TestScpParser(unittest.TestCase):
             print('\n=== Disassembly ===\n')
             for func in disassembled_functions:
                 print(f'{func} @ 0x{func.offset:08X}\n')
-                formatted_lines = parser.format_function(func.entry_block)
+                formatted_lines = parser.format_function(func)
                 print('\n'.join(formatted_lines))
                 print()
 
