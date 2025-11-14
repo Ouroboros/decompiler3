@@ -26,7 +26,6 @@ __all__ = [
     'ED9Opcode',
     'ED9InstructionTable',
     'ED9_INSTRUCTION_TABLE',
-    'ed9_optimize_instruction',
     'Formatter',
     'FormatterContext',
 ]

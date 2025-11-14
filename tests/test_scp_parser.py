@@ -277,30 +277,16 @@ class TestScpParser(unittest.TestCase):
             self.assertGreater(parser.header.function_count, 0)
 
             # Test disassembly and formatting
-            # Create context with callbacks
-            context = DisassemblerContext(
-                get_func_argc        = lambda func_id: parser.get_func_argc(func_id),
-                optimize_instruction = ed9_optimize_instruction
+            disassembled_functions = parser.disasm_all_functions(
+                filter_func = lambda f: f.name == 'MayaEvent02_07_01'
             )
 
-            disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
-
-            # Create formatter context
-            formatter_context = FormatterContext(
-                get_func_name = lambda func_id: parser.get_func_name(func_id)
-            )
-
-            formatter = Formatter(formatter_context)
-
-            # Disassemble and format all functions
+            # Print formatted functions
             print('\n=== Disassembly ===\n')
-            for func in parser.functions:
-                if func.name != 'CHR_DISABLE': continue
-
+            for func in disassembled_functions:
                 print(f'{func} @ 0x{func.offset:08X}\n')
-                entry = disasm.disasm_function(fs, offset = func.offset, name = func.name)
-                lines = formatter.format_function(entry)
-                print('\n'.join(lines))
+                formatted_lines = parser.format_function(func.entry_block)
+                print('\n'.join(formatted_lines))
                 print()
 
 

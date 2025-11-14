@@ -1,5 +1,9 @@
 from .types_scp import *
 from .crc32 import hash_func_Name
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..disasm import BasicBlock
 
 class GlobalVar:
     index       : int
@@ -66,10 +70,12 @@ class Function:
     params          : list[FunctionParam]
     is_common_func  : bool
     debug_info      : list[FunctionCallDebugInfo]
+    entry_block     : BasicBlock | None
 
     def __init__(self) -> None:
         self.params     = []
         self.debug_info = []
+        self.entry_block = None
 
     def name_hash(self) -> int:
         return hash_func_Name(self.name)

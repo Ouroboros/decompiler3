@@ -1,6 +1,72 @@
+from re import S
 from .types_scp import *
 from .types_parser import *
 from pprint import pprint
+from ..disasm import *
+from ..disasm.ed9_optable import *
+
+# Stack simulation instruction groups
+PUSH_VARIANTS = (
+    ED9Opcode.PUSH_RAW,
+    ED9Opcode.PUSH_INT,
+    ED9Opcode.PUSH_FLOAT,
+    ED9Opcode.PUSH_STR,
+)
+
+PUSH_VALUE_OPS = (
+    ED9Opcode.GET_REG,
+    ED9Opcode.LOAD_GLOBAL,
+    ED9Opcode.LOAD_STACK,
+    ED9Opcode.LOAD_STACK_DEREF,
+)
+
+POP_VALUE_OPS = (
+    ED9Opcode.SET_REG,
+    ED9Opcode.SET_GLOBAL,
+    ED9Opcode.POP_TO,
+    ED9Opcode.POP_TO_DEREF,
+)
+
+BINARY_OPS = (
+    ED9Opcode.ADD,
+    ED9Opcode.SUB,
+    ED9Opcode.MUL,
+    ED9Opcode.DIV,
+    ED9Opcode.MOD,
+    ED9Opcode.EQ,
+    ED9Opcode.NE,
+    ED9Opcode.GT,
+    ED9Opcode.GE,
+    ED9Opcode.LT,
+    ED9Opcode.LE,
+    ED9Opcode.BITWISE_AND,
+    ED9Opcode.BITWISE_OR,
+    ED9Opcode.LOGICAL_AND,
+    ED9Opcode.LOGICAL_OR,
+)
+
+UNARY_OPS = (
+    ED9Opcode.NEG,
+    ED9Opcode.EZ,
+    ED9Opcode.NOT,
+)
+
+CONDITIONAL_JUMPS = (
+    ED9Opcode.POP_JMP_ZERO,
+    ED9Opcode.POP_JMP_NOT_ZERO,
+)
+
+
+@dataclass
+class ScpDisassemblerContext(DisassemblerContext):
+    """ED9/SCP-specific disassembler context with optimization state"""
+    current_func     : 'Function | None' = None  # Current function being disassembled
+    stack_simulation : list = None  # Stack simulation for current block
+
+    def __post_init__(self):
+        if self.stack_simulation is None:
+            self.stack_simulation = []
+
 
 class ScpParser(StrictBase):
     fs              : fileio.FileStream
@@ -141,3 +207,174 @@ class ScpParser(StrictBase):
             global_vars.append(global_var)
 
         return global_vars
+
+
+    # disassemble
+
+    def on_disasm_function(self, context: ScpDisassemblerContext, offset: int, name: str) -> None:
+        """Initialize stack simulation with function parameters"""
+        # Get function object and parameter count
+        func = next((f for f in self.functions if f.offset == offset or f.name == name), None)
+        argc = len(func.params) if func else 0
+
+        # Store current function in context
+        context.current_func = func
+
+        # Clear stack and push parameters
+        context.stack_simulation.clear()
+
+        # Create simple placeholder objects for parameters
+        class ParamPlaceholder:
+            def __init__(self, idx: int, offset: int):
+                self.offset = offset
+                self.mnemonic = f'param_{idx}'
+
+        for i in range(argc):
+            param_inst = ParamPlaceholder(i, offset - (argc - i))
+            context.stack_simulation.append(param_inst)
+
+    def on_instruction_decoded(self, context: ScpDisassemblerContext, inst: Instruction, block: BasicBlock) -> list[BranchTarget]:
+        """Called for every instruction during disassembly"""
+
+        if inst.opcode == ED9Opcode.DEBUG_SET_LINENO:
+            print(f'[0x{inst.offset:08X}] Decoded: {inst.mnemonic}({inst.operands[0].value}) (opcode=0x{inst.opcode:02X})')
+        else:
+            print(f'[0x{inst.offset:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
+
+        # Simulate stack operations
+        stack = context.stack_simulation
+        opcode = inst.opcode
+
+        if opcode == ED9Opcode.RETURN:
+            if stack:
+                raise ValueError(f'Stack is not empty at return: {stack}')
+
+            self.on_disasm_function(context, context.current_func.offset, context.current_func.name)
+
+        # PUSH operations - add to stack
+        if opcode in PUSH_VARIANTS:
+            stack.append(inst)
+
+        # GET_REG, LOAD_GLOBAL, LOAD_STACK, etc - push value
+        elif opcode in PUSH_VALUE_OPS:
+            stack.append(inst)
+
+        # POP operations - remove from stack
+        elif opcode == ED9Opcode.POP:
+            count = inst.operands[0].value if inst.operands else 1
+            count //= 4
+            for _ in range(count):
+                stack.pop()
+
+        elif opcode == ED9Opcode.POPN:
+            count = inst.operands[0].value if inst.operands else 0
+            for _ in range(count):
+                stack.pop()
+
+        # SET_REG, SET_GLOBAL, POP_TO, etc - pop value
+        elif opcode in POP_VALUE_OPS:
+            stack.pop()
+
+        # Binary operations - pop 2, push 1
+        elif opcode in BINARY_OPS:
+            stack.pop()
+            stack.pop()
+            stack.append(inst)  # Result of operation
+
+        # Unary operations - pop 1, push 1
+        elif opcode in UNARY_OPS:
+            stack.pop()
+            stack.append(inst)  # Result of operation
+
+        # Conditional jumps - pop 1
+        elif opcode in CONDITIONAL_JUMPS:
+            stack.pop()
+
+        # Optimize CALL pattern
+        if opcode == ED9Opcode.CALL:
+            if len(stack) < 2:
+                return []
+
+            func_id = inst.operands[0].value
+            argc = context.get_func_argc(func_id)
+
+            # Pattern: PUSH(func_id), PUSH(ret_addr), PUSH(arg1), ..., PUSH(argN), CALL
+            # Stack (top to bottom): argN, ..., arg1, ret_addr, func_id
+            if len(stack) < argc + 2:
+                return []
+
+            targets = []
+
+            # Pop argc arguments from stack simulation to get ret_addr and func_id
+            ret_addr_inst = stack[-(argc + 1)]
+            func_id_inst = stack[-(argc + 2)]
+
+            for _ in range(argc + 2):
+                stack.pop()
+
+            # Check if these are PUSH instructions (not results of operations)
+            if not isinstance(ret_addr_inst, Instruction) or not isinstance(func_id_inst, Instruction):
+                return []
+
+            # Optimize func_id PUSH to PUSH_CURRENT_FUNC_ID
+            if func_id_inst.opcode in PUSH_VARIANTS:
+                func_id_inst.opcode = ED9Opcode.PUSH_CURRENT_FUNC_ID
+                func_id_inst.descriptor = context.instruction_table.get_descriptor(ED9Opcode.PUSH_CURRENT_FUNC_ID)
+                func_id_inst.operands.clear()
+
+            # Optimize ret_addr PUSH to PUSH_RET_ADDR
+            if ret_addr_inst.opcode in PUSH_VARIANTS:
+                ret_addr = ret_addr_inst.operands[0].value
+                ret_addr_inst.opcode = ED9Opcode.PUSH_RET_ADDR
+                ret_addr_inst.descriptor = context.instruction_table.get_descriptor(ED9Opcode.PUSH_RET_ADDR)
+                # Change operand to OFFSET from instruction descriptor
+                op_desc = OperandDescriptor.from_format_string(ret_addr_inst.descriptor.operand_fmt, ED9_FORMAT_TABLE)[0]
+                ret_addr_inst.operands = [Operand(descriptor = op_desc, value = ret_addr)]
+                # Create branch target for return address
+                targets.append(BranchTarget.unconditional(int(ret_addr)))
+
+            return targets
+
+        return []
+
+    def disasm_all_functions(self, filter_func = None) -> list[Function]:
+        """
+        Disassemble all functions in the SCP file.
+
+        Args:
+            filter_func: Optional function to filter which functions to disassemble (func) -> bool
+
+        Returns:
+            List of Function objects with entry_block set
+        """
+        disassembled_functions = []
+
+        for func in self.functions:
+            # Apply filter if provided
+            if filter_func and not filter_func(func):
+                continue
+
+            print(f'Disassembling {func.name} @ 0x{func.offset:08X}')
+
+            # Create new context for each function
+            context = ScpDisassemblerContext(
+                get_func_argc         = self.get_func_argc,
+                on_disasm_function    = self.on_disasm_function,
+                on_instruction_decoded = self.on_instruction_decoded,
+            )
+
+            disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
+            try:
+                func.entry_block = disasm.disasm_function(self.fs, offset = func.offset, name = func.name)
+                disassembled_functions.append(func)
+            except Exception as e:
+                print(f'Error disassembling {func.name} @ 0x{func.offset:08X}: {e}')
+                raise
+
+        return disassembled_functions
+
+    def format_function(self, entry_block) -> list[str]:
+        """Format a disassembled function"""
+        formatter_context = FormatterContext(get_func_name = self.get_func_name)
+        formatter = Formatter(formatter_context)
+        return formatter.format_function(entry_block)

@@ -16,16 +16,9 @@ class DisassemblerContext:
     """Context for disassembler with callbacks"""
     instruction_table      : 'InstructionTable' = None
     get_func_argc          : Callable[[int], int | None] = None  # func_id -> argc
-    optimize_instruction   : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
     create_fallthrough_jump: Callable[[int, int, 'InstructionTable'], 'Instruction'] = None  # offset, target, inst_table -> synthetic_jmp
-
-    # Optimization state
-    current_block_offset   : int = None  # Current block being processed
-    stack_simulation       : list = None  # Stack of (instruction, depth) for current block
-
-    def __post_init__(self):
-        if self.stack_simulation is None:
-            self.stack_simulation = []
+    on_disasm_function     : Callable[['DisassemblerContext', int, str], None] = None  # context, offset, name
+    on_instruction_decoded : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
 
 
 class Disassembler:
@@ -80,6 +73,10 @@ class Disassembler:
 
         fs.Position = offset
 
+        # Call on_disasm_function callback
+        if self.context.on_disasm_function:
+            self.context.on_disasm_function(self.context, offset, name)
+
         entry_block = self.disasm_block(fs)
 
         if name:
@@ -125,8 +122,6 @@ class Disassembler:
             # Decode instruction
             inst = self.instruction_table.decode_instruction(fs, pos)
 
-            print(f'[0x{pos:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
-
             # Record instruction
             self.disassembled_offset[pos] = inst
             self.offset_to_block[pos] = block
@@ -135,10 +130,10 @@ class Disassembler:
             # Get descriptor
             desc = inst.descriptor
 
-            # Call optimization callback for every instruction
+            # Call on_instruction_decoded callback for every instruction
             opt_targets = []
-            if self.context.optimize_instruction:
-                opt_targets = self.context.optimize_instruction(self.context, inst, block)
+            if self.context.on_instruction_decoded:
+                opt_targets = self.context.on_instruction_decoded(self.context, inst, block)
 
             # Check for block termination
             if desc.is_end_block():
