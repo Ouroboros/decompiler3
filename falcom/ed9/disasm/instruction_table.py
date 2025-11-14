@@ -37,7 +37,7 @@ class OperandType(IntEnum2):
 
 class OperandFormat:
     """Operand format descriptor"""
-    sizeTable: dict[OperandType, int] = {
+    size_table: dict[OperandType, int] = {
         OperandType.SInt8   : 1,
         OperandType.SInt16  : 2,
         OperandType.SInt32  : 4,
@@ -49,8 +49,8 @@ class OperandFormat:
         OperandType.Offset  : 4,
     }
 
-    def __init__(self, oprType: OperandType, is_hex: bool = False):
-        self.type   = oprType
+    def __init__(self, opr_type: OperandType, is_hex: bool = False):
+        self.type   = opr_type
         self.is_hex = is_hex
 
     def __str__(self):
@@ -61,17 +61,17 @@ class OperandFormat:
 
     @property
     def size(self):
-        return self.sizeTable.get(self.type)
+        return self.size_table.get(self.type)
 
 
 class OperandDescriptor:
     """Operand descriptor with read/write/format methods"""
-    formatTable: dict[str, 'OperandDescriptor'] = {}
+    format_table: dict[str, 'OperandDescriptor'] = {}
 
     @classmethod
-    def fromFormatString(cls, fmtstr: str, formatTable: dict = None) -> tuple['OperandDescriptor', ...]:
-        formatTable = formatTable if formatTable else cls.formatTable
-        return tuple(formatTable[f] for f in fmtstr)
+    def from_format_string(cls, fmtstr: str, format_table: dict | None = None) -> tuple['OperandDescriptor', ...]:
+        format_table = format_table if format_table else cls.format_table
+        return tuple(format_table[f] for f in fmtstr)
 
     def __init__(self, format: OperandFormat):
         self.format = format
@@ -127,23 +127,29 @@ class OperandDescriptor:
 
 
 # Initialize format table
-def _oprdesc(oprType: OperandType, is_hex: bool = False):
-    return OperandDescriptor(OperandFormat(oprType, is_hex=is_hex))
+def _oprdesc(opr_type: OperandType, is_hex: bool = False):
+    return OperandDescriptor(OperandFormat(opr_type, is_hex=is_hex))
 
-OperandDescriptor.formatTable.update({
-    'c' : _oprdesc(OperandType.UInt8, is_hex=False),
-    'h' : _oprdesc(OperandType.UInt16, is_hex=False),
-    'i' : _oprdesc(OperandType.UInt32, is_hex=False),
+OperandDescriptor.format_table.update({
+    'c' : _oprdesc(OperandType.SInt8, is_hex=False),
+    'C' : _oprdesc(OperandType.UInt8, is_hex=False),
+    'b' : _oprdesc(OperandType.SInt8, is_hex=True),
+    'B' : _oprdesc(OperandType.UInt8, is_hex=True),
 
-    'C' : _oprdesc(OperandType.SInt8, is_hex=False),
-    'H' : _oprdesc(OperandType.SInt16, is_hex=False),
-    'I' : _oprdesc(OperandType.SInt32, is_hex=False),
+    'h' : _oprdesc(OperandType.SInt16, is_hex=False),
+    'H' : _oprdesc(OperandType.UInt16, is_hex=False),
+    'w' : _oprdesc(OperandType.SInt16, is_hex=True),
+    'W' : _oprdesc(OperandType.UInt16, is_hex=True),
 
-    'x' : _oprdesc(OperandType.UInt8, is_hex=True),
-    'X' : _oprdesc(OperandType.UInt16, is_hex=True),
-    'Y' : _oprdesc(OperandType.UInt32, is_hex=True),
+    'i' : _oprdesc(OperandType.SInt32, is_hex=False),
+    'I' : _oprdesc(OperandType.UInt32, is_hex=False),
+    'l' : _oprdesc(OperandType.SInt32, is_hex=True),
+    'L' : _oprdesc(OperandType.UInt32, is_hex=True),
 
     'f' : _oprdesc(OperandType.Float32),
+
+    'S' : _oprdesc(OperandType.String),
+
     'O' : _oprdesc(OperandType.Offset),
 })
 
@@ -217,9 +223,6 @@ class InstructionDescriptor:
         Returns:
             Formatted instruction string
         """
-        if not inst.operands:
-            return self.mnemonic
-
         ops = self.format_operands(inst.operands, context)
         return f'{self.mnemonic}({", ".join(ops)})'
 

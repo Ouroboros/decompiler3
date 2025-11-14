@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 if TYPE_CHECKING:
     from .basic_block import BasicBlock
+    from .instruction import Instruction
 
 __all__ = (
     'Formatter',
@@ -18,15 +19,15 @@ __all__ = (
 @dataclass
 class FormatterContext:
     """Context for formatter with callbacks"""
-    get_func_name: Callable[[int], str | None] = None  # func_id -> func_name
+    get_func_name: Callable[[int], str | None] | None = None  # func_id -> func_name
 
 
 class Formatter:
     """Format disassembled code for output"""
 
-    def __init__(self, context: FormatterContext, indent: str = '    '):
+    def __init__(self, context: FormatterContext, indent: str | None = None):
         self.context = context
-        self.indent = indent
+        self.indent = indent if indent is not None else default_indent()
         self.formatted_offsets: set[int] = set()
         self.formatted_labels: set[str] = set()
 
@@ -54,11 +55,10 @@ class Formatter:
         lines = []
         func_name = entry_block.name or f'func_{entry_block.offset:X}'
         lines.append(f'def {func_name}():')
-        lines.append('')
 
         for i, block in enumerate(blocks):
             block_lines = self._format_block(block, gen_label = i != 0)
-            lines.extend(block_lines)
+            lines.extend(self.indent + line for line in block_lines)
             if lines and lines[-1] != '':
                 lines.append('')
 
@@ -123,7 +123,7 @@ class Formatter:
 
         return lines
 
-    def _format_instruction(self, inst) -> str:
+    def _format_instruction(self, inst: 'Instruction') -> str:
         """Format instruction with context support"""
         return inst.descriptor.format_instruction(inst, self.context)
 

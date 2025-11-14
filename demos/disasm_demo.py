@@ -274,8 +274,8 @@ def main():
     # test_conditional()
     # test_caller_frame()
     # test_loop()
-    test_jump_into_middle()
-    # test_scp_parser()
+    # test_jump_into_middle()
+    test_scp_parser()
 
 
 if __name__ == '__main__':

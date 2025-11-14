@@ -16,8 +16,16 @@ class DisassemblerContext:
     """Context for disassembler with callbacks"""
     instruction_table      : 'InstructionTable' = None
     get_func_argc          : Callable[[int], int | None] = None  # func_id -> argc
-    optimize_instruction   : Callable[['Instruction', 'BasicBlock', 'DisassemblerContext'], list[BranchTarget]] = None  # current_inst, block, context -> branch_targets
+    optimize_instruction   : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
     create_fallthrough_jump: Callable[[int, int, 'InstructionTable'], 'Instruction'] = None  # offset, target, inst_table -> synthetic_jmp
+
+    # Optimization state
+    current_block_offset   : int = None  # Current block being processed
+    stack_simulation       : list = None  # Stack of (instruction, depth) for current block
+
+    def __post_init__(self):
+        if self.stack_simulation is None:
+            self.stack_simulation = []
 
 
 class Disassembler:
@@ -117,6 +125,8 @@ class Disassembler:
             # Decode instruction
             inst = self.instruction_table.decode_instruction(fs, pos)
 
+            print(f'[0x{pos:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
+
             # Record instruction
             self.disassembled_offset[pos] = inst
             self.offset_to_block[pos] = block
@@ -128,7 +138,7 @@ class Disassembler:
             # Call optimization callback for every instruction
             opt_targets = []
             if self.context.optimize_instruction:
-                opt_targets = self.context.optimize_instruction(inst, block, self.context)
+                opt_targets = self.context.optimize_instruction(self.context, inst, block)
 
             # Check for block termination
             if desc.is_end_block():

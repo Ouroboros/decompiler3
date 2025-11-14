@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from ml import *
 from io import BytesIO
 from common import *
-from falcom.ed9.parser import *
+from falcom.ed9 import *
 import unittest
 import struct
 
@@ -250,7 +250,7 @@ class TestScpParser(unittest.TestCase):
 
         ED9_DATA_DIR = Path(r'D:\Game\Steam\steamapps\common\THE LEGEND OF HEROES KURO NO KISEKI\decrypted\tc\f\script\scena')
 
-        test_file = Path(__file__).parent / 'mp3010_01.dat'
+        test_file = Path(__file__).parent / 'mp2000_ev.dat'
         # test_file = ED9_DATA_DIR / 'c0600.dat'
 
         if not test_file.exists():
@@ -260,21 +260,48 @@ class TestScpParser(unittest.TestCase):
             parser = ScpParser(fs, test_file.name)
             parser.parse()
 
-        for i, func in enumerate(parser.functions):
-            print(f'[{i}] {func}')
-            print()
+            # for i, func in enumerate(parser.functions):
+            #     print(f'[{i}] {func}')
+            #     print()
 
-        print('global vars:')
+            # print('global vars:')
 
-        for i, gvar in enumerate(parser.global_vars):
-            print(f'[{i}] {gvar}')
-            print()
+            # for i, gvar in enumerate(parser.global_vars):
+            #     print(f'[{i}] {gvar}')
+            #     print()
 
-        print(parser.header)
+            print(parser.header)
 
-        # Check header was parsed
-        self.assertIsNotNone(parser.header)
-        self.assertGreater(parser.header.function_count, 0)
+            # Check header was parsed
+            self.assertIsNotNone(parser.header)
+            self.assertGreater(parser.header.function_count, 0)
+
+            # Test disassembly and formatting
+            # Create context with callbacks
+            context = DisassemblerContext(
+                get_func_argc        = lambda func_id: parser.get_func_argc(func_id),
+                optimize_instruction = ed9_optimize_instruction
+            )
+
+            disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
+
+            # Create formatter context
+            formatter_context = FormatterContext(
+                get_func_name = lambda func_id: parser.get_func_name(func_id)
+            )
+
+            formatter = Formatter(formatter_context)
+
+            # Disassemble and format all functions
+            print('\n=== Disassembly ===\n')
+            for func in parser.functions:
+                if func.name != 'CHR_DISABLE': continue
+
+                print(f'{func} @ 0x{func.offset:08X}\n')
+                entry = disasm.disasm_function(fs, offset = func.offset, name = func.name)
+                lines = formatter.format_function(entry)
+                print('\n'.join(lines))
+                print()
 
 
 if __name__ == '__main__':
