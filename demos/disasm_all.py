@@ -22,34 +22,18 @@ def disasm_file(input_path: Path, output_path: Path):
         parser = ScpParser(fs, input_path.name)
         parser.parse()
 
-        # Create context with callbacks
-        context = DisassemblerContext(
-            get_func_argc = lambda func_id: parser.get_func_argc(func_id),
-            optimize_instruction = ed9_optimize_instruction
-        )
-
-        disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
-
-        # Create formatter context
-        formatter_context = FormatterContext(
-            get_func_name = lambda func_id: parser.get_func_name(func_id)
-        )
-
-        formatter = Formatter(formatter_context)
-
         # Disassemble all functions
+        disassembled_functions = parser.disasm_all_functions()
+
+        # Format output
         all_lines = []
         all_lines.append(f'# Disassembly of {input_path.name}')
         all_lines.append('')
 
-        for func in parser.functions:
-            try:
-                entry = disasm.disasm_function(fs, offset = func.offset, name = func.name)
-                lines = formatter.format_function(entry)
-                all_lines.extend(lines)
-                all_lines.append('')
-            except Exception as e:
-                raise RuntimeError(f'  Error disassembling {func.name}: {e}')
+        for func in disassembled_functions:
+            lines = parser.format_function(func.entry_block)
+            all_lines.extend(lines)
+            all_lines.append('')
 
         # Write output
         output_path.write_text('\n'.join(all_lines), encoding = 'utf-8')

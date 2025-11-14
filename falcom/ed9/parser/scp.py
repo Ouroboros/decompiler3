@@ -62,10 +62,22 @@ class ScpDisassemblerContext(DisassemblerContext):
     """ED9/SCP-specific disassembler context with optimization state"""
     current_func     : 'Function | None' = None  # Current function being disassembled
     stack_simulation : list = None  # Stack simulation for current block
+    saved_stacks     : dict[int, list] = None  # offset -> stack snapshot for branches
 
     def __post_init__(self):
         if self.stack_simulation is None:
             self.stack_simulation = []
+        if self.saved_stacks is None:
+            self.saved_stacks = {}
+
+    def save_stack_for_offset(self, offset: int) -> None:
+        """Save current stack state for given offset"""
+        self.saved_stacks[offset] = self.stack_simulation.copy()
+
+    def restore_stack_for_offset(self, offset: int) -> None:
+        """Restore stack state for given offset, if saved"""
+        if offset in self.saved_stacks:
+            self.stack_simulation = self.saved_stacks[offset].copy()
 
 
 class ScpParser(StrictBase):
@@ -222,6 +234,7 @@ class ScpParser(StrictBase):
 
         # Clear stack and push parameters
         context.stack_simulation.clear()
+        context.saved_stacks.clear()
 
         # Create simple placeholder objects for parameters
         class ParamPlaceholder:
@@ -233,13 +246,23 @@ class ScpParser(StrictBase):
             param_inst = ParamPlaceholder(i, offset - (argc - i))
             context.stack_simulation.append(param_inst)
 
+    def on_block_start(self, context: ScpDisassemblerContext, offset: int) -> None:
+        """Restore stack state for this block"""
+        context.restore_stack_for_offset(offset)
+
+    def on_pre_add_branches(self, context: ScpDisassemblerContext, targets: list[BranchTarget]) -> None:
+        """Called before adding branches - save stack state for branch targets"""
+        for target in targets:
+            context.save_stack_for_offset(target.offset)
+
     def on_instruction_decoded(self, context: ScpDisassemblerContext, inst: Instruction, block: BasicBlock) -> list[BranchTarget]:
         """Called for every instruction during disassembly"""
 
-        if inst.opcode == ED9Opcode.DEBUG_SET_LINENO:
-            print(f'[0x{inst.offset:08X}] Decoded: {inst.mnemonic}({inst.operands[0].value}) (opcode=0x{inst.opcode:02X})')
-        else:
-            print(f'[0x{inst.offset:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
+        if not True:
+            if inst.opcode == ED9Opcode.DEBUG_SET_LINENO:
+                print(f'[0x{inst.offset:08X}] Decoded: {inst.mnemonic}({inst.operands[0].value}) (opcode=0x{inst.opcode:02X})')
+            else:
+                print(f'[0x{inst.offset:08X}] Decoded: {inst.mnemonic:<20} (opcode=0x{inst.opcode:02X})')
 
         # Simulate stack operations
         stack = context.stack_simulation
@@ -249,7 +272,7 @@ class ScpParser(StrictBase):
             if stack:
                 raise ValueError(f'Stack is not empty at return: {stack}')
 
-            self.on_disasm_function(context, context.current_func.offset, context.current_func.name)
+            # self.on_disasm_function(context, context.current_func.offset, context.current_func.name)
 
         # PUSH operations - add to stack
         if opcode in PUSH_VARIANTS:
@@ -358,9 +381,11 @@ class ScpParser(StrictBase):
 
             # Create new context for each function
             context = ScpDisassemblerContext(
-                get_func_argc         = self.get_func_argc,
-                on_disasm_function    = self.on_disasm_function,
-                on_instruction_decoded = self.on_instruction_decoded,
+                get_func_argc           = self.get_func_argc,
+                on_disasm_function      = self.on_disasm_function,
+                on_block_start          = self.on_block_start,
+                on_instruction_decoded  = self.on_instruction_decoded,
+                on_pre_add_branches     = self.on_pre_add_branches,
             )
 
             disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)

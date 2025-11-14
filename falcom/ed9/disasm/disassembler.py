@@ -17,8 +17,10 @@ class DisassemblerContext:
     instruction_table      : 'InstructionTable' = None
     get_func_argc          : Callable[[int], int | None] = None  # func_id -> argc
     create_fallthrough_jump: Callable[[int, int, 'InstructionTable'], 'Instruction'] = None  # offset, target, inst_table -> synthetic_jmp
-    on_disasm_function     : Callable[['DisassemblerContext', int, str], None] = None  # context, offset, name
-    on_instruction_decoded : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
+    on_disasm_function      : Callable[['DisassemblerContext', int, str], None] = None  # context, offset, name
+    on_block_start          : Callable[['DisassemblerContext', int], None] = None  # context, offset
+    on_instruction_decoded  : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
+    on_pre_add_branches     : Callable[['DisassemblerContext', list[BranchTarget]], None] = None  # context, targets
 
 
 class Disassembler:
@@ -106,6 +108,10 @@ class Disassembler:
         # Mark as disassembled (prevents infinite recursion)
         self.disassembled_blocks[offset] = block
 
+        # Call on_block_start callback to restore saved state
+        if self.context.on_block_start:
+            self.context.on_block_start(self.context, offset)
+
         # Save previous block context
         previous_block = self.current_block
         self.current_block = block
@@ -141,6 +147,10 @@ class Disassembler:
                 targets = desc.get_branch_targets(inst, fs.Position)
                 targets.extend(opt_targets)
 
+                # Call on_pre_add_branches callback
+                if self.context.on_pre_add_branches:
+                    self.context.on_pre_add_branches(self.context, targets)
+
                 for target in targets:
                     target_block = self.ensure_block_at(target.offset)
                     block.add_branch(target_block, target.kind)
@@ -148,9 +158,14 @@ class Disassembler:
                 break
 
             # Process optimization targets for non-END_BLOCK instructions
-            for target in opt_targets:
-                target_block = self.ensure_block_at(target.offset)
-                block.add_branch(target_block, target.kind)
+            if opt_targets:
+                # Call on_pre_add_branches callback
+                if self.context.on_pre_add_branches:
+                    self.context.on_pre_add_branches(self.context, opt_targets)
+
+                for target in opt_targets:
+                    target_block = self.ensure_block_at(target.offset)
+                    block.add_branch(target_block, target.kind)
 
             if desc.is_start_block():
                 # This instruction starts a new block at target offset
