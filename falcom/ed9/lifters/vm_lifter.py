@@ -179,13 +179,13 @@ class ED9VMLifter:
                 builder.jmp(target)
 
             case ED9Opcode.POP_JMP_ZERO:
-                true_block = self._branch_target(block.true_succs, llil_blocks, block_map, current = block)
-                false_block = self._branch_target(block.false_succs, llil_blocks, block_map, prefer_fallthrough = True, current = block)
+                true_block = self._branch_target(block.true_succs, llil_blocks)
+                false_block = self._branch_target(block.false_succs, llil_blocks)
                 builder.pop_jmp_zero(true_block, false_block)
 
             case ED9Opcode.POP_JMP_NOT_ZERO:
-                true_block = self._branch_target(block.true_succs, llil_blocks, block_map, current = block)
-                false_block = self._branch_target(block.false_succs, llil_blocks, block_map, prefer_fallthrough = True, current = block)
+                true_block = self._branch_target(block.true_succs, llil_blocks)
+                false_block = self._branch_target(block.false_succs, llil_blocks)
                 builder.pop_jmp_not_zero(true_block, false_block)
 
             case ED9Opcode.CALL:
@@ -253,17 +253,9 @@ class ED9VMLifter:
         self,
         candidates: list[BasicBlock],
         llil_blocks: Dict[int, LowLevelILBasicBlock],
-        block_map: Dict[int, BasicBlock],
-        *,
-        prefer_fallthrough: bool = False,
-        current: BasicBlock | None = None,
     ) -> LowLevelILFunction.BasicBlock:
         if candidates:
             return llil_blocks[candidates[0].offset]
-
-        if prefer_fallthrough and current is not None:
-            for succ in current.succs:
-                return llil_blocks[succ.offset]
 
         raise RuntimeError('Missing branch target while lifting')
 
