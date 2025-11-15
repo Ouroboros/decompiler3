@@ -94,133 +94,130 @@ class ED9VMLifter:
     ) -> None:
         opcode = ED9Opcode(inst.opcode)
 
-        if opcode == ED9Opcode.PUSH_INT:
-            builder.push_int(int(inst.operands[0].value))
+        match opcode:
+            case ED9Opcode.PUSH_INT:
+                builder.push_int(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.PUSH_FLOAT:
-            builder.push(builder.const_float(inst.operands[0].value))
+            case ED9Opcode.PUSH_FLOAT:
+                builder.push(builder.const_float(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.PUSH_STR:
-            builder.push_str(str(inst.operands[0].value))
+            case ED9Opcode.PUSH_STR:
+                builder.push_str(str(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.PUSH_RAW:
-            builder.push_raw(int(inst.operands[0].value))
+            case ED9Opcode.PUSH_RAW:
+                builder.push_raw(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.PUSH_CURRENT_FUNC_ID:
-            builder.push_func_id()
+            case ED9Opcode.PUSH_CURRENT_FUNC_ID:
+                builder.push_func_id()
 
-        elif opcode == ED9Opcode.PUSH_RET_ADDR:
-            target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
-            builder.push_ret_addr(target)
+            case ED9Opcode.PUSH_RET_ADDR:
+                target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
+                builder.push_ret_addr(target)
 
-        elif opcode == ED9Opcode.PUSH_CALLER_FRAME:
-            target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
-            builder.push_caller_frame(target)
+            case ED9Opcode.PUSH_CALLER_FRAME:
+                target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
+                builder.push_caller_frame(target)
 
-        elif opcode == ED9Opcode.LOAD_STACK or opcode == ED9Opcode.LOAD_STACK_DEREF:
-            builder.load_stack(int(inst.operands[0].value))
+            case ED9Opcode.LOAD_STACK | ED9Opcode.LOAD_STACK_DEREF:
+                builder.load_stack(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.PUSH_STACK_OFFSET:
-            builder.push_stack_addr(int(inst.operands[0].value))
+            case ED9Opcode.PUSH_STACK_OFFSET:
+                builder.push_stack_addr(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.POP_TO:
-            builder.pop_to(int(inst.operands[0].value))
+            case ED9Opcode.POP_TO | ED9Opcode.POP_TO_DEREF:
+                builder.pop_to(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.POP_TO_DEREF:
-            builder.pop_to(int(inst.operands[0].value))
+            case ED9Opcode.POP:
+                pop_size = int(inst.operands[0].value) if inst.operands else 0
+                self._pop_words(builder, pop_size // WORD_SIZE if pop_size > 0 else 0)
 
-        elif opcode == ED9Opcode.POP:
-            pop_size = int(inst.operands[0].value) if inst.operands else 0
-            self._pop_words(builder, pop_size // WORD_SIZE if pop_size > 0 else 0)
+            case ED9Opcode.POPN:
+                count = int(inst.operands[0].value) if inst.operands else 0
+                self._pop_words(builder, count)
 
-        elif opcode == ED9Opcode.POPN:
-            count = int(inst.operands[0].value) if inst.operands else 0
-            self._pop_words(builder, count)
+            case ED9Opcode.GET_REG:
+                builder.get_reg(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.GET_REG:
-            builder.get_reg(int(inst.operands[0].value))
+            case ED9Opcode.SET_REG:
+                builder.set_reg(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.SET_REG:
-            builder.set_reg(int(inst.operands[0].value))
+            case ED9Opcode.LOAD_GLOBAL:
+                builder.load_global(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.LOAD_GLOBAL:
-            builder.load_global(int(inst.operands[0].value))
+            case ED9Opcode.SET_GLOBAL:
+                builder.set_global(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.SET_GLOBAL:
-            builder.set_global(int(inst.operands[0].value))
+            case (
+                ED9Opcode.ADD |
+                ED9Opcode.SUB |
+                ED9Opcode.MUL |
+                ED9Opcode.DIV |
+                ED9Opcode.EQ |
+                ED9Opcode.NE |
+                ED9Opcode.GT |
+                ED9Opcode.GE |
+                ED9Opcode.LT |
+                ED9Opcode.LE |
+                ED9Opcode.BITWISE_AND |
+                ED9Opcode.BITWISE_OR |
+                ED9Opcode.LOGICAL_AND |
+                ED9Opcode.LOGICAL_OR
+            ):
+                self._emit_binary_op(builder, opcode)
 
-        elif opcode in (
-            ED9Opcode.ADD,
-            ED9Opcode.SUB,
-            ED9Opcode.MUL,
-            ED9Opcode.DIV,
-            ED9Opcode.EQ,
-            ED9Opcode.NE,
-            ED9Opcode.GT,
-            ED9Opcode.GE,
-            ED9Opcode.LT,
-            ED9Opcode.LE,
-            ED9Opcode.BITWISE_AND,
-            ED9Opcode.BITWISE_OR,
-            ED9Opcode.LOGICAL_AND,
-            ED9Opcode.LOGICAL_OR,
-        ):
-            self._emit_binary_op(builder, opcode)
+            case ED9Opcode.NEG:
+                builder.neg()
 
-        elif opcode == ED9Opcode.NEG:
-            builder.neg()
+            case ED9Opcode.NOT:
+                builder.logical_not()
 
-        elif opcode == ED9Opcode.NOT:
-            builder.logical_not()
+            case ED9Opcode.EZ:
+                builder.test_zero()
 
-        elif opcode == ED9Opcode.EZ:
-            builder.test_zero()
+            case ED9Opcode.JMP:
+                target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
+                builder.jmp(target)
 
-        elif opcode == ED9Opcode.JMP:
-            target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
-            builder.jmp(target)
+            case ED9Opcode.POP_JMP_ZERO:
+                true_block = self._branch_target(block.true_succs, llil_blocks, block_map, current = block)
+                false_block = self._branch_target(block.false_succs, llil_blocks, block_map, prefer_fallthrough = True, current = block)
+                builder.pop_jmp_zero(true_block, false_block)
 
-        elif opcode == ED9Opcode.POP_JMP_ZERO:
-            true_block = self._branch_target(block.true_succs, llil_blocks, block_map, current = block)
-            false_block = self._branch_target(block.false_succs, llil_blocks, block_map, prefer_fallthrough = True, current = block)
-            builder.pop_jmp_zero(true_block, false_block)
+            case ED9Opcode.POP_JMP_NOT_ZERO:
+                true_block = self._branch_target(block.true_succs, llil_blocks, block_map, current = block)
+                false_block = self._branch_target(block.false_succs, llil_blocks, block_map, prefer_fallthrough = True, current = block)
+                builder.pop_jmp_not_zero(true_block, false_block)
 
-        elif opcode == ED9Opcode.POP_JMP_NOT_ZERO:
-            true_block = self._branch_target(block.true_succs, llil_blocks, block_map, current = block)
-            false_block = self._branch_target(block.false_succs, llil_blocks, block_map, prefer_fallthrough = True, current = block)
-            builder.pop_jmp_not_zero(true_block, false_block)
+            case ED9Opcode.CALL:
+                func_id = int(inst.operands[0].value)
+                builder.call(self._resolve_call_target(func_id))
 
-        elif opcode == ED9Opcode.CALL:
-            func_id = int(inst.operands[0].value)
-            builder.call(self._resolve_call_target(func_id))
+            case ED9Opcode.CALL_SCRIPT:
+                module = self._scpvalue_to_str(inst.operands[0].value)
+                func_name = self._scpvalue_to_str(inst.operands[1].value)
+                argc = int(inst.operands[2].value)
+                builder.call_script(module, func_name, argc)
 
-        elif opcode == ED9Opcode.CALL_SCRIPT:
-            module = self._scpvalue_to_str(inst.operands[0].value)
-            func_name = self._scpvalue_to_str(inst.operands[1].value)
-            argc = int(inst.operands[2].value)
-            builder.call_script(module, func_name, argc)
+            case ED9Opcode.SYSCALL:
+                subsystem = int(inst.operands[0].value)
+                cmd = int(inst.operands[1].value)
+                argc = int(inst.operands[2].value)
+                builder.syscall(subsystem, cmd, argc)
 
-        elif opcode == ED9Opcode.SYSCALL:
-            subsystem = int(inst.operands[0].value)
-            cmd = int(inst.operands[1].value)
-            argc = int(inst.operands[2].value)
-            builder.syscall(subsystem, cmd, argc)
+            case ED9Opcode.DEBUG_SET_LINENO:
+                builder.debug_line(int(inst.operands[0].value))
 
-        elif opcode == ED9Opcode.DEBUG_SET_LINENO:
-            builder.debug_line(int(inst.operands[0].value))
+            case ED9Opcode.DEBUG_LOG:
+                pass
 
-        elif opcode == ED9Opcode.DEBUG_LOG:
-            # No-op for lifting; preserve stack state.
-            pass
+            case ED9Opcode.RETURN:
+                builder.ret()
 
-        elif opcode == ED9Opcode.RETURN:
-            builder.ret()
+            case ED9Opcode.MOD:
+                raise NotImplementedError('MOD opcode not supported in lifter yet')
 
-        elif opcode == ED9Opcode.MOD:
-            raise NotImplementedError('MOD opcode not supported in lifter yet')
-
-        else:
-            raise NotImplementedError(f'Unhandled opcode: {opcode.name} (0x{opcode.value:02X})')
+            case _:
+                raise NotImplementedError(f'Unhandled opcode: {opcode.name} (0x{opcode.value:02X})')
 
     def _emit_binary_op(self, builder: FalcomVMBuilder, opcode: ED9Opcode) -> None:
         mapping = {
