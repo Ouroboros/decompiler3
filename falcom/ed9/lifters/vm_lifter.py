@@ -5,19 +5,14 @@ Reuses the disassembler output (basic blocks + instructions) and rebuilds the
 same CFG inside `FalcomVMBuilder`, emitting `LowLevelILFunction` objects.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import *
 
 from ir.llil.llil import *
 
-from ..disasm.basic_block import *
-from ..disasm.ed9_optable import *
-from ..disasm.instruction import *
+from ..disasm import *
 from ..llil_builder import *
-from ..parser.types_parser import *
-from ..parser.types_scp import *
+from ..parser import *
 
 if TYPE_CHECKING:
     from ..parser.scp import *
