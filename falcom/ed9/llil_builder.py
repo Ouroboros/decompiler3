@@ -43,7 +43,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.caller_frame_inst = None  # Track PUSH_CALLER_FRAME instruction for call_script
         self._finalized = False
 
-    def create_function(self, name: str, start_addr: int = 0, num_params: int = 0):
+    def create_function(self, name: str, start_addr: int, num_params: int):
         '''Create function inside builder
 
         Args:

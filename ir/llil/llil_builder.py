@@ -712,20 +712,21 @@ class LLILFormatter:
         - Push operation for result
         '''
 
-        # StackStore containing a binary operation: expand the binary op
-        if isinstance(inst, LowLevelILStackStore) and isinstance(inst.value, LowLevelILBinaryOp):
-            return cls._format_binary_op_expanded(inst.value)
+        if isinstance(inst, LowLevelILStackStore) and inst.offset == 0:
+            # StackStore containing a binary operation: expand the binary op
+            if isinstance(inst.value, LowLevelILBinaryOp):
+                return cls._format_binary_op_expanded(inst.value)
 
-        # StackStore containing a unary operation: expand the unary op
-        if isinstance(inst, LowLevelILStackStore) and isinstance(inst.value, LowLevelILUnaryOp):
-            return cls._format_unary_op_expanded(inst.value)
+            # StackStore containing a unary operation: expand the unary op
+            if isinstance(inst.value, LowLevelILUnaryOp):
+                return cls._format_unary_op_expanded(inst.value)
 
         # Binary operations: pop 2, compute, push 1
-        if isinstance(inst, LowLevelILBinaryOp):
+        elif isinstance(inst, LowLevelILBinaryOp):
             return cls._format_binary_op_expanded(inst)
 
         # Unary operations: pop 1, compute, push 1
-        if isinstance(inst, LowLevelILUnaryOp):
+        elif isinstance(inst, LowLevelILUnaryOp):
             return cls._format_unary_op_expanded(inst)
 
         return None

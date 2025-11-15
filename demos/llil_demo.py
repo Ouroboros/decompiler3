@@ -709,72 +709,23 @@ def test_Dummy_m3010_talk0():
 
 
 def create_EV_06_37_00():
-    '''
-    EV_06_37_00 - Set random animation frame ratio for character
-
-    Original bytecode:
-    DEBUG_SET_LINENO(20967)
-    PUSH_CURRENT_FUNC_ID()
-    PUSH_RET_ADDR('loc_D2A04')
-    PUSH_INT(0)
-    PUSH_CURRENT_FUNC_ID()
-    PUSH_RET_ADDR('loc_D29F9')
-    PUSH_FLOAT(1.0)
-    PUSH_FLOAT(0.0)
-    CALL(rand)
-
-    label('loc_D29F9')
-    GET_REG(0)
-    PUSH_INT(0)
-    CALL(chr_set_animeclip_frame_ratio)
-
-    label('loc_D2A04')
-    RETURN()
-    '''
     builder = FalcomVMBuilder()
     builder.create_function('EV_06_37_00', 0x16AC50, num_params=0)
 
     # Create all blocks
     entry = builder.create_basic_block(0x16AC50, 'EV_06_37_00')
-    loc_D29F9 = builder.create_basic_block(0xD29F9, 'loc_D29F9')
-    loc_D2A04 = builder.create_basic_block(0xD2A04, 'loc_D2A04')
 
     # === BLOCK 0: Entry - Call rand(0.0, 1.0) ===
     builder.set_current_block(entry)
 
     # DEBUG_SET_LINENO(20967)
     builder.debug_line(20967)
-
-    # PUSH_CURRENT_FUNC_ID()
-    builder.push_func_id()
-    # PUSH_RET_ADDR('loc_D2A04')
-    builder.push_ret_addr(loc_D2A04)
-    # PUSH_INT(0) - first parameter for chr_set_animeclip_frame_ratio
     builder.push_int(0)
-
-    # PUSH_CURRENT_FUNC_ID()
-    builder.push_func_id()
-    # PUSH_RET_ADDR('loc_D29F9')
-    builder.push_ret_addr(loc_D29F9)
-    # PUSH_FLOAT(1.0) - max value for rand
-    builder.push(builder.const_float(1.0))
-    # PUSH_FLOAT(0.0) - min value for rand
-    builder.push(builder.const_float(0.0))
-    # CALL(rand)
-    builder.call('rand')
-
-    # === BLOCK 1: loc_D29F9 - Call chr_set_animeclip_frame_ratio ===
-    builder.set_current_block(loc_D29F9)
-
-    # GET_REG(0) - get rand result
-    builder.get_reg(0)
-    # PUSH_INT(0) - chr_id parameter
-    builder.push_int(0)
-    # CALL(chr_set_animeclip_frame_ratio)
-    builder.call('chr_set_animeclip_frame_ratio')
-
-    # === BLOCK 2: loc_D2A04 - Return ===
-    builder.set_current_block(loc_D2A04)
+    builder.push_int(1)
+    builder.push_int(1)
+    builder.add()
+    builder.pop_to(-4)
+    builder.set_reg(0)
 
     # RETURN()
     builder.ret()

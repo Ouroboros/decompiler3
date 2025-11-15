@@ -94,7 +94,7 @@ class ScpParser(StrictBase):
     def get_func_by_name(self, name: str) -> Function:
         return self.function_map[name]
 
-    def get_func_name(self, func_id: int) -> str | None:
+    def get_func_name(self, func_id: int) -> str:
         if func_id >= len(self.functions):
             raise ValueError(f'func_id out of range: {func_id} >= {len(self.functions)}')
 
