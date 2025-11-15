@@ -263,8 +263,6 @@ class ED9VMLifter:
 
         if prefer_fallthrough and current is not None:
             for succ in current.succs:
-                if candidates and succ.offset == candidates[0].offset:
-                    continue
                 return llil_blocks[succ.offset]
 
         raise RuntimeError('Missing branch target while lifting')
