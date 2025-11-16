@@ -1,4 +1,4 @@
-from enum import IntEnum, IntFlag
+from enum import IntEnum, IntFlag, auto
 
 class IntEnum2(IntEnum):
     def __str__(self):

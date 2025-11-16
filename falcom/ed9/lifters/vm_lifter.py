@@ -152,6 +152,7 @@ class ED9VMLifter:
                 ED9Opcode.SUB |
                 ED9Opcode.MUL |
                 ED9Opcode.DIV |
+                ED9Opcode.MOD |
                 ED9Opcode.EQ |
                 ED9Opcode.NE |
                 ED9Opcode.GT |
@@ -193,8 +194,8 @@ class ED9VMLifter:
                 builder.call(self._resolve_call_target(func_id))
 
             case ED9Opcode.CALL_SCRIPT:
-                module = self._scpvalue_to_str(inst.operands[0].value)
-                func_name = self._scpvalue_to_str(inst.operands[1].value)
+                module = self._must_str(inst.operands[0].value)
+                func_name = self._must_str(inst.operands[1].value)
                 argc = int(inst.operands[2].value)
                 builder.call_script(module, func_name, argc)
 
@@ -213,9 +214,6 @@ class ED9VMLifter:
             case ED9Opcode.RETURN:
                 builder.ret()
 
-            case ED9Opcode.MOD:
-                raise NotImplementedError('MOD opcode not supported in lifter yet')
-
             case _:
                 raise NotImplementedError(f'Unhandled opcode: {opcode.name} (0x{opcode.value:02X})')
 
@@ -225,6 +223,7 @@ class ED9VMLifter:
             ED9Opcode.SUB: builder.sub,
             ED9Opcode.MUL: builder.mul,
             ED9Opcode.DIV: builder.div,
+            ED9Opcode.MOD: builder.mod,
             ED9Opcode.EQ: builder.eq,
             ED9Opcode.NE: builder.ne,
             ED9Opcode.GT: builder.gt,
@@ -262,7 +261,7 @@ class ED9VMLifter:
     def _resolve_call_target(self, func_id: int) -> str:
         return self._parser.get_func_name(func_id)
 
-    def _scpvalue_to_str(self, value: ScpValue) -> str:
+    def _must_str(self, value: ScpValue) -> str:
         if not isinstance(value, ScpValue):
             raise TypeError(f'Expected ScpValue, got {type(value)}')
 

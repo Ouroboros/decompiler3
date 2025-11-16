@@ -5,8 +5,7 @@ Following the confirmed VM semantics with layered architecture
 
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Union, TYPE_CHECKING
-from enum import IntEnum
-
+from common import *
 from ir.core import *
 
 if TYPE_CHECKING:
@@ -17,65 +16,66 @@ if TYPE_CHECKING:
 WORD_SIZE = 4  # 4 bytes per word
 
 
-class LowLevelILOperation(IntEnum):
+class LowLevelILOperation(IntEnum2):
     '''Atomic LLIL operations'''
 
     # Stack operations (atomic)
-    LLIL_STACK_STORE = 0        # STACK[sp + offset] = value
-    LLIL_STACK_LOAD = 1         # load STACK[sp + offset]
-    LLIL_SP_ADD = 2             # sp = sp + delta
+    LLIL_STACK_STORE        = 0     # STACK[sp + offset] = value
+    LLIL_STACK_LOAD         = 1     # load STACK[sp + offset]
+    LLIL_SP_ADD             = 2     # sp = sp + delta
 
     # Frame operations (relative to frame base, for function parameters/locals)
-    LLIL_FRAME_LOAD = 5         # load STACK[frame + offset]
-    LLIL_FRAME_STORE = 6        # STACK[frame + offset] = value
+    LLIL_FRAME_LOAD         = 5     # load STACK[frame + offset]
+    LLIL_FRAME_STORE        = 6     # STACK[frame + offset] = value
 
     # Register operations
-    LLIL_REG_STORE = 10         # R[index] = value
-    LLIL_REG_LOAD = 11          # load R[index]
+    LLIL_REG_STORE          = 10    # R[index] = value
+    LLIL_REG_LOAD           = 11    # load R[index]
 
     # Arithmetic operations (stack-based)
-    LLIL_ADD = 20               # binary operation on stack
-    LLIL_SUB = 21
-    LLIL_MUL = 22
-    LLIL_DIV = 23
-    LLIL_EQ = 24
-    LLIL_NE = 25
-    LLIL_LT = 26
-    LLIL_LE = 27
-    LLIL_GT = 28
-    LLIL_GE = 29
-    LLIL_AND = 30               # bitwise AND
-    LLIL_OR = 31                # bitwise OR
-    LLIL_LOGICAL_AND = 32       # logical AND (&&)
-    LLIL_LOGICAL_OR = 33        # logical OR (||)
+    LLIL_ADD                = 20    # binary operation on stack
+    LLIL_SUB                = 21    # subtraction
+    LLIL_MUL                = 22    # multiplication
+    LLIL_DIV                = 23    # division
+    LLIL_EQ                 = 24    # equality compare
+    LLIL_NE                 = 25    # inequality compare
+    LLIL_LT                 = 26    # less-than compare
+    LLIL_LE                 = 27    # less-or-equal compare
+    LLIL_GT                 = 28    # greater-than compare
+    LLIL_GE                 = 29    # greater-or-equal compare
+    LLIL_AND                = 30    # bitwise AND
+    LLIL_OR                 = 31    # bitwise OR
+    LLIL_LOGICAL_AND        = 32    # logical AND (&&)
+    LLIL_LOGICAL_OR         = 33    # logical OR (||)
+    LLIL_MOD                = 34    # modulus
 
     # Unary operations
-    LLIL_NEG = 35               # arithmetic negation (-x)
-    LLIL_NOT = 36               # logical NOT (!x)
-    LLIL_TEST_ZERO = 37         # test if zero (x == 0)
+    LLIL_NEG                = 35    # arithmetic negation (-x)
+    LLIL_NOT                = 36    # logical NOT (!x)
+    LLIL_TEST_ZERO          = 37    # test if zero (x == 0)
 
     # Control flow
-    LLIL_JMP = 40               # unconditional jump
-    LLIL_BRANCH = 41            # conditional branch
-    LLIL_CALL = 42              # function call
-    LLIL_RET = 43               # return
+    LLIL_JMP                = 40    # unconditional jump
+    LLIL_BRANCH             = 41    # conditional branch
+    LLIL_CALL               = 42    # function call
+    LLIL_RET                = 43    # return
 
     # Constants and special
-    LLIL_CONST = 50             # constant value
-    LLIL_LABEL = 51             # label
-    LLIL_NOP = 52               # no operation
+    LLIL_CONST              = 50    # constant value
+    LLIL_LABEL              = 51    # label
+    LLIL_NOP                = 52    # no operation
 
     # VM specific
-    LLIL_SYSCALL = 60           # system call
-    LLIL_DEBUG = 61             # debug info
-    LLIL_STACK_ADDR = 62        # address of stack location (sp + offset)
+    LLIL_SYSCALL            = 60    # system call
+    LLIL_DEBUG              = 61    # debug info
+    LLIL_STACK_ADDR         = 62    # address of stack location (sp + offset)
 
     # Falcom VM specific (user-defined extensions)
-    LLIL_PUSH_CALLER_FRAME = 1000  # Falcom VM: push caller frame (4 values)
-    LLIL_CALL_SCRIPT = 1001        # Falcom VM: call script function
+    LLIL_PUSH_CALLER_FRAME  = 1000  # Falcom VM: push caller frame (4 values)
+    LLIL_CALL_SCRIPT        = 1001  # Falcom VM: call script function
 
     # User-defined extensions (reserved range: 1002+)
-    LLIL_USER_DEFINED = 1002    # Start of user-defined operations
+    LLIL_USER_DEFINED       = 1002  # Start of user-defined operations
 
 
 class LowLevelILInstruction(ILInstruction):
@@ -329,6 +329,11 @@ class LowLevelILSub(LowLevelILBinaryOp):
 class LowLevelILDiv(LowLevelILBinaryOp):
     def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
         super().__init__(LowLevelILOperation.LLIL_DIV, lhs, rhs)
+
+
+class LowLevelILMod(LowLevelILBinaryOp):
+    def __init__(self, lhs: 'LowLevelILExpr' = None, rhs: 'LowLevelILExpr' = None):
+        super().__init__(LowLevelILOperation.LLIL_MOD, lhs, rhs)
 
 
 class LowLevelILEq(LowLevelILBinaryOp):
@@ -751,4 +756,3 @@ class LowLevelILFunction:
         for block in self.basic_blocks:
             result += str(block)
         return result
-

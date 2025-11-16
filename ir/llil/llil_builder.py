@@ -420,6 +420,10 @@ class LowLevelILBuilder:
         '''DIV operation - computes lhs / rhs (pops rhs first, then lhs)'''
         return self._binary_op(LowLevelILDiv, lhs, rhs, push = push, hidden_for_formatter = hidden_for_formatter)
 
+    def mod(self, lhs = None, rhs = None, *, push: bool = True, hidden_for_formatter: bool = True):
+        '''MOD operation - computes lhs % rhs (pops rhs first, then lhs)'''
+        return self._binary_op(LowLevelILMod, lhs, rhs, push = push, hidden_for_formatter = hidden_for_formatter)
+
     # === Comparison Operations ===
 
     def eq(self, lhs = None, rhs = None, *, push: bool = True, hidden_for_formatter: bool = True):
@@ -621,6 +625,7 @@ class LLILFormatter:
         LowLevelILOperation.LLIL_SUB            : '{lhs} - {rhs}',
         LowLevelILOperation.LLIL_MUL            : '{lhs} * {rhs}',
         LowLevelILOperation.LLIL_DIV            : '{lhs} / {rhs}',
+        LowLevelILOperation.LLIL_MOD            : '{lhs} % {rhs}',
         LowLevelILOperation.LLIL_EQ             : '({lhs} == {rhs}) ? 1 : 0',
         LowLevelILOperation.LLIL_NE             : '({lhs} != {rhs}) ? 1 : 0',
         LowLevelILOperation.LLIL_LT             : '({lhs} < {rhs}) ? 1 : 0',
