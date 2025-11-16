@@ -84,7 +84,7 @@ class LowLevelILInstruction(ILInstruction):
     def __init__(self, operation: LowLevelILOperation):
         super().__init__()
         self.address = 0
-        self.inst_index = 0
+        self.inst_index = -1  # Assigned via LowLevelILFunction._register_instruction
         self.operation = operation
         self.options = ILOptions()  # Formatting and processing options
 
@@ -610,6 +610,7 @@ class LowLevelILBasicBlock:
         self.instructions: List[LowLevelILInstruction] = []
         self.sp_in = 0   # sp state at block entry
         self.sp_out = 0  # sp state at block exit
+        self.function: Optional['LowLevelILFunction'] = None  # Set when block added to a function
 
         # Control flow edges (following BN design)
         self.outgoing_edges: List['LowLevelILBasicBlock'] = []
@@ -626,8 +627,11 @@ class LowLevelILBasicBlock:
                 f'Cannot add instruction to {self.block_name}: '
                 f'block already has terminal instruction {self.instructions[-1]}'
             )
-        inst.inst_index = len(self.instructions)
+
         self.instructions.append(inst)
+
+        if self.function is not None:
+            self.function._register_instruction(self, inst)
 
     def add_outgoing_edge(self, target: 'LowLevelILBasicBlock'):
         '''Add outgoing edge to another block'''
@@ -680,13 +684,38 @@ class LowLevelILFunction:
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
         self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label -> block
         self.frame_base_sp: Optional[int] = None  # Frame pointer (sp at function entry)
+        self._next_inst_index: int = 0
+        self._inst_block_map: dict[int, LowLevelILBasicBlock] = {}
+        self._instructions: List[LowLevelILInstruction] = []
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
         '''Add basic block to function'''
         block.index = len(self.basic_blocks)
+        block.function = self
         self.basic_blocks.append(block)
         self._block_map[block.start] = block
         self._label_map[block.label] = block
+
+    def _register_instruction(self, block: LowLevelILBasicBlock, inst: LowLevelILInstruction):
+        '''Assign a global instruction index and track block association'''
+        inst.inst_index = self._next_inst_index
+        self._next_inst_index += 1
+        self._instructions.append(inst)
+        self._inst_block_map[inst.inst_index] = block
+
+    def get_instruction_by_index(self, inst_index: int) -> Optional[LowLevelILInstruction]:
+        '''Get instruction by global inst_index'''
+        if inst_index < 0 or inst_index >= len(self._instructions):
+            return None
+        return self._instructions[inst_index]
+
+    def get_instruction_block_by_index(self, inst_index: int) -> Optional[LowLevelILBasicBlock]:
+        '''Get the basic block containing the instruction with inst_index'''
+        return self._inst_block_map.get(inst_index)
+
+    def iter_instructions(self):
+        '''Iterate over instructions in insertion order'''
+        return iter(self._instructions)
 
     def get_block_by_addr(self, addr: int) -> Optional[LowLevelILBasicBlock]:
         '''Get basic block by start address'''
