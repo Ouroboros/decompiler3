@@ -228,6 +228,8 @@ class Disassembler:
 - 将反汇编后的指令提升为LLIL
 - 管理虚拟栈和寄存器状态
 - 识别高级结构（函数调用、条件分支等）
+- LLIL Function 会为每一条指令分配全局 `inst_index`，可通过 `get_instruction_by_index()`、
+  `get_instruction_block_by_index()` 和 `iter_instructions()` 查询，用于后续 MLIL/HLIL pass 做数据流分析。
 
 ### 核心设计
 

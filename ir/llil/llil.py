@@ -628,6 +628,12 @@ class LowLevelILBasicBlock:
                 f'block already has terminal instruction {self.instructions[-1]}'
             )
 
+        if inst.inst_index != -1:
+            raise RuntimeError(
+                f'Instruction {inst} already registered (inst_index = {inst.inst_index}). '
+                f'Instructions should not be reused across blocks.'
+            )
+
         self.instructions.append(inst)
 
         if self.function is not None:

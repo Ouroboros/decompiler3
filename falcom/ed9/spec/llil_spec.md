@@ -62,7 +62,7 @@
   class LowLevelILInstruction(ABC):
       operation: LowLevelILOperation
       address: int
-      inst_index: int
+      inst_index: int  # 由 LowLevelILFunction 分配
   ```
 
 - 在其基础上分为两类：
@@ -114,7 +114,16 @@
   1. 用 Expr 描述值本身；
   2. 再用 Statement 把该值写到寄存器/栈槽/全局。
 
-### 1.4 终结指令基类（Terminal）
+### 1.4 指令索引与查询
+
+- basic block 将指令加入函数时，`LowLevelILFunction` 会分配全局唯一的 `inst_index`（初始值为 -1）。
+- 如果某条指令已经被使用（`inst_index != -1`）却再次加入 block，`LowLevelILBasicBlock.add_instruction()` 会抛出 `RuntimeError`。
+- 可用的查询接口：
+  - `get_instruction_by_index(idx)`：根据 `inst_index` 获取指令对象
+  - `get_instruction_block_by_index(idx)`：获取指令所在的 basic block
+  - `iter_instructions()`：按插入顺序遍历函数内所有指令
+
+### 1.5 终结指令基类（Terminal）
 
 ```python
 class LowLevelILTerminal(LowLevelILStatement):
