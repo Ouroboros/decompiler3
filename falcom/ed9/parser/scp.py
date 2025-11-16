@@ -250,10 +250,9 @@ class ScpParser(StrictBase):
         """Restore stack state for this block"""
         context.restore_stack_for_offset(offset)
 
-    def on_pre_add_branches(self, context: ScpDisassemblerContext, targets: list[BranchTarget]) -> None:
-        """Called before adding branches - save stack state for branch targets"""
-        for target in targets:
-            context.save_stack_for_offset(target.offset)
+    def on_pre_add_branch(self, context: ScpDisassemblerContext, target: BranchTarget) -> None:
+        """Called before adding a branch - save stack state for branch target"""
+        context.save_stack_for_offset(target.offset)
 
     def on_instruction_decoded(self, context: ScpDisassemblerContext, inst: Instruction, block: BasicBlock) -> list[BranchTarget]:
         """Called for every instruction during disassembly"""
@@ -385,7 +384,7 @@ class ScpParser(StrictBase):
                 on_disasm_function      = self.on_disasm_function,
                 on_block_start          = self.on_block_start,
                 on_instruction_decoded  = self.on_instruction_decoded,
-                on_pre_add_branches     = self.on_pre_add_branches,
+                on_pre_add_branch       = self.on_pre_add_branch,
             )
 
             disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)

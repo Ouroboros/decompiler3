@@ -20,7 +20,7 @@ class DisassemblerContext:
     on_disasm_function      : Callable[['DisassemblerContext', int, str], None] = None  # context, offset, name
     on_block_start          : Callable[['DisassemblerContext', int], None] = None  # context, offset
     on_instruction_decoded  : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
-    on_pre_add_branches     : Callable[['DisassemblerContext', list[BranchTarget]], None] = None  # context, targets
+    on_pre_add_branch       : Callable[['DisassemblerContext', BranchTarget], None] = None  # context, target
 
 
 class Disassembler:
@@ -137,43 +137,27 @@ class Disassembler:
             desc = inst.descriptor
 
             # Call on_instruction_decoded callback for every instruction
-            opt_targets = []
+            pending_targets = []
             if self.context.on_instruction_decoded:
-                opt_targets = self.context.on_instruction_decoded(self.context, inst, block)
+                pending_targets = self.context.on_instruction_decoded(self.context, inst, block)
 
-            # Check for block termination
+            # If block terminates or declares future targets, collect them
             if desc.is_end_block():
-                # Extract branch targets before ending block
-                targets = desc.get_branch_targets(inst, fs.Position)
-                targets.extend(opt_targets)
-
-                # Call on_pre_add_branches callback
-                if self.context.on_pre_add_branches:
-                    self.context.on_pre_add_branches(self.context, targets)
-
-                for target in targets:
-                    target_block = self.ensure_block_at(target.offset)
-                    block.add_branch(target_block, target.kind)
-                # Terminal instruction - block ends here
-                break
-
-            # Process optimization targets for non-END_BLOCK instructions
-            if opt_targets:
-                # Call on_pre_add_branches callback
-                if self.context.on_pre_add_branches:
-                    self.context.on_pre_add_branches(self.context, opt_targets)
-
-                for target in opt_targets:
-                    target_block = self.ensure_block_at(target.offset)
-                    block.add_branch(target_block, target.kind)
+                pending_targets.extend(desc.get_branch_targets(inst, fs.Position))
 
             if desc.is_start_block():
-                # This instruction starts a new block at target offset
-                # Extract branch targets (e.g., return address for PUSH_CALLER_FRAME)
-                targets = desc.get_branch_targets(inst, fs.Position)
-                for target in targets:
-                    # Ensure block at target (may split if target is in middle of block)
-                    self.ensure_block_at(target.offset)
+                pending_targets.extend(desc.get_branch_targets(inst, fs.Position))
+
+            # Add any pending targets
+            for target in pending_targets:
+                if self.context.on_pre_add_branch:
+                    self.context.on_pre_add_branch(self.context, target)
+
+                target_block = self.ensure_block_at(target.offset)
+                block.add_branch(target_block, target.kind)
+
+            if desc.is_end_block():
+                break
 
             # Check if next position is an allocated block
             if fs.Position in self.allocated_blocks:

@@ -37,11 +37,17 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
     def __init__(
         self,
         func_id: 'LowLevelILConstFuncId',
-        ret_addr: Union['LowLevelILConstRetAddr', 'LowLevelILConstRetAddrBlock'],
+        ret_addr: 'LowLevelILConstRetAddrBlock',
         script_ptr: 'LowLevelILConstScript',
         context_marker: LowLevelILConst
     ):
         super().__init__(LowLevelILFalcomOperation.LLIL_PUSH_CALLER_FRAME)
+
+        if not isinstance(ret_addr, LowLevelILConstRetAddrBlock):
+            raise TypeError(
+                f'ret_addr must be LowLevelILConstRetAddrBlock, got {type(ret_addr).__name__}'
+            )
+
         self.func_id          = func_id                     # FalcomConstants.current_func_id()
         self.ret_addr         = ret_addr                    # FalcomConstants.ret_addr() or ret_addr_block()
         self.script_ptr       = script_ptr                  # FalcomConstants.current_script()

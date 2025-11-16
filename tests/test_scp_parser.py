@@ -281,7 +281,7 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                filter_func = lambda f: f.name == 'MayaEvent02_07_01'
+                filter_func = lambda f: f.name == 'MayaEvent03_00_00_03'
             )
 
             # Print formatted functions
