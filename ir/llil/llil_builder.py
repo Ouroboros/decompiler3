@@ -192,8 +192,6 @@ class LowLevelILBuilder:
               both branch targets start with the same stack state.
         '''
 
-        print(f'Saving stack state for offset 0x{offset:X}, sp = {self.sp_get()}')
-
         self.saved_stacks[offset] = self.save_stack_state()
 
     def restore_stack_for_offset(self, offset: int):
