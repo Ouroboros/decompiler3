@@ -72,7 +72,7 @@ class Function:
     debug_info      : list[FunctionCallDebugInfo]
     entry_block     : BasicBlock | None
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.params     = []
         self.debug_info = []
         self.entry_block = None

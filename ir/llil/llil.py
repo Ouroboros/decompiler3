@@ -670,9 +670,9 @@ class LowLevelILBasicBlock:
         return None
 
     def __str__(self) -> str:
-        result = f'{self.block_name} @ {hex(self.start)}: [sp={self.sp_in}]\n'
-        for i, inst in enumerate(self.instructions):
-            result += f'  {inst}\n'
+        result = f'{self.block_name} {self.label} @ {hex(self.start)}: [sp={self.sp_in}]\n'
+        # for i, inst in enumerate(self.instructions):
+        #     result += f'  {inst}\n'
         if self.outgoing_edges:
             targets = [b.block_name for b in self.outgoing_edges]
             result += f'  -> {', '.join(targets)}\n'
@@ -783,7 +783,7 @@ class LowLevelILFunction:
             elif not isinstance(last_inst, Terminal):
                 # Should not happen - all blocks must end with terminal
                 raise RuntimeError(
-                    f'Block {block.index} ends with non-terminal instruction: {last_inst}'
+                    f'Block {block} {block.label} ends with non-terminal instruction: {last_inst}'
                 )
 
     def __str__(self) -> str:

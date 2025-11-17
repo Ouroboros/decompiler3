@@ -2,9 +2,45 @@
 LLIL v2 Builder - Layered architecture for convenience
 '''
 
+from dataclasses import dataclass
 from typing import Union, Optional, List
 
 from .llil import *
+
+
+class _VirtualStack:
+    '''Encapsulates the builder's virtual stack with save/restore support.'''
+
+    def __init__(self):
+        self._items: List[LowLevelILExpr] = []
+
+    def push(self, expr: LowLevelILExpr):
+        self._items.append(expr)
+
+    def pop(self) -> LowLevelILExpr:
+        if not self._items:
+            raise RuntimeError('Vstack underflow: attempting to pop from empty vstack')
+        return self._items.pop()
+
+    def peek(self, offset: int = -1) -> LowLevelILExpr:
+        if not self._items:
+            raise RuntimeError('Vstack empty: cannot peek')
+        return self._items[offset]
+
+    def size(self) -> int:
+        return len(self._items)
+
+    def snapshot(self) -> List[LowLevelILExpr]:
+        return list(self._items)
+
+    def restore(self, snapshot: List[LowLevelILExpr]):
+        self._items = list(snapshot)
+
+
+@dataclass
+class StackSnapshot:
+    sp: int
+    values: List[LowLevelILExpr]
 
 
 class LowLevelILBuilder:
@@ -15,7 +51,8 @@ class LowLevelILBuilder:
         self.current_block: Optional[LowLevelILBasicBlock] = None
         self.__current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out) - PRIVATE
         self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
-        self.__vstack: List[LowLevelILExpr] = []  # Virtual stack for expression tracking - PRIVATE (ONLY stores LowLevelILExpr)
+        self.__vstack = _VirtualStack()  # Virtual stack for expression tracking
+        self.saved_stacks: dict[int, StackSnapshot] = {}  # offset -> StackSnapshot for branches
 
     # === Stack Pointer Management (Public Interface) ===
 
@@ -89,24 +126,19 @@ class LowLevelILBuilder:
         '''Push expression to vstack (only accepts LowLevelILExpr)'''
         if not isinstance(expr, LowLevelILExpr):
             raise TypeError(f'vstack only accepts LowLevelILExpr, got {type(expr).__name__}')
-        self.__vstack.append(expr)
+        self.__vstack.push(expr)
 
     def __vstack_pop(self) -> LowLevelILExpr:
         '''Pop expression from vstack (returns LowLevelILExpr)'''
-        if not self.__vstack:
-            raise RuntimeError('Vstack underflow: attempting to pop from empty vstack')
         return self.__vstack.pop()
 
     def vstack_peek(self, offset: int = -1) -> LowLevelILExpr:
         '''Peek at top of vstack without popping (returns LowLevelILExpr)'''
-        if not self.__vstack:
-            raise RuntimeError('Vstack empty: cannot peek')
-
-        return self.__vstack[offset]
+        return self.__vstack.peek(offset)
 
     def vstack_size(self) -> int:
         '''Get current vstack size'''
-        return len(self.__vstack)
+        return self.__vstack.size()
 
     def set_current_block(self, block: LowLevelILBasicBlock):
         '''Set the current basic block for instruction insertion
@@ -140,6 +172,41 @@ class LowLevelILBuilder:
         if self.frame_base_sp is None:
             self.frame_base_sp = 0
             self.function.frame_base_sp = 0
+
+    def save_stack_state(self) -> StackSnapshot:
+        '''Snapshot current stack pointer and virtual stack'''
+        return StackSnapshot(self.sp_get(), self.__vstack.snapshot())
+
+    def restore_stack_state(self, snapshot: StackSnapshot):
+        '''Restore stack pointer and virtual stack'''
+        self.__sp_set(snapshot.sp)
+        self.__vstack.restore(snapshot.values)
+
+    def save_stack_for_offset(self, offset: int):
+        '''Save current stack state for given offset (branch target)
+
+        Args:
+            offset: Target block offset to save stack state for
+
+        Note: This is typically called before conditional branches to ensure
+              both branch targets start with the same stack state.
+        '''
+
+        print(f'Saving stack state for offset 0x{offset:X}, sp = {self.sp_get()}')
+
+        self.saved_stacks[offset] = self.save_stack_state()
+
+    def restore_stack_for_offset(self, offset: int):
+        '''Restore stack state for given offset, if saved
+
+        Args:
+            offset: Block offset to restore stack state for
+
+        Note: This is typically called at the start of processing each block
+              to restore the stack state saved by a previous branch.
+        '''
+        if offset in self.saved_stacks:
+            self.restore_stack_state(self.saved_stacks[offset])
 
     def get_block_by_addr(self, addr: int) -> Optional[LowLevelILBasicBlock]:
         '''Get block by start address'''

@@ -281,32 +281,32 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                filter_func = lambda f: f.name == 'MayaEvent03_00_00_03'
+                filter_func = lambda f: f.name == 'MayaEvent02_07_01'
             )
+
+            formatted_lines = []
+            llil_lines = []
 
             # Print formatted functions
             print('\n=== Disassembly ===\n')
             for func in disassembled_functions:
-                print(f'{func} @ 0x{func.offset:08X}\n')
+                print(f'{func} @ 0x{func.offset:08X}')
 
-                formatted_lines = parser.format_function(func)
-                vmpy_path = test_file.with_suffix('.py')
-                vmpy_path.write_text('\n'.join(formatted_lines) + '\n', encoding = 'utf-8')
-
-                # print('\n'.join(formatted_lines))
-                # print()
+                formatted_lines.extend(parser.format_function(func))
+                formatted_lines.append('')
 
                 lifter = ED9VMLifter(parser = parser)
                 llil_func = lifter.lift_function(func)
                 self.assertIsInstance(llil_func, LowLevelILFunction)
-                llil_lines = FalcomLLILFormatter.format_llil_function(llil_func)
-                # print('--- LLIL ---')
-                # print('\n'.join(llil_lines))
-                # print()
 
-                llil_path = test_file.with_suffix('.asm')
-                llil_path.write_text('\n'.join(llil_lines) + '\n', encoding = 'utf-8')
+                llil_lines.extend(FalcomLLILFormatter.format_llil_function(llil_func))
+                llil_lines.append('')
 
+            vmpy_path = test_file.with_suffix('.py')
+            vmpy_path.write_text('\n'.join(formatted_lines) + '\n', encoding = 'utf-8')
+
+            llil_path = test_file.with_suffix('.asm')
+            llil_path.write_text('\n'.join(llil_lines) + '\n', encoding = 'utf-8')
 
 if __name__ == '__main__':
     unittest.main(buffer = False, defaultTest = 'TestScpParser')

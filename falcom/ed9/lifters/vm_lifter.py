@@ -56,7 +56,9 @@ class ED9VMLifter:
         block_map = {block.offset: block for block in blocks}
 
         for block in blocks:
+            builder.restore_stack_for_offset(block.offset)
             builder.set_current_block(llil_blocks[block.offset])
+            # Restore stack state for this block if it was saved by a previous branch
             for inst in block.instructions:
                 self._translate_instruction(builder, inst, block, block_map, llil_blocks)
 
@@ -182,12 +184,22 @@ class ED9VMLifter:
             case ED9Opcode.POP_JMP_ZERO:
                 true_block = self._branch_target(block.true_succs, llil_blocks)
                 false_block = self._branch_target(block.false_succs, llil_blocks)
+
                 builder.pop_jmp_zero(true_block, false_block)
+
+                # Save current stack state for both branch targets before popping
+                builder.save_stack_for_offset(true_block.start)
+                builder.save_stack_for_offset(false_block.start)
 
             case ED9Opcode.POP_JMP_NOT_ZERO:
                 true_block = self._branch_target(block.true_succs, llil_blocks)
                 false_block = self._branch_target(block.false_succs, llil_blocks)
+
                 builder.pop_jmp_not_zero(true_block, false_block)
+
+                # Save current stack state for both branch targets before popping
+                builder.save_stack_for_offset(true_block.start)
+                builder.save_stack_for_offset(false_block.start)
 
             case ED9Opcode.CALL:
                 func_id = int(inst.operands[0].value)

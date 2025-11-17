@@ -11,7 +11,7 @@ class StrictBase:
     '''
     _allowed_attrs_: frozenset[str]
 
-    def __init_subclass__(cls) -> None:
+    def __init_subclass__(cls):
         ann = getattr(cls, '__annotations__', {})
         cls._allowed_attrs_ = frozenset(ann.keys())
 

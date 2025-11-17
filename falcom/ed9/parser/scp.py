@@ -11,6 +11,7 @@ PUSH_VARIANTS = (
     ED9Opcode.PUSH_INT,
     ED9Opcode.PUSH_FLOAT,
     ED9Opcode.PUSH_STR,
+    ED9Opcode.PUSH_STACK_OFFSET,
 )
 
 PUSH_VALUE_OPS = (
@@ -70,11 +71,11 @@ class ScpDisassemblerContext(DisassemblerContext):
         if self.saved_stacks is None:
             self.saved_stacks = {}
 
-    def save_stack_for_offset(self, offset: int) -> None:
+    def save_stack_for_offset(self, offset: int):
         """Save current stack state for given offset"""
         self.saved_stacks[offset] = self.stack_simulation.copy()
 
-    def restore_stack_for_offset(self, offset: int) -> None:
+    def restore_stack_for_offset(self, offset: int):
         """Restore stack state for given offset, if saved"""
         if offset in self.saved_stacks:
             self.stack_simulation = self.saved_stacks[offset].copy()
@@ -223,7 +224,7 @@ class ScpParser(StrictBase):
 
     # disassemble
 
-    def on_disasm_function(self, context: ScpDisassemblerContext, offset: int, name: str) -> None:
+    def on_disasm_function(self, context: ScpDisassemblerContext, offset: int, name: str):
         """Initialize stack simulation with function parameters"""
         # Get function object and parameter count
         func = next((f for f in self.functions if f.offset == offset or f.name == name), None)
@@ -246,11 +247,11 @@ class ScpParser(StrictBase):
             param_inst = ParamPlaceholder(i, offset - (argc - i))
             context.stack_simulation.append(param_inst)
 
-    def on_block_start(self, context: ScpDisassemblerContext, offset: int) -> None:
+    def on_block_start(self, context: ScpDisassemblerContext, offset: int):
         """Restore stack state for this block"""
         context.restore_stack_for_offset(offset)
 
-    def on_pre_add_branch(self, context: ScpDisassemblerContext, target: BranchTarget) -> None:
+    def on_pre_add_branch(self, context: ScpDisassemblerContext, target: BranchTarget):
         """Called before adding a branch - save stack state for branch target"""
         context.save_stack_for_offset(target.offset)
 
@@ -270,8 +271,6 @@ class ScpParser(StrictBase):
         if opcode == ED9Opcode.RETURN:
             if stack:
                 raise ValueError(f'Stack is not empty at return: {stack}')
-
-            # self.on_disasm_function(context, context.current_func.offset, context.current_func.name)
 
         # PUSH operations - add to stack
         if opcode in PUSH_VARIANTS:
@@ -385,6 +384,7 @@ class ScpParser(StrictBase):
                 on_block_start          = self.on_block_start,
                 on_instruction_decoded  = self.on_instruction_decoded,
                 on_pre_add_branch       = self.on_pre_add_branch,
+                create_fallthrough_jump = ed9_create_fallthrough_jump,
             )
 
             disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)

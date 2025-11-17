@@ -125,6 +125,9 @@ class Disassembler:
                 # Reached an instruction that's part of another block
                 break
 
+            if pos == 0xEEC92:
+                pass
+
             # Decode instruction
             inst = self.instruction_table.decode_instruction(fs, pos)
 
@@ -153,6 +156,9 @@ class Disassembler:
                 if self.context.on_pre_add_branch:
                     self.context.on_pre_add_branch(self.context, target)
 
+                if target.offset == 0xEEC8C:
+                    pass
+
                 target_block = self.ensure_block_at(target.offset)
                 block.add_branch(target_block, target.kind)
 
@@ -162,6 +168,7 @@ class Disassembler:
             # Check if next position is an allocated block
             if fs.Position in self.allocated_blocks:
                 # Next instruction belongs to a pre-allocated block
+                self._add_fallthrough_jump(block, pos, fs.Position)
                 break
 
         # Recursively disassemble all successors
@@ -178,6 +185,24 @@ class Disassembler:
         self.current_block = previous_block
 
         return block
+
+    def _add_fallthrough_jump(self, block: BasicBlock, src_offset: int, target_offset: int):
+        """
+        Emit a synthetic fallthrough jump from block to the block at target_offset.
+
+        Args:
+            block: Current basic block
+            src_offset: Offset of the last decoded instruction (jump origin)
+            target_offset: Offset of the next block (jump destination)
+        """
+        next_block = self.ensure_block_at(target_offset)
+        synthetic_jmp = self.context.create_fallthrough_jump(
+            src_offset,
+            target_offset,
+            self.instruction_table
+        )
+        block.instructions.append(synthetic_jmp)
+        block.add_branch(next_block, BranchKind.UNCONDITIONAL)
 
     def create_block(self, offset: int) -> BasicBlock:
         """
@@ -270,13 +295,13 @@ class Disassembler:
 
         # Add synthetic fallthrough jump instruction to owner to make it terminate properly
         # This is needed for LLIL conversion to ensure every block ends with a terminal instruction
-        if self.context.create_fallthrough_jump:
-            synthetic_jmp = self.context.create_fallthrough_jump(
-                split_offset,
-                tail.start_offset,
-                self.instruction_table
-            )
-            owner.instructions.append(synthetic_jmp)
+
+        synthetic_jmp = self.context.create_fallthrough_jump(
+            split_offset,
+            tail.start_offset,
+            self.instruction_table
+        )
+        owner.instructions.append(synthetic_jmp)
 
         owner.succs = [tail]
         owner.true_succs = []
