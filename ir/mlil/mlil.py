@@ -213,7 +213,10 @@ class MLILConst(MediumLevelILExpr, Constant):
     def __str__(self) -> str:
         if isinstance(self.value, int):
             if self.is_hex:
-                return f'0x{self.value:X}'
+                if self.value < 0:
+                    return f'-0x{-self.value:X}'
+                else:
+                    return f'0x{self.value:X}'
 
             return str(self.value)
 

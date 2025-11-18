@@ -68,6 +68,7 @@ class MLILOptimizer:
                             # Simple comparison - invert it
                             # (a >= b) == 0 is equivalent to a < b
                             new_condition = inverted
+
                         else:
                             # Complex expression - use LogicalNot
                             # (expr) == 0 is equivalent to !expr
@@ -147,6 +148,7 @@ class MLILOptimizer:
                 # Keep if variable is used
                 if self.var_uses.get(inst.var, 0) > 0:
                     new_instructions.append(inst)
+
                 else:
                     # Dead code - variable assigned but never read
                     changed = True
@@ -247,8 +249,10 @@ class MLILOptimizer:
             if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
                 if isinstance(inst, MLILCall):
                     return MLILCall(inst.target, new_args)
+
                 elif isinstance(inst, MLILSyscall):
                     return MLILSyscall(inst.subsystem, inst.cmd, new_args)
+
                 elif isinstance(inst, MLILCallScript):
                     return MLILCallScript(inst.module, inst.func, new_args)
 
@@ -257,6 +261,7 @@ class MLILOptimizer:
             if new_value is not inst.value:
                 if isinstance(inst, MLILStoreGlobal):
                     return MLILStoreGlobal(inst.index, new_value)
+
                 else:
                     return MLILStoreReg(inst.reg_index, new_value)
 
@@ -282,16 +287,99 @@ class MLILOptimizer:
             new_lhs = self._inline_expr(expr.lhs)
             new_rhs = self._inline_expr(expr.rhs)
             if new_lhs is not expr.lhs or new_rhs is not expr.rhs:
-                # Create new instance with inlined operands
-                return type(expr)(new_lhs, new_rhs)
+                # Create new instance with inlined operands (explicit type checking)
+                return self._reconstruct_binary_op(expr, new_lhs, new_rhs)
 
         # Recurse into unary operations
-        elif isinstance(expr, (MLILNeg, MLILLogicalNot, MLILTestZero)):
+        elif isinstance(expr, (MLILNeg, MLILLogicalNot, MLILTestZero, MLILAddressOf)):
             new_operand = self._inline_expr(expr.operand)
             if new_operand is not expr.operand:
-                return type(expr)(new_operand)
+                return self._reconstruct_unary_op(expr, new_operand)
 
         return expr
+
+    def _reconstruct_binary_op(self, expr: MediumLevelILInstruction,
+                               lhs: MediumLevelILInstruction,
+                               rhs: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Reconstruct binary operation with new operands (explicit type checking)'''
+        # Arithmetic operations
+        if isinstance(expr, MLILAdd):
+            return MLILAdd(lhs, rhs)
+
+        elif isinstance(expr, MLILSub):
+            return MLILSub(lhs, rhs)
+
+        elif isinstance(expr, MLILMul):
+            return MLILMul(lhs, rhs)
+
+        elif isinstance(expr, MLILDiv):
+            return MLILDiv(lhs, rhs)
+
+        elif isinstance(expr, MLILMod):
+            return MLILMod(lhs, rhs)
+
+        # Bitwise operations
+        elif isinstance(expr, MLILAnd):
+            return MLILAnd(lhs, rhs)
+
+        elif isinstance(expr, MLILOr):
+            return MLILOr(lhs, rhs)
+
+        elif isinstance(expr, MLILXor):
+            return MLILXor(lhs, rhs)
+
+        elif isinstance(expr, MLILShl):
+            return MLILShl(lhs, rhs)
+
+        elif isinstance(expr, MLILShr):
+            return MLILShr(lhs, rhs)
+
+        # Logical operations
+        elif isinstance(expr, MLILLogicalAnd):
+            return MLILLogicalAnd(lhs, rhs)
+
+        elif isinstance(expr, MLILLogicalOr):
+            return MLILLogicalOr(lhs, rhs)
+
+        # Comparison operations
+        elif isinstance(expr, MLILEq):
+            return MLILEq(lhs, rhs)
+
+        elif isinstance(expr, MLILNe):
+            return MLILNe(lhs, rhs)
+
+        elif isinstance(expr, MLILLt):
+            return MLILLt(lhs, rhs)
+
+        elif isinstance(expr, MLILLe):
+            return MLILLe(lhs, rhs)
+
+        elif isinstance(expr, MLILGt):
+            return MLILGt(lhs, rhs)
+
+        elif isinstance(expr, MLILGe):
+            return MLILGe(lhs, rhs)
+
+        else:
+            raise NotImplementedError(f'Unhandled binary operation type: {type(expr).__name__}')
+
+    def _reconstruct_unary_op(self, expr: MediumLevelILInstruction,
+                              operand: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Reconstruct unary operation with new operand (explicit type checking)'''
+        if isinstance(expr, MLILNeg):
+            return MLILNeg(operand)
+
+        elif isinstance(expr, MLILLogicalNot):
+            return MLILLogicalNot(operand)
+
+        elif isinstance(expr, MLILTestZero):
+            return MLILTestZero(operand)
+
+        elif isinstance(expr, MLILAddressOf):
+            return MLILAddressOf(operand)
+
+        else:
+            raise NotImplementedError(f'Unhandled unary operation type: {type(expr).__name__}')
 
     def _is_inlinable(self, expr: MediumLevelILInstruction) -> bool:
         '''Check if expression is safe to inline'''
