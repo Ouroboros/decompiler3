@@ -73,30 +73,21 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
         # Generate MLIL CallScript
         self.builder.call_script(llil_inst.module, llil_inst.func, mlil_args)
 
-        # Add goto to return target
-        if isinstance(llil_inst.return_target, str):
-            # Find block by label
-            return_block = None
-            for block in self.builder.function.basic_blocks:
-                if block.label == llil_inst.return_target:
-                    return_block = block
-                    break
-            if return_block is None:
-                raise ValueError(f'Return target block not found: {llil_inst.return_target}')
-        else:
-            # return_target is a LowLevelILBasicBlock
-            return_block = self.block_map[llil_inst.return_target]
-
+        # Add goto to return target (always a LowLevelILBasicBlock in Falcom)
+        return_block = self.block_map[llil_inst.return_target]
         self.builder.goto(return_block)
 
     def _translate_syscall(self, llil_inst: LowLevelILSyscall):
         '''Translate Falcom syscall'''
+        # Verify args match argc
+        if llil_inst.argc > 0 and not llil_inst.args:
+            raise ValueError(f'Syscall argc={llil_inst.argc} but args is empty')
+
+        if len(llil_inst.args) != llil_inst.argc:
+            raise ValueError(f'Syscall argc={llil_inst.argc} but got {len(llil_inst.args)} args')
+
         # Translate arguments from LLIL
-        if llil_inst.args:
-            mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
-        else:
-            # Fallback: use placeholders if args not available
-            mlil_args = [MLILConst(f'<arg{i}>', is_hex = False) for i in range(llil_inst.argc)]
+        mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
 
         # Generate MLIL Syscall
         self.builder.syscall(llil_inst.subsystem, llil_inst.cmd, mlil_args)

@@ -90,7 +90,7 @@ class MLILFormatter:
 
         elif isinstance(inst, MLILCallScript):
             args_str = ', '.join(str(arg) for arg in inst.args)
-            return f'{inst.module}.{inst.func}({args_str})'
+            return f'{inst.module}.{inst.func}({args_str})  ; MLILCallScript'
 
         elif isinstance(inst, MLILIf):
             return f'if ({inst.condition}) goto {inst.true_target.label} else {inst.false_target.label}'

@@ -684,14 +684,14 @@ class LowLevelILBuilder:
 
         self.add_instruction(LowLevelILIf(condition, true_target, false_target))
 
-    def call(self, target: Union[str, LowLevelILInstruction],
-             return_target: Optional[Union[str, LowLevelILBasicBlock]] = None,
+    def call(self, target: str,
+             return_target: LowLevelILBasicBlock,
              argc: Optional[int] = None):
         '''Function call (terminal instruction)
 
         Args:
             target: Function name or address
-            return_target: Block or label to return to after call (resolved in build_cfg)
+            return_target: Block to return to after call
             argc: Number of stack slots to clean up (includes func_id + ret_addr + args)
         '''
 

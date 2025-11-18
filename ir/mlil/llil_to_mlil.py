@@ -144,30 +144,12 @@ class LLILToMLILTranslator:
         # Translate arguments
         mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
 
-        # Get target name
-        if isinstance(llil_inst.target, str):
-            target_name = llil_inst.target
-        else:
-            target_name = str(llil_inst.target)
-
-        # Generate call
-        self.builder.call(target_name, mlil_args)
+        # Generate call (target is always a string)
+        self.builder.call(llil_inst.target, mlil_args)
 
         # Add goto to return target (makes this block terminal)
-        # return_target can be a string (label) or a block
-        if isinstance(llil_inst.return_target, str):
-            # Find block by label
-            return_block = None
-            for block in self.builder.function.basic_blocks:
-                if block.label == llil_inst.return_target:
-                    return_block = block
-                    break
-            if return_block is None:
-                raise ValueError(f'Return target block not found: {llil_inst.return_target}')
-        else:
-            # return_target is a LowLevelILBasicBlock
-            return_block = self.block_map[llil_inst.return_target]
-
+        # return_target is always a LowLevelILBasicBlock
+        return_block = self.block_map[llil_inst.return_target]
         self.builder.goto(return_block)
 
     def _translate_expr(self, llil_expr: LowLevelILInstruction) -> MediumLevelILInstruction:
