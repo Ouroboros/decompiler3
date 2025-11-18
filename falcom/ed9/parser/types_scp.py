@@ -136,7 +136,8 @@ class ScpValue:
                 value = int.from_bytes((sign | (value >> 2)).to_bytes(4, 'little'), 'little', signed = True)
 
             case ScpValue.Type.Float:
-                value = struct.unpack('f', ((value << 2) & 0xFFFFFFFF).to_bytes(4, 'little'))[0]
+                float_bytes = ((value << 2) & 0xFFFFFFFF).to_bytes(4, 'little')
+                value = struct.unpack('f', float_bytes)[0]
 
             case ScpValue.Type.String:
                 with fs.PositionSaver:

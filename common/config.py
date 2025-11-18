@@ -26,6 +26,7 @@ class Config:
     _defaults = {
         'endian': 'little',
         'encoding': 'UTF8',
+        'float_precision_decimals': 10,
     }
 
     def __new__(cls):
@@ -59,12 +60,12 @@ class Config:
     def load_defaults(self):
         '''Load default configuration files'''
         # Load project config
-        project_config = Path.cwd() / 'config.json5'
+        project_config = Path(__file__).parent.parent / 'config.json5'
         self.load_file(project_config)
 
         # Load user config (overrides project config)
-        user_config = Path.home() / '.decompiler3' / 'config.json5'
-        self.load_file(user_config)
+        # user_config = Path.home() / '.decompiler3' / 'config.json5'
+        # self.load_file(user_config)
 
     def parse_args(self, args: list[str] = None):
         '''Parse command-line arguments and override config'''
@@ -117,12 +118,17 @@ class Config:
     @property
     def endian(self) -> str:
         '''Get byte order configuration'''
-        return self.get('endian', 'little')
+        return self.get('endian')
 
     @property
     def encoding(self) -> str:
         '''Get encoding configuration'''
-        return self.get('encoding', 'UTF8')
+        return self.get('encoding')
+
+    @property
+    def float_precision_decimals(self) -> int:
+        '''Get default float precision for decimal rounding'''
+        return int(self.get('float_precision_decimals'))
 
 
 # Global config instance
@@ -143,6 +149,10 @@ def default_encoding() -> str:
     '''Get default encoding (UTF8/UTF16)'''
     return _config.encoding
 
+
+def default_float_precision_decimals() -> int:
+    '''Get default decimal places for float rounding'''
+    return _config.float_precision_decimals
 
 def default_indent() -> str:
     '''Get default indent'''

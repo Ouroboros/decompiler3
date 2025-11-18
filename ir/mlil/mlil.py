@@ -19,6 +19,10 @@ from typing import Any, Dict, Iterator, List, Optional, TYPE_CHECKING
 from common import *
 from ir.core import *
 
+
+FLOAT_ROUND_REL_TOL = 1e-6
+FLOAT_ROUND_ABS_TOL = 1e-9
+
 if TYPE_CHECKING:
     from ir.llil import LowLevelILBasicBlock, LowLevelILFunction
 
@@ -210,10 +214,26 @@ class MLILConst(MediumLevelILExpr, Constant):
         if isinstance(self.value, int):
             if self.is_hex:
                 return f'0x{self.value:X}'
+
             return str(self.value)
+
         elif isinstance(self.value, float):
-            return f'{self.value}f'
+            precision = default_float_precision_decimals()
+            value = self.value
+            round_value = round(value, precision)
+
+            rel_tol = FLOAT_ROUND_REL_TOL
+            abs_tol = FLOAT_ROUND_ABS_TOL
+
+            if abs(round_value - value) <= max(abs(value) * rel_tol, abs_tol):
+                if value != round_value:
+                    print(f'float: {precision} {value} -> {round_value}')
+                value = round_value
+
+            return f'{value}'
+
         elif isinstance(self.value, str):
+
             return f'"{self.value}"'
         return str(self.value)
 
