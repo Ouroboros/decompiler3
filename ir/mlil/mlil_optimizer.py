@@ -263,7 +263,7 @@ class MLILOptimizer:
                     return MLILStoreGlobal(inst.index, new_value)
 
                 else:
-                    return MLILStoreReg(inst.reg_index, new_value)
+                    return MLILStoreReg(inst.index, new_value)
 
         return inst
 

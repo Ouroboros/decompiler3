@@ -154,7 +154,7 @@ class MLILFormatter:
             return str(inst)
 
         elif isinstance(inst, MLILDebug):
-            return f'debug.{inst.debug_type}({inst.value})'
+            return f'; debug.{inst.debug_type}({inst.value})'
 
         else:
             raise NotImplementedError(f'Unhandled MLIL instruction type: {type(inst).__name__}')

@@ -88,7 +88,45 @@ class Disassembler:
 
     def disasm_block(self, fs) -> BasicBlock:
         """
-        Recursively disassemble a basic block.
+        Iteratively disassemble blocks using worklist algorithm.
+
+        Args:
+            fs: File stream positioned at entry block start
+
+        Returns:
+            Entry basic block
+        """
+        entry_offset = fs.Position
+
+        # Worklist of block offsets to process
+        worklist = [entry_offset]
+        entry_block = None
+
+        while worklist:
+            offset = worklist.pop()
+
+            # Check if already disassembled
+            if offset in self.disassembled_blocks:
+                continue
+
+            # Disassemble this block
+            fs.Position = offset
+            block = self._disasm_block_single(fs)
+
+            # Track entry block
+            if offset == entry_offset:
+                entry_block = block
+
+            # Add successors to worklist
+            for succ in block.succs:
+                if succ.offset not in self.disassembled_blocks:
+                    worklist.append(succ.offset)
+
+        return entry_block
+
+    def _disasm_block_single(self, fs) -> BasicBlock:
+        """
+        Disassemble a single basic block (non-recursive).
 
         Args:
             fs: File stream positioned at block start
@@ -98,14 +136,10 @@ class Disassembler:
         """
         offset = fs.Position
 
-        # Check if already disassembled
-        if offset in self.disassembled_blocks:
-            return self.disassembled_blocks[offset]
-
         # Create new block
         block = self.create_block(offset)
 
-        # Mark as disassembled (prevents infinite recursion)
+        # Mark as disassembled (prevents reprocessing)
         self.disassembled_blocks[offset] = block
 
         # Call on_block_start callback to restore saved state
@@ -124,9 +158,6 @@ class Disassembler:
             if pos in self.disassembled_offset:
                 # Reached an instruction that's part of another block
                 break
-
-            if pos == 0xEEC92:
-                pass
 
             # Decode instruction
             inst = self.instruction_table.decode_instruction(fs, pos)
@@ -170,16 +201,6 @@ class Disassembler:
                 # Next instruction belongs to a pre-allocated block
                 self._add_fallthrough_jump(block, pos, fs.Position)
                 break
-
-        # Recursively disassemble all successors
-        # Make a copy of succs list since split_block may modify it during iteration
-        succs_to_process = list(block.succs)
-        for succ in succs_to_process:
-            saved_pos = fs.Position
-            fs.Position = succ.offset
-            # Recursively disassemble (modifies succ in place, no need to reassign)
-            self.disasm_block(fs)
-            fs.Position = saved_pos
 
         # Restore previous block context
         self.current_block = previous_block

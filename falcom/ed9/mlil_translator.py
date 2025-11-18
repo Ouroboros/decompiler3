@@ -11,10 +11,8 @@ Extends the generic LLILToMLILTranslator to handle Falcom-specific instructions:
 
 from ir.llil import *
 from ir.mlil import *
-from ir.mlil.llil_to_mlil import LLILToMLILTranslator
-
-from .llil_ext import LowLevelILPushCallerFrame, LowLevelILCallScript, LowLevelILGlobalLoad, LowLevelILGlobalStore
-from .constants import LowLevelILConstFuncId, LowLevelILConstRetAddrBlock, LowLevelILConstScript, LowLevelILConstScriptName
+from .llil_ext import *
+from .constants import *
 
 
 class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
@@ -119,7 +117,8 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
 
 def translate_falcom_llil_to_mlil(llil_func: LowLevelILFunction) -> MediumLevelILFunction:
     '''Convenience function to translate Falcom LLIL to MLIL with optimization'''
-    from ir.mlil import optimize_mlil
+
+    print(f'Translating {llil_func.name} @ 0x{llil_func.start_addr:08X}')
 
     translator = FalcomLLILToMLILTranslator()
     mlil_func = translator.translate(llil_func)

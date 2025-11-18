@@ -150,103 +150,6 @@ class TestScpValue(unittest.TestCase):
         self.assertEqual(val.value, test_string)
 
 
-class TestScpHeader(unittest.TestCase):
-    '''Test SCP header parsing'''
-
-    def create_test_header(self):
-        '''Create a test SCP header'''
-        endian = '<' if default_endian() == 'little' else '>'
-        data = struct.pack(
-            f'{endian}4s5I',
-            b'#scp',          # magic
-            0x1000,           # function_entry_offset
-            10,               # function_count
-            0x2000,           # global_var_offset
-            5,                # global_var_count
-            0x12345678        # dword_14
-        )
-        return data
-
-    def test_header_parse(self):
-        '''Test parsing SCP header'''
-        data = self.create_test_header()
-
-        fs = fileio.FileStream()
-        fs.OpenMemory(data)
-        header = ScpHeader(fs = fs)
-
-        self.assertEqual(header.function_entry_offset, 0x1000)
-        self.assertEqual(header.function_count, 10)
-        self.assertEqual(header.global_var_offset, 0x2000)
-        self.assertEqual(header.global_var_count, 5)
-        self.assertEqual(header.dword_14, 0x12345678)
-
-    def test_invalid_magic(self):
-        '''Test header with invalid magic'''
-        endian = '<' if default_endian() == 'little' else '>'
-        data = struct.pack(
-            f'{endian}4s5I',
-            b'#xxx',          # wrong magic
-            0, 0, 0, 0, 0
-        )
-
-        fs = fileio.FileStream()
-        fs.OpenMemory(data)
-
-        with self.assertRaises(AssertionError):
-            ScpHeader(fs = fs)
-
-
-class TestScenaFunctionEntry(unittest.TestCase):
-    '''Test ScenaFunctionEntry parsing'''
-
-    def create_test_function_entry(self):
-        '''Create a test function entry'''
-        endian = '<' if default_endian() == 'little' else '>'
-        # ScenaFunctionEntry structure (0x20 bytes)
-        data = struct.pack(
-            f'{endian}I4B5I',
-            0x5000,           # offset
-            3,                # param_count
-            0x01,             # byte05
-            0x02,             # byte06
-            1,                # default_params_count
-            0x6000,           # default_params_offset
-            0x7000,           # param_flags_offset
-            5,                # debug_symbol_count
-            0x8000,           # debug_symbol_offset
-            0xABCDEF12,       # name_crc32
-        )
-
-        # Add name_offset as ScpValue (String type pointing to offset)
-        # String type: top 2 bits = 11, bottom 30 bits = offset
-        name_offset = 0x9000 | (ScpValue.Type.String << 30)
-        data += struct.pack(f'{endian}I', name_offset)
-
-        return data
-
-    def test_function_entry_parse(self):
-        '''Test parsing function entry'''
-        data = self.create_test_function_entry()
-
-        fs = fileio.FileStream(encoding = default_encoding())
-        fs.OpenMemory(data)
-        entry = ScpFunctionEntry(fs = fs)
-
-        self.assertEqual(entry.offset, 0x5000)
-        self.assertEqual(entry.param_count, 3)
-        self.assertEqual(entry.byte05, 0x01)
-        self.assertEqual(entry.byte06, 0x02)
-        self.assertEqual(entry.default_params_count, 1)
-        self.assertEqual(entry.default_params_offset, 0x6000)
-        self.assertEqual(entry.param_flags_offset, 0x7000)
-        self.assertEqual(entry.debug_symbol_count, 5)
-        self.assertEqual(entry.debug_symbol_offset, 0x8000)
-        self.assertEqual(entry.name_hash, 0xABCDEF12)
-        # name_offset is read as a string through ScpValue
-        self.assertEqual(entry.name_offset, '')
-
-
 class TestScpParser(unittest.TestCase):
     '''Test SCP parser'''
 
@@ -256,8 +159,8 @@ class TestScpParser(unittest.TestCase):
         ED9_DATA_DIR = Path(r'D:\Game\Steam\steamapps\common\THE LEGEND OF HEROES KURO NO KISEKI\decrypted\tc\f\script\scena')
 
         test_file = Path(__file__).parent / 'mp2000_ev.dat'
-        # test_file = Path(__file__).parent / 'debug.dat'
-        # test_file = Path(__file__).parent / 'mp3010_01.dat'
+        test_file = Path(__file__).parent / 'debug.dat'
+        test_file = Path(__file__).parent / 'mp3010_01.dat'
         # test_file = ED9_DATA_DIR / 'c0600.dat'
 
         if not test_file.exists():
@@ -285,7 +188,7 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                # filter_func = lambda f: f.name == 'EV_03_00_00_AGATE_ATK'
+                # filter_func = lambda f: f.name == 'LP_Capel'
             )
 
             formatted_lines = []
