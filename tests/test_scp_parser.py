@@ -15,7 +15,9 @@ from common import *
 from falcom.ed9 import *
 from falcom.ed9.lifters import ED9VMLifter
 from falcom.ed9.llil_builder import FalcomLLILFormatter
+from falcom.ed9.mlil_translator import translate_falcom_llil_to_mlil
 from ir.llil.llil import LowLevelILFunction
+from ir.mlil import MLILFormatter
 import unittest
 import struct
 
@@ -253,7 +255,9 @@ class TestScpParser(unittest.TestCase):
 
         ED9_DATA_DIR = Path(r'D:\Game\Steam\steamapps\common\THE LEGEND OF HEROES KURO NO KISEKI\decrypted\tc\f\script\scena')
 
-        test_file = Path(__file__).parent / 'mp2000_ev.dat'
+        # test_file = Path(__file__).parent / 'mp2000_ev.dat'
+        test_file = Path(__file__).parent / 'debug.dat'
+        # test_file = Path(__file__).parent / 'mp3010_01.dat'
         # test_file = ED9_DATA_DIR / 'c0600.dat'
 
         if not test_file.exists():
@@ -281,11 +285,12 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                filter_func = lambda f: f.name == 'MayaEvent02_07_01'
+                # filter_func = lambda f: f.name == 'MayaEvent02_07_01'
             )
 
             formatted_lines = []
             llil_lines = []
+            mlil_lines = []
 
             # Print formatted functions
             print('\n=== Disassembly ===\n')
@@ -295,6 +300,7 @@ class TestScpParser(unittest.TestCase):
                 formatted_lines.extend(parser.format_function(func))
                 formatted_lines.append('')
 
+                # Generate LLIL
                 lifter = ED9VMLifter(parser = parser)
                 llil_func = lifter.lift_function(func)
                 self.assertIsInstance(llil_func, LowLevelILFunction)
@@ -302,11 +308,19 @@ class TestScpParser(unittest.TestCase):
                 llil_lines.extend(FalcomLLILFormatter.format_llil_function(llil_func))
                 llil_lines.append('')
 
+                # Generate MLIL from LLIL
+                mlil_func = translate_falcom_llil_to_mlil(llil_func)
+                mlil_lines.extend(MLILFormatter.format_function(mlil_func))
+                mlil_lines.append('')
+
             vmpy_path = test_file.with_suffix('.py')
             vmpy_path.write_text('\n'.join(formatted_lines) + '\n', encoding = 'utf-8')
 
-            llil_path = test_file.with_suffix('.asm')
+            llil_path = test_file.with_suffix('.llil.asm')
             llil_path.write_text('\n'.join(llil_lines) + '\n', encoding = 'utf-8')
+
+            mlil_path = test_file.with_suffix('.mlil.asm')
+            mlil_path.write_text('\n'.join(mlil_lines) + '\n', encoding = 'utf-8')
 
 if __name__ == '__main__':
     unittest.main(buffer = False, defaultTest = 'TestScpParser')

@@ -573,14 +573,19 @@ class LowLevelILDebug(LowLevelILStatement):
 class LowLevelILSyscall(LowLevelILStatement):
     '''System call (statement)'''
 
-    def __init__(self, subsystem: int, cmd: int, argc: int):
+    def __init__(self, subsystem: int, cmd: int, argc: int, args: List['LowLevelILExpr'] = None):
         super().__init__(LowLevelILOperation.LLIL_SYSCALL)
         self.subsystem = subsystem
         self.cmd = cmd
         self.argc = argc
+        self.args = args if args is not None else []  # Argument expressions (from vstack)
 
     def __str__(self) -> str:
-        return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'
+        if self.args:
+            args_str = ', '.join(str(arg) for arg in self.args)
+            return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {args_str})'
+        else:
+            return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'
 
 
 # === Helper Functions ===

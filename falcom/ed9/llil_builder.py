@@ -35,63 +35,16 @@ class FalcomVMBuilder(LowLevelILBuilder):
 
     def __init__(self):
         '''Create builder without function (call create_function first)'''
-        # Initialize with a temporary None function
-        # Parent class expects a function, but we'll replace it in create_function
-        super().__init__(None)
+        super().__init__()
         self.sp_before_call_stack = []  # Stack of sp values before calls for nested calls
         self.return_target_stack = []  # Stack of return target blocks for nested calls
         self.caller_frame_inst = None  # Track PUSH_CALLER_FRAME instruction for call_script
         self._finalized = False
 
-    def create_function(self, name: str, start_addr: int, num_params: int):
-        '''Create function inside builder
-
-        Args:
-            name: Function name
-            start_addr: Function start address
-            num_params: Number of parameters
-
-        Example:
-            builder = FalcomVMBuilder()
-            builder.create_function('DOF_ON', 0x1FFDB6, 2)
-            # ... build instructions ...
-            return builder.finalize()
-        '''
-        if self.function is not None:
-            raise RuntimeError('Function already created')
-
-        # Create and set the function
-        self.function = LowLevelILFunction(name, start_addr, num_params)
-
     def add_instruction(self, inst):
         '''Override to handle Falcom-specific instructions'''
 
         super().add_instruction(inst)
-
-    def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
-        '''Create basic block and automatically add to function
-
-        Args:
-            start: Block start address
-            label: Optional label name (if None, uses default loc_{start:X})
-
-        Returns:
-            The created basic block
-
-        Example:
-            entry = builder.create_basic_block(0x243C5, 'AV_04_0017')
-            loc_ret = builder.create_basic_block(0x243E3, 'loc_243E3')
-        '''
-        if self.function is None:
-            raise RuntimeError('No function created. Call create_function() first.')
-
-        # Get next block index
-        index = len(self.function.basic_blocks)
-        # Create block
-        block = LowLevelILBasicBlock(start, index, label=label)
-        # Automatically add to function
-        self.function.add_basic_block(block)
-        return block
 
     def finalize(self) -> 'LowLevelILFunction':
         '''Finalize builder and return function
@@ -481,6 +434,23 @@ class FalcomVMBuilder(LowLevelILBuilder):
         '''
         val = self.pop(hidden_for_formatter = True)
         self.add_instruction(LowLevelILGlobalStore(index, val))
+
+    def syscall(self, subsystem: int, cmd: int, argc: int):
+        '''SYSCALL operation - Falcom VM system call
+
+        Args:
+            subsystem: System call category (e.g., 5 for UI, 6 for audio, etc.)
+            cmd: Command ID within the subsystem
+            argc: Number of arguments for this syscall
+        '''
+        # Extract arguments from vstack (they were pushed before syscall)
+        args = []
+        if argc > 0:
+            # Peek at top argc items (in LIFO order)
+            args = self.vstack_peek_many(argc)
+
+        self.add_instruction(LowLevelILSyscall(subsystem, cmd, argc, args))
+
 
 class FalcomLLILFormatter(LLILFormatter):
     @classmethod

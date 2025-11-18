@@ -27,6 +27,21 @@ class _VirtualStack:
             raise RuntimeError('Vstack empty: cannot peek')
         return self._items[offset]
 
+    def peek_many(self, count: int) -> List[LowLevelILExpr]:
+        '''Peek at the last count items on the stack (in LIFO order)
+
+        Args:
+            count: Number of items to peek
+
+        Returns:
+            List of items in LIFO order (top of stack first)
+        '''
+        if len(self._items) < count:
+            raise RuntimeError(f'Vstack has only {len(self._items)} items, cannot peek {count}')
+
+        # Get last count items and reverse (LIFO order)
+        return self._items[-count:][::-1]
+
     def size(self) -> int:
         return len(self._items)
 
@@ -46,13 +61,58 @@ class StackSnapshot:
 class LowLevelILBuilder:
     '''Mid-level builder with convenience methods'''
 
-    def __init__(self, function: LowLevelILFunction):
+    def __init__(self, function: Optional[LowLevelILFunction] = None):
         self.function = function
         self.current_block: Optional[LowLevelILBasicBlock] = None
         self.__current_sp: int = 0  # Track current stack pointer state (for block sp_in/sp_out) - PRIVATE
         self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
         self.__vstack = _VirtualStack()  # Virtual stack for expression tracking
         self.saved_stacks: dict[int, StackSnapshot] = {}  # offset -> StackSnapshot for branches
+
+    # === Function and Block Creation ===
+
+    def create_function(self, name: str, start_addr: int, num_params: int = 0):
+        '''Create function inside builder
+
+        Args:
+            name: Function name
+            start_addr: Function start address
+            num_params: Number of parameters (default: 0)
+
+        Example:
+            builder = LowLevelILBuilder()
+            builder.create_function('my_func', 0x1000, 2)
+            # ... build instructions ...
+        '''
+        if self.function is not None:
+            raise RuntimeError('Function already created')
+
+        self.function = LowLevelILFunction(name, start_addr, num_params)
+
+    def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
+        '''Create basic block and automatically add to function
+
+        Args:
+            start: Block start address
+            label: Optional label name (if None, uses default loc_{start:X})
+
+        Returns:
+            The created basic block
+
+        Example:
+            entry = builder.create_basic_block(0x1000, 'entry')
+            exit = builder.create_basic_block(0x1020, 'exit')
+        '''
+        if self.function is None:
+            raise RuntimeError('No function created. Call create_function() first.')
+
+        # Get next block index
+        index = len(self.function.basic_blocks)
+        # Create block
+        block = LowLevelILBasicBlock(start, index, label = label)
+        # Automatically add to function
+        self.function.add_basic_block(block)
+        return block
 
     # === Stack Pointer Management (Public Interface) ===
 
@@ -135,6 +195,17 @@ class LowLevelILBuilder:
     def vstack_peek(self, offset: int = -1) -> LowLevelILExpr:
         '''Peek at top of vstack without popping (returns LowLevelILExpr)'''
         return self.__vstack.peek(offset)
+
+    def vstack_peek_many(self, count: int) -> List[LowLevelILExpr]:
+        '''Peek at multiple items from vstack in LIFO order
+
+        Args:
+            count: Number of items to peek
+
+        Returns:
+            List of expressions in LIFO order (top of stack first)
+        '''
+        return self.__vstack.peek_many(count)
 
     def vstack_size(self) -> int:
         '''Get current vstack size'''
@@ -645,16 +716,6 @@ class LowLevelILBuilder:
     def debug_line(self, line_no: int):
         '''Debug line number'''
         self.add_instruction(LowLevelILDebug('line', line_no))
-
-    def syscall(self, subsystem: int, cmd: int, argc: int):
-        '''System call
-
-        Args:
-            subsystem: System call category (e.g., 6 for audio, graphics, etc.)
-            cmd: Command ID within the subsystem
-            argc: Number of arguments for this syscall
-        '''
-        self.add_instruction(LowLevelILSyscall(subsystem, cmd, argc))
 
 
 class LLILFormatter:
