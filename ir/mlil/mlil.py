@@ -226,8 +226,8 @@ class MLILConst(MediumLevelILExpr, Constant):
             abs_tol = FLOAT_ROUND_ABS_TOL
 
             if abs(round_value - value) <= max(abs(value) * rel_tol, abs_tol):
-                if value != round_value:
-                    print(f'float: {precision} {value} -> {round_value}')
+                # if value != round_value:
+                #     print(f'float: {precision} {value} -> {round_value}')
                 value = round_value
 
             return f'{value}'
