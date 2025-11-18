@@ -1,9 +1,12 @@
 '''
-MLIL Optimizer - Dead Code Elimination and Variable Propagation
+MLIL Optimizer - Expression simplification and optimization
 
-Performs optimization passes on MLIL to remove redundant operations:
-- Dead Code Elimination: Remove unused variable assignments
+Performs optimization passes on MLIL:
+- Constant Folding: Evaluate constant expressions at compile time
+- Expression Simplification: Apply algebraic identities (x+0=x, x*1=x, etc.)
+- Condition Simplification: Simplify boolean expressions
 - Copy Propagation: Inline single-use variables
+- Dead Code Elimination: Remove unused variable assignments
 '''
 
 from typing import Dict, Set, Optional
@@ -27,9 +30,11 @@ class MLILOptimizer:
 
         while changed and iterations < max_iterations:
             changed = False
+            # changed |= self.fold_constants()
+            changed |= self.simplify_expressions()
             changed |= self.simplify_conditions()
-            changed |= self.eliminate_dead_code()
             changed |= self.propagate_copies()
+            changed |= self.eliminate_dead_code()
             iterations += 1
 
         return self.function
@@ -124,6 +129,343 @@ class MLILOptimizer:
         else:
             return None
 
+    def fold_constants(self) -> bool:
+        '''Fold constant expressions at compile time
+
+        Returns:
+            True if any folding occurred
+        '''
+        changed = False
+
+        for block in self.function.basic_blocks:
+            new_instructions = []
+
+            for inst in block.instructions:
+                new_inst = self._fold_constants_in_inst(inst)
+                new_instructions.append(new_inst)
+
+                if new_inst is not inst:
+                    changed = True
+
+            block.instructions = new_instructions
+
+        return changed
+
+    def _fold_constants_in_inst(self, inst: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Fold constants in a single instruction'''
+        if isinstance(inst, MLILSetVar):
+            new_value = self._fold_expr(inst.value)
+
+            if new_value is not inst.value:
+                return MLILSetVar(inst.var, new_value)
+
+        elif isinstance(inst, MLILIf):
+            new_condition = self._fold_expr(inst.condition)
+
+            if new_condition is not inst.condition:
+                return MLILIf(new_condition, inst.true_target, inst.false_target)
+
+        elif isinstance(inst, MLILRet):
+            if inst.value is not None:
+                new_value = self._fold_expr(inst.value)
+
+                if new_value is not inst.value:
+                    return MLILRet(new_value)
+
+        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            new_args = [self._fold_expr(arg) for arg in inst.args]
+
+            if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
+                if isinstance(inst, MLILCall):
+                    return MLILCall(inst.target, new_args)
+
+                elif isinstance(inst, MLILSyscall):
+                    return MLILSyscall(inst.subsystem, inst.cmd, new_args)
+
+                elif isinstance(inst, MLILCallScript):
+                    return MLILCallScript(inst.module, inst.func, new_args)
+
+        elif isinstance(inst, MLILStoreGlobal):
+            new_value = self._fold_expr(inst.value)
+
+            if new_value is not inst.value:
+                return MLILStoreGlobal(inst.index, new_value)
+
+        elif isinstance(inst, MLILStoreReg):
+            new_value = self._fold_expr(inst.value)
+
+            if new_value is not inst.value:
+                return MLILStoreReg(inst.index, new_value)
+
+        return inst
+
+    def _fold_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Recursively fold constants in expression'''
+        # First fold children
+        if isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod,
+                             MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr,
+                             MLILLogicalAnd, MLILLogicalOr,
+                             MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
+            lhs = self._fold_expr(expr.lhs)
+            rhs = self._fold_expr(expr.rhs)
+
+            # Try to evaluate if both are constants
+            if isinstance(lhs, MLILConst) and isinstance(rhs, MLILConst):
+                result = self._eval_binary_const(type(expr), lhs.value, rhs.value)
+
+                if result is not None:
+                    return MLILConst(result, is_hex = False)
+
+            # Rebuild if children changed
+            if lhs is not expr.lhs or rhs is not expr.rhs:
+                return self._reconstruct_binary_op(expr, lhs, rhs)
+
+        elif isinstance(expr, (MLILNeg, MLILLogicalNot)):
+            operand = self._fold_expr(expr.operand)
+
+            # Try to evaluate if operand is constant
+            if isinstance(operand, MLILConst):
+                result = self._eval_unary_const(type(expr), operand.value)
+
+                if result is not None:
+                    return MLILConst(result, is_hex = False)
+
+            # Rebuild if operand changed
+            if operand is not expr.operand:
+                return self._reconstruct_unary_op(expr, operand)
+
+        return expr
+
+    def _eval_binary_const(self, op_type, lhs: int, rhs: int) -> Optional[int]:
+        '''Evaluate binary operation on constants'''
+        try:
+            if op_type == MLILAdd:
+                return lhs + rhs
+
+            elif op_type == MLILSub:
+                return lhs - rhs
+
+            elif op_type == MLILMul:
+                return lhs * rhs
+
+            elif op_type == MLILDiv:
+                return lhs // rhs if rhs != 0 else None
+
+            elif op_type == MLILMod:
+                return lhs % rhs if rhs != 0 else None
+
+            elif op_type == MLILAnd:
+                return lhs & rhs
+
+            elif op_type == MLILOr:
+                return lhs | rhs
+
+            elif op_type == MLILXor:
+                return lhs ^ rhs
+
+            elif op_type == MLILShl:
+                return lhs << rhs
+
+            elif op_type == MLILShr:
+                return lhs >> rhs
+
+            elif op_type == MLILLogicalAnd:
+                return 1 if (lhs and rhs) else 0
+
+            elif op_type == MLILLogicalOr:
+                return 1 if (lhs or rhs) else 0
+
+            elif op_type == MLILEq:
+                return 1 if lhs == rhs else 0
+
+            elif op_type == MLILNe:
+                return 1 if lhs != rhs else 0
+
+            elif op_type == MLILLt:
+                return 1 if lhs < rhs else 0
+
+            elif op_type == MLILLe:
+                return 1 if lhs <= rhs else 0
+
+            elif op_type == MLILGt:
+                return 1 if lhs > rhs else 0
+
+            elif op_type == MLILGe:
+                return 1 if lhs >= rhs else 0
+
+        except (OverflowError, ZeroDivisionError):
+            return None
+
+        return None
+
+    def _eval_unary_const(self, op_type, operand: int) -> Optional[int]:
+        '''Evaluate unary operation on constant'''
+        try:
+            if op_type == MLILNeg:
+                return -operand
+
+            elif op_type == MLILLogicalNot:
+                return 1 if not operand else 0
+
+        except OverflowError:
+            return None
+
+        return None
+
+    def simplify_expressions(self) -> bool:
+        '''Apply algebraic simplification rules
+
+        Returns:
+            True if any simplification occurred
+        '''
+        changed = False
+
+        for block in self.function.basic_blocks:
+            new_instructions = []
+
+            for inst in block.instructions:
+                new_inst = self._simplify_expr_in_inst(inst)
+                new_instructions.append(new_inst)
+
+                if new_inst is not inst:
+                    changed = True
+
+            block.instructions = new_instructions
+
+        return changed
+
+    def _simplify_expr_in_inst(self, inst: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Simplify expressions in a single instruction'''
+        if isinstance(inst, MLILSetVar):
+            new_value = self._simplify_expr(inst.value)
+
+            if new_value is not inst.value:
+                return MLILSetVar(inst.var, new_value)
+
+        elif isinstance(inst, MLILIf):
+            new_condition = self._simplify_expr(inst.condition)
+
+            if new_condition is not inst.condition:
+                return MLILIf(new_condition, inst.true_target, inst.false_target)
+
+        elif isinstance(inst, MLILRet):
+            if inst.value is not None:
+                new_value = self._simplify_expr(inst.value)
+
+                if new_value is not inst.value:
+                    return MLILRet(new_value)
+
+        return inst
+
+    def _simplify_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Recursively apply algebraic simplifications'''
+        # First simplify children
+        if isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod,
+                             MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr)):
+            lhs = self._simplify_expr(expr.lhs)
+            rhs = self._simplify_expr(expr.rhs)
+
+            # Apply algebraic identities
+            simplified = self._apply_algebraic_identity(type(expr), lhs, rhs)
+
+            if simplified is not None:
+                return simplified
+
+            # Rebuild if children changed
+            if lhs is not expr.lhs or rhs is not expr.rhs:
+                return self._reconstruct_binary_op(expr, lhs, rhs)
+
+        elif isinstance(expr, (MLILNeg, MLILLogicalNot)):
+            operand = self._simplify_expr(expr.operand)
+
+            if operand is not expr.operand:
+                return self._reconstruct_unary_op(expr, operand)
+
+        return expr
+
+    def _apply_algebraic_identity(self, op_type, lhs, rhs) -> Optional[MediumLevelILInstruction]:
+        '''Apply algebraic identity rules'''
+        # x + 0 = x
+        if op_type == MLILAdd:
+            if isinstance(rhs, MLILConst) and rhs.value == 0:
+                return lhs
+
+            if isinstance(lhs, MLILConst) and lhs.value == 0:
+                return rhs
+
+        # x - 0 = x
+        elif op_type == MLILSub:
+            if isinstance(rhs, MLILConst) and rhs.value == 0:
+                return lhs
+
+        # x * 0 = 0, x * 1 = x
+        elif op_type == MLILMul:
+            if isinstance(rhs, MLILConst):
+                if rhs.value == 0:
+                    return MLILConst(0, is_hex = False)
+
+                elif rhs.value == 1:
+                    return lhs
+
+            if isinstance(lhs, MLILConst):
+                if lhs.value == 0:
+                    return MLILConst(0, is_hex = False)
+
+                elif lhs.value == 1:
+                    return rhs
+
+        # x / 1 = x
+        elif op_type == MLILDiv:
+            if isinstance(rhs, MLILConst) and rhs.value == 1:
+                return lhs
+
+        # x & 0 = 0, x & 0xFFFFFFFF = x
+        elif op_type == MLILAnd:
+            if isinstance(rhs, MLILConst):
+                if rhs.value == 0:
+                    return MLILConst(0, is_hex = False)
+
+                elif rhs.value == 0xFFFFFFFF:
+                    return lhs
+
+            if isinstance(lhs, MLILConst):
+                if lhs.value == 0:
+                    return MLILConst(0, is_hex = False)
+
+                elif lhs.value == 0xFFFFFFFF:
+                    return rhs
+
+        # x | 0 = x, x | 0xFFFFFFFF = 0xFFFFFFFF
+        elif op_type == MLILOr:
+            if isinstance(rhs, MLILConst):
+                if rhs.value == 0:
+                    return lhs
+
+                elif rhs.value == 0xFFFFFFFF:
+                    return MLILConst(0xFFFFFFFF, is_hex = True)
+
+            if isinstance(lhs, MLILConst):
+                if lhs.value == 0:
+                    return rhs
+
+                elif lhs.value == 0xFFFFFFFF:
+                    return MLILConst(0xFFFFFFFF, is_hex = True)
+
+        # x ^ 0 = x
+        elif op_type == MLILXor:
+            if isinstance(rhs, MLILConst) and rhs.value == 0:
+                return lhs
+
+            if isinstance(lhs, MLILConst) and lhs.value == 0:
+                return rhs
+
+        # x << 0 = x, x >> 0 = x
+        elif op_type in (MLILShl, MLILShr):
+            if isinstance(rhs, MLILConst) and rhs.value == 0:
+                return lhs
+
+        return None
+
     def eliminate_dead_code(self) -> bool:
         '''Remove assignments to variables that are never read
 
@@ -213,6 +555,10 @@ class MLILOptimizer:
 
         elif isinstance(expr, MLILIf):
             self._count_uses_in_expr(expr.condition)
+
+        elif isinstance(expr, MLILRet):
+            if expr.value is not None:
+                self._count_uses_in_expr(expr.value)
 
         elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
             for arg in expr.args:
