@@ -6,7 +6,7 @@ Performs optimization passes on MLIL to remove redundant operations:
 - Copy Propagation: Inline single-use variables
 '''
 
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 from .mlil import *
 
 
@@ -27,11 +27,101 @@ class MLILOptimizer:
 
         while changed and iterations < max_iterations:
             changed = False
+            changed |= self.simplify_conditions()
             changed |= self.eliminate_dead_code()
             changed |= self.propagate_copies()
             iterations += 1
 
         return self.function
+
+    def simplify_conditions(self) -> bool:
+        '''Simplify condition expressions in If instructions
+
+        Transforms patterns like ((a >= b) == 0) to (a < b)
+
+        Returns:
+            True if any simplification occurred
+        '''
+        changed = False
+
+        for block in self.function.basic_blocks:
+            for i, inst in enumerate(block.instructions):
+                if not isinstance(inst, MLILIf):
+                    continue
+
+                # Check if condition needs simplification
+                condition = inst.condition
+                new_condition = None
+
+                # Pattern: !(comparison) -> invert comparison
+                if isinstance(condition, MLILLogicalNot):
+                    inverted = self._invert_comparison(condition.operand)
+                    if inverted is not None:
+                        new_condition = inverted
+
+                # Pattern: (expr == 0)
+                elif isinstance(condition, MLILEq):
+                    if isinstance(condition.rhs, MLILConst) and condition.rhs.value == 0:
+                        # Try to invert comparison
+                        inverted = self._invert_comparison(condition.lhs)
+                        if inverted is not None:
+                            # Simple comparison - invert it
+                            # (a >= b) == 0 is equivalent to a < b
+                            new_condition = inverted
+                        else:
+                            # Complex expression - use LogicalNot
+                            # (expr) == 0 is equivalent to !expr
+                            new_condition = MLILLogicalNot(condition.lhs)
+
+                # Pattern: (expr != 0)
+                elif isinstance(condition, MLILNe):
+                    if isinstance(condition.rhs, MLILConst) and condition.rhs.value == 0:
+                        # For (expr != 0), just use expr directly if it's a comparison
+                        if isinstance(condition.lhs, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
+                            new_condition = condition.lhs
+
+                # Apply simplification
+                if new_condition is not None:
+                    # Simplified condition has same semantics, keep targets unchanged
+                    block.instructions[i] = MLILIf(new_condition, inst.true_target, inst.false_target)
+                    changed = True
+
+        return changed
+
+    def _invert_comparison(self, expr: MediumLevelILInstruction) -> Optional[MediumLevelILInstruction]:
+        '''Invert a comparison expression
+
+        Examples:
+            a >= b  ->  a < b
+            a > b   ->  a <= b
+            a < b   ->  a >= b
+            a <= b  ->  a > b
+            a == b  ->  a != b
+            a != b  ->  a == b
+
+        Returns:
+            Inverted expression, or None if not a comparison
+        '''
+        if isinstance(expr, MLILGe):
+            return MLILLt(expr.lhs, expr.rhs)
+
+        elif isinstance(expr, MLILGt):
+            return MLILLe(expr.lhs, expr.rhs)
+
+        elif isinstance(expr, MLILLt):
+            return MLILGe(expr.lhs, expr.rhs)
+
+        elif isinstance(expr, MLILLe):
+            return MLILGt(expr.lhs, expr.rhs)
+
+        elif isinstance(expr, MLILEq):
+            return MLILNe(expr.lhs, expr.rhs)
+
+        elif isinstance(expr, MLILNe):
+            return MLILEq(expr.lhs, expr.rhs)
+
+        else:
+            return None
 
     def eliminate_dead_code(self) -> bool:
         '''Remove assignments to variables that are never read

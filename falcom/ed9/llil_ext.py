@@ -28,7 +28,7 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
       1. funcIndex (current function ID)
       2. retAddr (return address label/block)
       3. currScript (current script index)
-      4. context_marker (0xF0000000)
+      4. script_name (current script name, empty string for now)
 
     This is an atomic operation that occupies 4 stack slots.
     Saves the caller frame so the script call can return properly.
@@ -39,7 +39,7 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
         func_id: 'LowLevelILConstFuncId',
         ret_addr: 'LowLevelILConstRetAddrBlock',
         script_ptr: 'LowLevelILConstScript',
-        context_marker: LowLevelILConst
+        script_name: 'LowLevelILConstScriptName'
     ):
         super().__init__(LowLevelILFalcomOperation.LLIL_PUSH_CALLER_FRAME)
 
@@ -51,7 +51,7 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
         self.func_id          = func_id                     # FalcomConstants.current_func_id()
         self.ret_addr         = ret_addr                    # FalcomConstants.ret_addr() or ret_addr_block()
         self.script_ptr       = script_ptr                  # FalcomConstants.current_script()
-        self.context_marker   = context_marker              # Raw value (0xF0000000)
+        self.script_name      = script_name                 # FalcomConstants.current_script_name()
         self.slot_index       : Optional[int] = None        # Will be set by builder to track stack position
 
     def __str__(self) -> str:

@@ -52,6 +52,23 @@ class LowLevelILConstScript(LowLevelILConst):
         return '<script_ptr>'
 
 
+class LowLevelILConstScriptName(LowLevelILConst):
+    '''Falcom VM current script name constant (context marker)'''
+
+    def __init__(self, name: str):
+        super().__init__(name)
+
+    @property
+    def name(self) -> str:
+        return self.value
+
+    def __str__(self) -> str:
+        if self.name:
+            return f'<script_name:{self.name}>'
+        else:
+            return '<script_name>'
+
+
 class FalcomConstants:
     '''Falcom VM specific constants factory'''
 
@@ -70,3 +87,7 @@ class FalcomConstants:
     @classmethod
     def current_script(cls):
         return LowLevelILConstScript()
+
+    @classmethod
+    def current_script_name(cls, name: str):
+        return LowLevelILConstScriptName(name)

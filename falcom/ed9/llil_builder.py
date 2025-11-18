@@ -175,21 +175,21 @@ class FalcomVMBuilder(LowLevelILBuilder):
         func_id = FalcomConstants.current_func_id()
         ret_addr = FalcomConstants.ret_addr_block(return_target)
         script = FalcomConstants.current_script()
-        context_marker = self.const_raw(0xF0000000)
+        script_name = FalcomConstants.current_script_name('')  # Empty string for now
 
         # Push return target onto stack (supports nested calls)
         self.return_target_stack.append(return_target)
 
         # Create and add the atomic PUSH_CALLER_FRAME instruction
         # This occupies 4 stack slots
-        push_frame_inst = LowLevelILPushCallerFrame(func_id, ret_addr, script, context_marker)
+        push_frame_inst = LowLevelILPushCallerFrame(func_id, ret_addr, script, script_name)
         push_frame_inst.slot_index = self.sp_get()
         # self.add_instruction(push_frame_instr)
 
         self.push(func_id)
         self.push(ret_addr)
         self.push(script)
-        self.push(context_marker)
+        self.push(script_name)
 
         # Save reference for call_script to use
         self.caller_frame_inst = push_frame_inst
@@ -282,13 +282,13 @@ class FalcomVMBuilder(LowLevelILBuilder):
         func_id         = self.vstack_peek(offset - arg_count - 4)
         ret_addr        = self.vstack_peek(offset - arg_count - 3)
         script          = self.vstack_peek(offset - arg_count - 1)  # 8 bytes
-        context_marker  = self.vstack_peek(offset - arg_count - 0)
+        script_name     = self.vstack_peek(offset - arg_count - 0)
 
         if not all([
             func_id         is self.caller_frame_inst.func_id,
             ret_addr        is self.caller_frame_inst.ret_addr,
             script          is self.caller_frame_inst.script_ptr,
-            context_marker  is self.caller_frame_inst.context_marker,
+            script_name     is self.caller_frame_inst.script_name,
         ]):
             raise RuntimeError(f'Caller frame mismatch')
 

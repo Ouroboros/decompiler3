@@ -14,7 +14,7 @@ from ir.mlil import *
 from ir.mlil.llil_to_mlil import LLILToMLILTranslator
 
 from .llil_ext import LowLevelILPushCallerFrame, LowLevelILCallScript, LowLevelILGlobalLoad, LowLevelILGlobalStore
-from .constants import LowLevelILConstFuncId, LowLevelILConstRetAddrBlock, LowLevelILConstScript
+from .constants import LowLevelILConstFuncId, LowLevelILConstRetAddrBlock, LowLevelILConstScript, LowLevelILConstScriptName
 
 
 class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
@@ -53,10 +53,12 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
 
     def _is_caller_frame_value(self, expr: LowLevelILInstruction) -> bool:
         '''Check if expression is a caller frame value (should be omitted in MLIL)'''
-        return (isinstance(expr, LowLevelILConstFuncId) or
-                isinstance(expr, LowLevelILConstRetAddrBlock) or
-                isinstance(expr, LowLevelILConstScript) or
-                (isinstance(expr, LowLevelILConst) and expr.value == 0xF0000000))
+        return isinstance(expr, (
+            LowLevelILConstFuncId,
+            LowLevelILConstRetAddrBlock,
+            LowLevelILConstScript,
+            LowLevelILConstScriptName,
+        ))
 
     def _translate_call_script(self, llil_inst: LowLevelILCallScript):
         '''Translate Falcom script call
