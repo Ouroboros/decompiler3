@@ -15,6 +15,8 @@ from .mlil import (
     # Core
     MediumLevelILOperation,
     MediumLevelILInstruction,
+    MediumLevelILExpr,
+    MediumLevelILStatement,
     MediumLevelILFunction,
     MediumLevelILBasicBlock,
 
@@ -97,6 +99,8 @@ __all__ = [
     # Core
     'MediumLevelILOperation',
     'MediumLevelILInstruction',
+    'MediumLevelILExpr',
+    'MediumLevelILStatement',
     'MediumLevelILFunction',
     'MediumLevelILBasicBlock',
 

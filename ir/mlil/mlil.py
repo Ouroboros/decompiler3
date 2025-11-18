@@ -148,6 +148,26 @@ class MediumLevelILInstruction(ILInstruction):
         return f'<{self.__class__.__name__} {self.operation_name}>'
 
 
+# === Instruction Categories ===
+
+class MediumLevelILExpr(MediumLevelILInstruction):
+    '''Base class for value expressions (produces a value)
+
+    Expressions can be used as operands to other instructions.
+    Examples: Const, Var, BinaryOp, UnaryOp, LoadGlobal, LoadReg
+    '''
+    pass
+
+
+class MediumLevelILStatement(MediumLevelILInstruction):
+    '''Base class for statements (side effects, no value)
+
+    Statements have side effects but do not produce values.
+    Examples: SetVar, StoreGlobal, StoreReg, Goto, If, Ret, Call
+    '''
+    pass
+
+
 # === Variables ===
 
 class MLILVariable:
@@ -178,7 +198,7 @@ class MLILVariable:
 
 # === Constants ===
 
-class MLILConst(MediumLevelILInstruction, Constant):
+class MLILConst(MediumLevelILExpr, Constant):
     '''Constant value (int, float, or string)'''
 
     def __init__(self, value: Any, is_hex: bool = False):
@@ -200,7 +220,7 @@ class MLILConst(MediumLevelILInstruction, Constant):
 
 # === Variable Operations ===
 
-class MLILVar(MediumLevelILInstruction):
+class MLILVar(MediumLevelILExpr):
     '''Load variable value'''
 
     def __init__(self, var: MLILVariable):
@@ -211,7 +231,7 @@ class MLILVar(MediumLevelILInstruction):
         return str(self.var)
 
 
-class MLILSetVar(MediumLevelILInstruction):
+class MLILSetVar(MediumLevelILStatement):
     '''Store value to variable'''
 
     def __init__(self, var: MLILVariable, value: MediumLevelILInstruction):
@@ -225,7 +245,7 @@ class MLILSetVar(MediumLevelILInstruction):
 
 # === Binary Operations ===
 
-class MLILBinaryOp(MediumLevelILInstruction, BinaryOperation):
+class MLILBinaryOp(MediumLevelILExpr, BinaryOperation):
     '''Base class for binary operations'''
 
     def __init__(self, operation: MediumLevelILOperation, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
@@ -352,7 +372,7 @@ class MLILGe(MLILBinaryOp):
 
 # === Unary Operations ===
 
-class MLILUnaryOp(MediumLevelILInstruction, UnaryOperation):
+class MLILUnaryOp(MediumLevelILExpr, UnaryOperation):
     '''Base class for unary operations'''
 
     def __init__(self, operation: MediumLevelILOperation, operand: MediumLevelILInstruction):
@@ -398,7 +418,7 @@ class MLILAddressOf(MLILUnaryOp):
 
 # === Control Flow ===
 
-class MLILGoto(MediumLevelILInstruction, Terminal):
+class MLILGoto(MediumLevelILStatement, Terminal):
     '''Unconditional jump'''
 
     def __init__(self, target: 'MediumLevelILBasicBlock'):
@@ -409,7 +429,7 @@ class MLILGoto(MediumLevelILInstruction, Terminal):
         return f'goto {self.target.label}'
 
 
-class MLILIf(MediumLevelILInstruction, Terminal):
+class MLILIf(MediumLevelILStatement, Terminal):
     '''Conditional branch'''
 
     def __init__(self, condition: MediumLevelILInstruction, true_target: 'MediumLevelILBasicBlock', false_target: 'MediumLevelILBasicBlock'):
@@ -422,7 +442,7 @@ class MLILIf(MediumLevelILInstruction, Terminal):
         return f'if ({self.condition}) goto {self.true_target.label} else {self.false_target.label}'
 
 
-class MLILRet(MediumLevelILInstruction, Terminal):
+class MLILRet(MediumLevelILStatement, Terminal):
     '''Return from function
 
     Args:
@@ -442,7 +462,7 @@ class MLILRet(MediumLevelILInstruction, Terminal):
 
 # === Function Calls ===
 
-class MLILCall(MediumLevelILInstruction):
+class MLILCall(MediumLevelILStatement):
     '''Function call'''
 
     def __init__(self, target: str, args: List[MediumLevelILInstruction]):
@@ -455,7 +475,7 @@ class MLILCall(MediumLevelILInstruction):
         return f'{self.target}({args_str})'
 
 
-class MLILSyscall(MediumLevelILInstruction):
+class MLILSyscall(MediumLevelILStatement):
     '''System call'''
 
     def __init__(self, subsystem: int, cmd: int, args: List[MediumLevelILInstruction]):
@@ -474,7 +494,7 @@ class MLILSyscall(MediumLevelILInstruction):
             return f'syscall({', '.join(args)})'
 
 
-class MLILCallScript(MediumLevelILInstruction):
+class MLILCallScript(MediumLevelILStatement):
     '''Falcom script call'''
 
     def __init__(self, module: str, func: str, args: List[MediumLevelILInstruction]):
@@ -490,7 +510,7 @@ class MLILCallScript(MediumLevelILInstruction):
 
 # === Global Variables ===
 
-class MLILLoadGlobal(MediumLevelILInstruction):
+class MLILLoadGlobal(MediumLevelILExpr):
     '''Load global variable'''
 
     def __init__(self, index: int):
@@ -501,7 +521,7 @@ class MLILLoadGlobal(MediumLevelILInstruction):
         return f'GLOBAL[{self.index}]'
 
 
-class MLILStoreGlobal(MediumLevelILInstruction):
+class MLILStoreGlobal(MediumLevelILStatement):
     '''Store to global variable'''
 
     def __init__(self, index: int, value: MediumLevelILInstruction):
@@ -515,7 +535,7 @@ class MLILStoreGlobal(MediumLevelILInstruction):
 
 # === Registers ===
 
-class MLILLoadReg(MediumLevelILInstruction):
+class MLILLoadReg(MediumLevelILExpr):
     '''Load register'''
 
     def __init__(self, index: int):
@@ -526,7 +546,7 @@ class MLILLoadReg(MediumLevelILInstruction):
         return f'REG[{self.index}]'
 
 
-class MLILStoreReg(MediumLevelILInstruction):
+class MLILStoreReg(MediumLevelILStatement):
     '''Store to register'''
 
     def __init__(self, index: int, value: MediumLevelILInstruction):
@@ -540,7 +560,7 @@ class MLILStoreReg(MediumLevelILInstruction):
 
 # === Debug ===
 
-class MLILNop(MediumLevelILInstruction):
+class MLILNop(MediumLevelILStatement):
     '''No operation'''
 
     def __init__(self):
@@ -550,7 +570,7 @@ class MLILNop(MediumLevelILInstruction):
         return 'nop'
 
 
-class MLILDebug(MediumLevelILInstruction):
+class MLILDebug(MediumLevelILStatement):
     '''Debug information'''
 
     def __init__(self, debug_type: str, value: Any):
