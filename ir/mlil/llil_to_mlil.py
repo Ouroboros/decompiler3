@@ -175,10 +175,10 @@ class LLILToMLILTranslator:
             return self.builder.var(var)
 
         elif isinstance(llil_expr, LowLevelILStackAddr):
-            # Stack address → variable reference
+            # Stack address → address of variable (&var)
             var_name = mlil_stack_var_name(llil_expr.slot_index)
             var = self.builder.get_or_create_var(var_name, llil_expr.slot_index)
-            return self.builder.var(var)
+            return self.builder.address_of(self.builder.var(var))
 
         # Binary operations
         elif isinstance(llil_expr, LowLevelILAdd):

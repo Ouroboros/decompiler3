@@ -161,7 +161,7 @@ class MLILVariable:
 **控制流：**
 - `MLILGoto` - 无条件跳转
 - `MLILIf` - 条件分支
-- `MLILRet` / `MLILRetVar` - 返回
+- `MLILRet` - 返回（可选返回值）
 
 **函数调用：**
 - `MLILCall` - 普通函数调用

@@ -61,7 +61,6 @@ from .mlil import (
     MLILGoto,
     MLILIf,
     MLILRet,
-    MLILRetVar,
 
     # Function calls
     MLILCall,
@@ -144,7 +143,6 @@ __all__ = [
     'MLILGoto',
     'MLILIf',
     'MLILRet',
-    'MLILRetVar',
 
     # Function calls
     'MLILCall',

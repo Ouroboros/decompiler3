@@ -226,6 +226,10 @@ class MLILBuilder:
         '''Create TEST_ZERO operation'''
         return MLILTestZero(operand)
 
+    def address_of(self, operand: MediumLevelILInstruction) -> MLILAddressOf:
+        '''Create ADDRESS_OF operation (&var)'''
+        return MLILAddressOf(operand)
+
     # === Control Flow ===
 
     def goto(self, target: MediumLevelILBasicBlock):
@@ -243,14 +247,13 @@ class MLILBuilder:
         self.current_block.add_outgoing_edge(true_target)
         self.current_block.add_outgoing_edge(false_target)
 
-    def ret(self):
-        '''Return (no value)'''
-        inst = MLILRet()
-        self.add_instruction(inst)
+    def ret(self, value: Optional[MediumLevelILInstruction] = None):
+        '''Return from function
 
-    def ret_var(self, value: MediumLevelILInstruction):
-        '''Return with value'''
-        inst = MLILRetVar(value)
+        Args:
+            value: Return value expression, or None for void return
+        '''
+        inst = MLILRet(value)
         self.add_instruction(inst)
 
     # === Function Calls ===

@@ -89,12 +89,12 @@ class MediumLevelILOperation(IntEnum2):
     # Unary operations
     MLIL_NEG                = 60
     MLIL_TEST_ZERO          = 61
+    MLIL_ADDRESS_OF         = 62    # Address of variable (&var)
 
     # Control flow
     MLIL_GOTO               = 70    # Unconditional jump
     MLIL_IF                 = 71    # Conditional branch
-    MLIL_RET                = 72    # Return
-    MLIL_RET_VAR            = 73    # Return with value
+    MLIL_RET                = 72    # Return (with optional value)
 
     # Function calls
     MLIL_CALL               = 80    # Function call
@@ -386,6 +386,16 @@ class MLILTestZero(MLILUnaryOp):
         return f'({self.operand} == 0)'
 
 
+class MLILAddressOf(MLILUnaryOp):
+    '''Address-of operation (&var)'''
+
+    def __init__(self, operand: MediumLevelILInstruction):
+        super().__init__(MediumLevelILOperation.MLIL_ADDRESS_OF, operand)
+
+    def __str__(self) -> str:
+        return f'&{self.operand}'
+
+
 # === Control Flow ===
 
 class MLILGoto(MediumLevelILInstruction, Terminal):
@@ -413,24 +423,21 @@ class MLILIf(MediumLevelILInstruction, Terminal):
 
 
 class MLILRet(MediumLevelILInstruction, Terminal):
-    '''Return (no value)'''
+    '''Return from function
 
-    def __init__(self):
+    Args:
+        value: Return value expression, or None for void return
+    '''
+
+    def __init__(self, value: Optional[MediumLevelILInstruction] = None):
         super().__init__(MediumLevelILOperation.MLIL_RET)
-
-    def __str__(self) -> str:
-        return 'return'
-
-
-class MLILRetVar(MediumLevelILInstruction, Terminal):
-    '''Return with value'''
-
-    def __init__(self, value: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_RET_VAR)
         self.value = value
 
     def __str__(self) -> str:
-        return f'return {self.value}'
+        if self.value is not None:
+            return f'return {self.value}'
+        else:
+            return 'return'
 
 
 # === Function Calls ===

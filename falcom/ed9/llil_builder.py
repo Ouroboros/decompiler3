@@ -214,6 +214,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
         # This includes: func_id (1) + ret_addr (1) + args (N)
         argc = self.sp_get() - sp_before_call
 
+        if argc < 0:
+            raise RuntimeError(f'argc is negative: {argc}')
+
         # Verify we have at least func_id and ret_addr
         if argc < 2:
             raise RuntimeError(
@@ -232,17 +235,20 @@ class FalcomVMBuilder(LowLevelILBuilder):
                     f'This indicates inconsistent stack management.'
                 )
 
-        # Call with return target and argc for stack cleanup
-        # argc will adjust shadow SP to balance the stack
-        super().call(target, return_target = return_block, argc = argc)
-
-        if argc is not None:
-            args = self._cleanup_stack(argc)[:-2]
+        # Peek arguments from vstack before cleanup
+        if argc is not None and argc > 2:
+            # argc includes func_id + ret_addr + actual args
+            # Peek actual args (argc - 2)
+            args = self.vstack_peek_many(argc - 2)
         else:
             args = []
 
-        call: LowLevelILCall = self.current_block.instructions[-1]
-        call.args = args
+        # Create call with arguments
+        super().call(target, return_target = return_block, args = args)
+
+        # Clean up stack (func_id + ret_addr + args)
+        if argc > 0:
+            self._cleanup_stack(argc)
 
     def call_script(self, module: str, func: str, arg_count: int):
         '''CALL_SCRIPT operation - call a script function

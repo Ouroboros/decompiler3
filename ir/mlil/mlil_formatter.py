@@ -69,12 +69,56 @@ class MLILFormatter:
         Returns:
             Formatted instruction string
         '''
-        # Most instructions have good __str__ implementations
-        # We can add special formatting here if needed
+        # Constants and Variables
+        if isinstance(inst, MLILConst):
+            return str(inst)
 
-        if isinstance(inst, MLILSetVar):
+        elif isinstance(inst, MLILVar):
+            return str(inst)
+
+        elif isinstance(inst, MLILSetVar):
             return f'{inst.var} = {inst.value}'
 
+        # Binary operations - Arithmetic
+        elif isinstance(inst, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod)):
+            return str(inst)
+
+        # Binary operations - Bitwise
+        elif isinstance(inst, (MLILAnd, MLILOr, MLILXor)):
+            return str(inst)
+
+        # Binary operations - Logical
+        elif isinstance(inst, (MLILLogicalAnd, MLILLogicalOr)):
+            return str(inst)
+
+        # Binary operations - Comparison
+        elif isinstance(inst, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
+            return str(inst)
+
+        # Unary operations
+        elif isinstance(inst, (MLILNeg, MLILLogicalNot)):
+            return str(inst)
+
+        elif isinstance(inst, MLILTestZero):
+            return str(inst)
+
+        elif isinstance(inst, MLILAddressOf):
+            return str(inst)
+
+        # Control flow
+        elif isinstance(inst, MLILGoto):
+            return f'goto {inst.target.label}'
+
+        elif isinstance(inst, MLILIf):
+            return f'if ({inst.condition}) goto {inst.true_target.label} else {inst.false_target.label}'
+
+        elif isinstance(inst, MLILRet):
+            if inst.value is not None:
+                return f'return {inst.value}'
+            else:
+                return 'return'
+
+        # Function calls
         elif isinstance(inst, MLILCall):
             args_str = ', '.join(str(arg) for arg in inst.args)
             return f'{inst.target}({args_str})'
@@ -85,36 +129,35 @@ class MLILFormatter:
                 f'{inst.cmd}',
                 *[str(arg) for arg in inst.args],
             ]
-
             return f'syscall({', '.join(args)})'
 
         elif isinstance(inst, MLILCallScript):
             args_str = ', '.join(str(arg) for arg in inst.args)
             return f'{inst.module}.{inst.func}({args_str})  ; MLILCallScript'
 
-        elif isinstance(inst, MLILIf):
-            return f'if ({inst.condition}) goto {inst.true_target.label} else {inst.false_target.label}'
-
-        elif isinstance(inst, MLILGoto):
-            return f'goto {inst.target.label}'
-
-        elif isinstance(inst, MLILRet):
-            return 'return'
-
-        elif isinstance(inst, MLILRetVar):
-            return f'return {inst.value}'
+        # Globals
+        elif isinstance(inst, MLILLoadGlobal):
+            return str(inst)
 
         elif isinstance(inst, MLILStoreGlobal):
             return f'GLOBAL[{inst.index}] = {inst.value}'
 
+        # Registers
+        elif isinstance(inst, MLILLoadReg):
+            return str(inst)
+
         elif isinstance(inst, MLILStoreReg):
             return f'REG[{inst.index}] = {inst.value}'
+
+        # Debug
+        elif isinstance(inst, MLILNop):
+            return str(inst)
 
         elif isinstance(inst, MLILDebug):
             return f'debug.{inst.debug_type}({inst.value})'
 
         else:
-            return str(inst)
+            raise NotImplementedError(f'Unhandled MLIL instruction type: {type(inst).__name__}')
 
     @classmethod
     def to_dot(cls, func: MediumLevelILFunction) -> str:
@@ -164,7 +207,7 @@ class MLILFormatter:
             if block.index == 0:
                 # Entry block
                 lines.append(f'    {block.block_name} [label="{label}", style=filled, fillcolor=lightgreen];')
-            elif block.has_terminal and isinstance(block.instructions[-1], (MLILRet, MLILRetVar)):
+            elif block.has_terminal and isinstance(block.instructions[-1], MLILRet):
                 # Exit block
                 lines.append(f'    {block.block_name} [label="{label}", style=filled, fillcolor=lightblue];')
             else:

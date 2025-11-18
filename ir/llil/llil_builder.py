@@ -686,16 +686,16 @@ class LowLevelILBuilder:
 
     def call(self, target: str,
              return_target: LowLevelILBasicBlock,
-             argc: Optional[int] = None):
+             args: List[LowLevelILExpr] = None):
         '''Function call (terminal instruction)
 
         Args:
             target: Function name or address
             return_target: Block to return to after call
-            argc: Number of stack slots to clean up (includes func_id + ret_addr + args)
+            args: Call arguments (expressions from vstack)
         '''
 
-        self.add_instruction(LowLevelILCall(target, return_target))
+        self.add_instruction(LowLevelILCall(target, return_target, args))
 
     def ret(self):
         '''Return'''

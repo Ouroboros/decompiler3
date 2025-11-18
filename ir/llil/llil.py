@@ -478,11 +478,12 @@ class LowLevelILCall(LowLevelILStatement, Terminal):
         self,
         target: str,
         return_target: 'LowLevelILBasicBlock',
+        args: List['LowLevelILExpr'] = None,
     ):
         super().__init__(LowLevelILOperation.LLIL_CALL)
         self.target = target
         self.return_target = return_target  # Where to return after call (always a block)
-        self.args = []    # for debug only
+        self.args = args if args is not None else []  # Arguments (used by MLIL translator)
 
     def __str__(self) -> str:
         if self.args:
