@@ -124,6 +124,6 @@ def translate_falcom_llil_to_mlil(llil_func: LowLevelILFunction) -> MediumLevelI
     mlil_func = translator.translate(llil_func)
 
     # Apply optimizations
-    mlil_func = optimize_mlil(mlil_func)
+    mlil_func = optimize_mlil(mlil_func, use_ssa = not True)
 
     return mlil_func

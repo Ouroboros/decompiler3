@@ -2,6 +2,8 @@
 
 ## Rules
 
+### -1. SPEAK CHINESE
+
 ### 0. NEVER TOUCH binaryninja-api/
 READ ONLY - no writes, edits, or deletes.
 
@@ -48,3 +50,10 @@ Short (1-2 sentences), no signatures/metadata.
 - [ ] English-only comments
 - [ ] `@classmethod` not `@staticmethod`
 - [ ] Concise commits (no signatures)
+
+## Environment
+
+### Python
+- Path: `D:\Dev\Python\python.exe`
+- Version: 3.14.0
+- Environment: Git Bash (MINGW64) on Windows

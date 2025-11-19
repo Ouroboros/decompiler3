@@ -17,7 +17,7 @@ from falcom.ed9.lifters import ED9VMLifter
 from falcom.ed9.llil_builder import FalcomLLILFormatter
 from falcom.ed9.mlil_translator import translate_falcom_llil_to_mlil
 from ir.llil.llil import LowLevelILFunction
-from ir.mlil import MLILFormatter
+from ir.mlil import MLILFormatter, optimize_mlil
 import unittest
 import struct
 
@@ -188,7 +188,7 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                filter_func = lambda f: f.name == 'TestNpcSet'
+                filter_func = lambda f: f.name == 'EVENT_BEGIN'
             )
 
             formatted_lines = []
@@ -213,6 +213,10 @@ class TestScpParser(unittest.TestCase):
 
                 # Generate MLIL from LLIL
                 mlil_func = translate_falcom_llil_to_mlil(llil_func)
+
+                # Optimize MLIL (includes type inference)
+                mlil_func = optimize_mlil(mlil_func, use_ssa = True, infer_types_enabled = True)
+
                 mlil_lines.extend(MLILFormatter.format_function(mlil_func))
                 mlil_lines.append('')
 

@@ -657,6 +657,7 @@ class MediumLevelILFunction:
         self.variables: Dict[str, MLILVariable] = {}
         self.llil_function: Optional[LowLevelILFunction] = None  # Source LLIL function
         self._inst_block_map: Dict[int, MediumLevelILBasicBlock] = {}
+        self.var_types: Dict[Any, Any] = {}  # SSA variable -> type mapping
 
     def add_basic_block(self, block: MediumLevelILBasicBlock):
         self.basic_blocks.append(block)

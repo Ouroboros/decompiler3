@@ -7,6 +7,7 @@ Provides clean, readable output of MLIL functions.
 from typing import List
 
 from .mlil import *
+from .mlil_ssa import MLILVarSSA, MLILSetVarSSA, MLILPhi
 
 
 class MLILFormatter:
@@ -33,6 +34,14 @@ class MLILFormatter:
                     result.append(f';   {var.name} (slot {var.slot_index})')
                 else:
                     result.append(f';   {var.name}')
+
+        # List inferred types (if available)
+        if func.var_types:
+            result.append(';')
+            result.append('; Inferred Types:')
+            for var_name in sorted(func.var_types.keys()):
+                typ = func.var_types[var_name]
+                result.append(f';   {var_name}: {typ}')
 
         result.append('')
 
@@ -78,6 +87,16 @@ class MLILFormatter:
 
         elif isinstance(inst, MLILSetVar):
             return f'{inst.var} = {inst.value}'
+
+        # SSA variable operations
+        elif isinstance(inst, MLILVarSSA):
+            return str(inst)
+
+        elif isinstance(inst, MLILSetVarSSA):
+            return f'{inst.var} = {inst.value}'
+
+        elif isinstance(inst, MLILPhi):
+            return str(inst)
 
         # Binary operations - Arithmetic
         elif isinstance(inst, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod)):

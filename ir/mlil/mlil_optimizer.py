@@ -9,8 +9,12 @@ Performs optimization passes on MLIL:
 - Dead Code Elimination: Remove unused variable assignments
 '''
 
-from typing import Dict, Set, Optional
+from typing import Dict, Set, Optional, Any
 from .mlil import *
+from .mlil_ssa import convert_to_ssa, convert_from_ssa, MLILVariableSSA
+from .mlil_ssa_optimizer import SSAOptimizer
+from .mlil_type_inference import infer_types
+from .mlil_types import MLILType, unify_types
 
 
 class MLILOptimizer:
@@ -741,7 +745,68 @@ class MLILOptimizer:
         return True
 
 
-def optimize_mlil(function: MediumLevelILFunction) -> MediumLevelILFunction:
-    '''Convenience function to optimize MLIL function'''
-    optimizer = MLILOptimizer(function)
-    return optimizer.optimize()
+def _map_ssa_types_to_base(ssa_var_types: Dict[MLILVariableSSA, MLILType],
+                           function: MediumLevelILFunction) -> Dict[str, MLILType]:
+    '''Map SSA variable types back to base variables
+
+    Args:
+        ssa_var_types: Mapping from SSA variables to types
+        function: MLIL function (still in SSA form)
+
+    Returns:
+        Mapping from variable names to unified types
+
+    Strategy:
+        For each base variable, unify all its SSA versions' types
+        Example: var_x#0: int, var_x#1: int → var_x: int
+    '''
+    base_types: Dict[str, MLILType] = {}
+
+    for ssa_var, typ in ssa_var_types.items():
+        base_name = ssa_var.base_var.name
+
+        if base_name in base_types:
+            # Unify with existing type
+            base_types[base_name] = unify_types(base_types[base_name], typ)
+        else:
+            base_types[base_name] = typ
+
+    return base_types
+
+
+def optimize_mlil(function: MediumLevelILFunction, use_ssa: bool = True, infer_types_enabled: bool = True) -> MediumLevelILFunction:
+    '''Optimize MLIL function using SSA-based analysis
+
+    Args:
+        function: MLIL function to optimize
+        use_ssa: Whether to use SSA form for optimization (default: True)
+        infer_types_enabled: Whether to infer types (default: True)
+
+    Returns:
+        Optimized MLIL function
+
+    Pipeline:
+        MLIL → SSA → SSA-based optimizations → type inference → de-SSA → optimized MLIL
+    '''
+    if use_ssa:
+        # Convert to SSA form
+        convert_to_ssa(function)
+
+        # Run SSA-based optimizations
+        ssa_optimizer = SSAOptimizer(function)
+        function = ssa_optimizer.optimize()
+
+        # Infer types (before de-SSA, so we have def-use chains)
+        if infer_types_enabled:
+            ssa_var_types = infer_types(function)
+            # Map SSA types back to base variables
+            function.var_types = _map_ssa_types_to_base(ssa_var_types, function)
+
+        # Convert back from SSA
+        convert_from_ssa(function)
+    else:
+        # Fallback: use old non-SSA optimizer
+        optimizer = MLILOptimizer(function)
+        function = optimizer.optimize()
+
+    return function
