@@ -221,19 +221,7 @@ class MLILConst(MediumLevelILExpr, Constant):
             return str(self.value)
 
         elif isinstance(self.value, float):
-            precision = default_float_precision_decimals()
-            value = self.value
-            round_value = round(value, precision)
-
-            rel_tol = FLOAT_ROUND_REL_TOL
-            abs_tol = FLOAT_ROUND_ABS_TOL
-
-            if abs(round_value - value) <= max(abs(value) * rel_tol, abs_tol):
-                # if value != round_value:
-                #     print(f'float: {precision} {value} -> {round_value}')
-                value = round_value
-
-            return f'{value}'
+            return format_float(self.value)
 
         elif isinstance(self.value, str):
 

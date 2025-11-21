@@ -17,7 +17,7 @@ from falcom.ed9.lifters import ED9VMLifter
 from falcom.ed9.llil_builder import FalcomLLILFormatter
 from falcom.ed9.mlil_translator import translate_falcom_llil_to_mlil
 from ir.llil.llil import LowLevelILFunction
-from ir.mlil import MLILFormatter, optimize_mlil
+from ir.mlil import MLILFormatter, optimize_mlil, generate_typescript
 import unittest
 import struct
 
@@ -194,6 +194,7 @@ class TestScpParser(unittest.TestCase):
             formatted_lines = []
             llil_lines = []
             mlil_lines = []
+            typescript_lines = []
 
             # Print formatted functions
             print('\n=== Disassembly ===\n')
@@ -220,6 +221,11 @@ class TestScpParser(unittest.TestCase):
                 mlil_lines.extend(MLILFormatter.format_function(mlil_func))
                 mlil_lines.append('')
 
+                # Generate TypeScript
+                typescript_code = generate_typescript(mlil_func)
+                typescript_lines.append(typescript_code)
+                typescript_lines.append('')
+
             vmpy_path = test_file.with_suffix('.py')
             vmpy_path.write_text('\n'.join(formatted_lines) + '\n', encoding = 'utf-8')
 
@@ -228,6 +234,9 @@ class TestScpParser(unittest.TestCase):
 
             mlil_path = test_file.with_suffix('.mlil.asm')
             mlil_path.write_text('\n'.join(mlil_lines) + '\n', encoding = 'utf-8')
+
+            typescript_path = test_file.with_suffix('.ts')
+            typescript_path.write_text('\n'.join(typescript_lines) + '\n', encoding = 'utf-8')
 
 if __name__ == '__main__':
     unittest.main(buffer = False, defaultTest = 'TestScpParser')

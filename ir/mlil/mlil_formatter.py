@@ -4,6 +4,7 @@ MLIL Formatter - Format MLIL for display
 Provides clean, readable output of MLIL functions.
 '''
 
+from common import *
 from typing import List
 
 from .mlil import *
@@ -12,6 +13,28 @@ from .mlil_ssa import MLILVarSSA, MLILSetVarSSA, MLILPhi
 
 class MLILFormatter:
     '''Format MLIL functions for display'''
+
+    @classmethod
+    def _format_const(cls, const: MLILConst) -> str:
+        '''Format a constant value
+
+        Args:
+            const: Constant to format
+
+        Returns:
+            Formatted constant string
+        '''
+        if isinstance(const.value, str):
+            return f'"{const.value}"'
+
+        elif isinstance(const.value, bool):
+            return 'true' if const.value else 'false'
+
+        elif isinstance(const.value, float):
+            return format_float(const.value)
+
+        else:
+            return str(const.value)
 
     @classmethod
     def format_function(cls, func: MediumLevelILFunction) -> List[str]:
@@ -80,7 +103,7 @@ class MLILFormatter:
         '''
         # Constants and Variables
         if isinstance(inst, MLILConst):
-            return str(inst)
+            return cls._format_const(inst)
 
         elif isinstance(inst, MLILVar):
             return str(inst)

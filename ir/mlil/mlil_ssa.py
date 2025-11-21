@@ -548,6 +548,10 @@ class SSADeconstructor:
             # Insert copies in predecessors
             for phi in phi_nodes:
                 for ssa_var, pred_block in phi.sources:
+                    # Skip self-assignment (var_s3 = var_s3)
+                    if phi.dest.base_var == ssa_var.base_var:
+                        continue
+
                     # Insert: phi.dest.base_var = ssa_var.base_var at end of pred_block
                     copy = MLILSetVar(phi.dest.base_var, MLILVar(ssa_var.base_var))
                     # Insert before terminal instruction
