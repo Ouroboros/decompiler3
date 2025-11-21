@@ -17,7 +17,8 @@ from falcom.ed9.lifters import ED9VMLifter
 from falcom.ed9.llil_builder import FalcomLLILFormatter
 from falcom.ed9.mlil_translator import translate_falcom_llil_to_mlil
 from ir.llil.llil import LowLevelILFunction
-from ir.mlil import MLILFormatter, optimize_mlil, generate_typescript
+from ir.mlil import MLILFormatter, optimize_mlil
+from ir.hlil import HLILFormatter, convert_mlil_to_hlil, optimize_hlil
 import unittest
 import struct
 
@@ -158,8 +159,8 @@ class TestScpParser(unittest.TestCase):
 
         ED9_DATA_DIR = Path(r'D:\Game\Steam\steamapps\common\THE LEGEND OF HEROES KURO NO KISEKI\decrypted\tc\f\script\scena')
 
-        # test_file = Path(__file__).parent / 'mp2000_ev.dat'
-        test_file = Path(__file__).parent / 'debug.dat'
+        test_file = Path(__file__).parent / 'mp2000_ev.dat'
+        # test_file = Path(__file__).parent / 'debug.dat'
         # test_file = Path(__file__).parent / 'mp3010_01.dat'
         # test_file = ED9_DATA_DIR / 'c0600.dat'
 
@@ -170,16 +171,6 @@ class TestScpParser(unittest.TestCase):
             parser = ScpParser(fs, test_file.name)
             parser.parse()
 
-            # for i, func in enumerate(parser.functions):
-            #     print(f'[{i}] {func}')
-            #     print()
-
-            # print('global vars:')
-
-            # for i, gvar in enumerate(parser.global_vars):
-            #     print(f'[{i}] {gvar}')
-            #     print()
-
             print(parser.header)
 
             # Check header was parsed
@@ -188,13 +179,15 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                filter_func = lambda f: f.name == 'EVENT_BEGIN'
+                # filter_func = lambda f: f.name == 'Dummy_m4000_talk0'
+                # filter_func = lambda f: f.name != 'FC_Event_PartySet'
+                filter_func = lambda f: f.name in ['EV_02_63_02_SELECT_00', 'CHR_SETARM']
             )
 
             formatted_lines = []
             llil_lines = []
             mlil_lines = []
-            typescript_lines = []
+            hlil_lines = []
 
             # Print formatted functions
             print('\n=== Disassembly ===\n')
@@ -214,17 +207,14 @@ class TestScpParser(unittest.TestCase):
 
                 # Generate MLIL from LLIL
                 mlil_func = translate_falcom_llil_to_mlil(llil_func)
-
-                # Optimize MLIL (includes type inference)
-                mlil_func = optimize_mlil(mlil_func, use_ssa = True, infer_types_enabled = True)
-
                 mlil_lines.extend(MLILFormatter.format_function(mlil_func))
                 mlil_lines.append('')
 
-                # Generate TypeScript
-                typescript_code = generate_typescript(mlil_func)
-                typescript_lines.append(typescript_code)
-                typescript_lines.append('')
+                # Generate HLIL from MLIL
+                hlil_func = convert_mlil_to_hlil(mlil_func)
+                hlil_func = optimize_hlil(hlil_func)
+                hlil_lines.extend(HLILFormatter.format_function(hlil_func))
+                hlil_lines.append('')
 
             vmpy_path = test_file.with_suffix('.py')
             vmpy_path.write_text('\n'.join(formatted_lines) + '\n', encoding = 'utf-8')
@@ -235,8 +225,8 @@ class TestScpParser(unittest.TestCase):
             mlil_path = test_file.with_suffix('.mlil.asm')
             mlil_path.write_text('\n'.join(mlil_lines) + '\n', encoding = 'utf-8')
 
-            typescript_path = test_file.with_suffix('.ts')
-            typescript_path.write_text('\n'.join(typescript_lines) + '\n', encoding = 'utf-8')
+            hlil_path = test_file.with_suffix('.hlil.ts')
+            hlil_path.write_text('\n'.join(hlil_lines) + '\n', encoding = 'utf-8')
 
 if __name__ == '__main__':
     unittest.main(buffer = False, defaultTest = 'TestScpParser')
