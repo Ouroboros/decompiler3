@@ -5,3 +5,4 @@ binaryninja-api/
 *.png
 *.zip
 
+tests
