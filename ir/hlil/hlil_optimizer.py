@@ -27,6 +27,8 @@ class HLILOptimizer:
             Optimized function (modifies in place and returns same object)
         '''
         cls._optimize_block(func.body)
+        # Post-optimization: merge nested switches
+        cls._merge_nested_switches(func.body)
         return func
 
     @classmethod
@@ -172,6 +174,20 @@ class HLILOptimizer:
                     continue
 
             # True branch is the default case (or end of chain)
+            # But first check if it contains a nested switch pattern
+            if current_if.true_block and len(current_if.true_block.statements) == 1:
+                next_stmt = current_if.true_block.statements[0]
+                # If the default case is another switch on the same variable, merge it
+                if isinstance(next_stmt, HLILSwitch):
+                    if isinstance(next_stmt.scrutinee, HLILVar) and scrutinee and next_stmt.scrutinee.var.name == scrutinee.var.name:
+                        # Merge nested switch cases
+                        for nested_case in next_stmt.cases:
+                            if nested_case.is_default():
+                                default_body = nested_case.body
+                            else:
+                                cases.append((nested_case.value.value, nested_case.body))
+                        break
+
             default_body = current_if.true_block
             break
 
@@ -191,6 +207,45 @@ class HLILOptimizer:
             switch_cases.append(HLILSwitchCase(None, default_body))
 
         return HLILSwitch(scrutinee, switch_cases)
+
+    @classmethod
+    def _merge_nested_switches(cls, block: HLILBlock):
+        '''Merge nested switch statements on the same variable
+
+        Args:
+            block: Block to process
+        '''
+        for i, stmt in enumerate(block.statements):
+            if isinstance(stmt, HLILSwitch):
+                # Check each case for nested switches
+                for case in stmt.cases:
+                    # Recursively process case body
+                    cls._merge_nested_switches(case.body)
+
+                    # Check if case body is a single nested switch on the same variable
+                    if len(case.body.statements) == 1:
+                        nested_stmt = case.body.statements[0]
+                        if isinstance(nested_stmt, HLILSwitch):
+                            if isinstance(nested_stmt.scrutinee, HLILVar) and isinstance(stmt.scrutinee, HLILVar):
+                                if nested_stmt.scrutinee.var.name == stmt.scrutinee.var.name:
+                                    # Merge nested switch into parent
+                                    # This happens when default case contains another switch
+                                    if case.is_default():
+                                        # Remove the default case
+                                        stmt.cases.remove(case)
+                                        # Add all nested cases to parent
+                                        stmt.cases.extend(nested_stmt.cases)
+                                        # Recurse to check for more nesting
+                                        cls._merge_nested_switches(block)
+                                        return
+
+            elif isinstance(stmt, HLILIf):
+                cls._merge_nested_switches(stmt.true_block)
+                if stmt.false_block:
+                    cls._merge_nested_switches(stmt.false_block)
+
+            elif isinstance(stmt, HLILWhile):
+                cls._merge_nested_switches(stmt.body)
 
     @classmethod
     def _negate_condition(cls, condition: HLILExpression) -> HLILExpression:
