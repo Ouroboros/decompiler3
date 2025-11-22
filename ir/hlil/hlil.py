@@ -68,9 +68,10 @@ class HLILExpression(HLILInstruction):
 class HLILVariable:
     '''HLIL variable with optional type information'''
 
-    def __init__(self, name: str, type_hint: Optional[str] = None):
+    def __init__(self, name: str, type_hint: Optional[str] = None, default_value: Optional[str] = None):
         self.name = name
         self.type_hint = type_hint  # 'int', 'bool', 'string', 'float', etc.
+        self.default_value = default_value  # Default value as TypeScript literal
 
     def __str__(self) -> str:
         return self.name
@@ -187,6 +188,22 @@ class HLILSyscall(HLILExpression):
 
     def __repr__(self) -> str:
         return f'HLILSyscall({self.subsystem}.{self.cmd})'
+
+
+class HLILExternCall(HLILExpression):
+    '''External module call (e.g., script call)'''
+
+    def __init__(self, target: str, args: List[HLILExpression]):
+        super().__init__(HLILOperation.HLIL_CALL)
+        self.target = target  # Format: "module:func"
+        self.args = args
+
+    def __str__(self) -> str:
+        args_str = ', '.join(str(arg) for arg in self.args)
+        return f'{self.target}({args_str})'
+
+    def __repr__(self) -> str:
+        return f'HLILExternCall({self.target}, {len(self.args)} args)'
 
 
 # ============================================================================

@@ -5,12 +5,7 @@ Optimizes HLIL code by recognizing patterns and simplifying expressions.
 '''
 
 from typing import List, Optional
-from .hlil import (
-    HighLevelILFunction, HLILBlock, HLILStatement, HLILExpression,
-    HLILVariable, HLILVar, HLILConst, HLILAssign, HLILExprStmt,
-    HLILReturn, HLILCall, HLILIf, HLILWhile, HLILBinaryOp, HLILUnaryOp,
-    HLILSwitch, HLILSwitchCase
-)
+from .hlil import *
 
 
 class HLILOptimizer:

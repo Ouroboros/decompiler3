@@ -2,15 +2,8 @@
 Core IL base classes and traits
 '''
 
-from .il_base import (
-    ILInstruction,
-    ControlFlow,
-    Terminal,
-    Constant,
-    BinaryOperation,
-    UnaryOperation,
-)
-from .il_options import ILOptions
+from .il_base import *
+from .il_options import *
 
 __all__ = [
     'ILInstruction',

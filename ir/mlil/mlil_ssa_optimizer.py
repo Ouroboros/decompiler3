@@ -9,12 +9,7 @@ Performs SSA-based optimization passes:
 
 from typing import Dict, List, Optional
 from .mlil import *
-from .mlil_ssa import (
-    MLILVariableSSA,
-    MLILVarSSA,
-    MLILSetVarSSA,
-    MLILPhi,
-)
+from .mlil_ssa import *
 
 
 class SSAOptimizer:
@@ -35,7 +30,7 @@ class SSAOptimizer:
         while changed and iterations < max_iterations:
             changed = False
             changed |= self.propagate_constants()
-            # changed |= self.fold_constants()     # 常量折叠 - 暂时关闭
+            # changed |= self.fold_constants()     # Constant folding - temporarily disabled
             changed |= self.simplify_expressions()
             changed |= self.simplify_conditions()
             changed |= self.propagate_copies()

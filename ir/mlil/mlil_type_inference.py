@@ -248,21 +248,23 @@ class MLILTypeInference:
         '''Infer type from comparison operation'''
         changed = False
 
-        # Get both sides
-        lhs = comp.lhs if hasattr(comp, 'lhs') else None
-        rhs = comp.rhs if hasattr(comp, 'rhs') else None
+        # Comparison operations have lhs and rhs
+        if not isinstance(comp, MLILBinaryOp):
+            return changed
 
-        if lhs and rhs:
-            # If comparing with constant, infer type from constant
-            if isinstance(rhs, MLILConst):
-                const_type = self._infer_const_type(rhs)
-                if isinstance(lhs, MLILVarSSA) and not const_type.is_unknown():
-                    changed |= self._update_var_type(lhs.var, const_type)
+        lhs = comp.lhs
+        rhs = comp.rhs
 
-            elif isinstance(lhs, MLILConst):
-                const_type = self._infer_const_type(lhs)
-                if isinstance(rhs, MLILVarSSA) and not const_type.is_unknown():
-                    changed |= self._update_var_type(rhs.var, const_type)
+        # If comparing with constant, infer type from constant
+        if isinstance(rhs, MLILConst):
+            const_type = self._infer_const_type(rhs)
+            if isinstance(lhs, MLILVarSSA) and not const_type.is_unknown():
+                changed |= self._update_var_type(lhs.var, const_type)
+
+        elif isinstance(lhs, MLILConst):
+            const_type = self._infer_const_type(lhs)
+            if isinstance(rhs, MLILVarSSA) and not const_type.is_unknown():
+                changed |= self._update_var_type(rhs.var, const_type)
 
         return changed
 
@@ -270,8 +272,12 @@ class MLILTypeInference:
         '''Infer that variables in arithmetic are numeric'''
         changed = False
 
-        lhs = arith.lhs if hasattr(arith, 'lhs') else None
-        rhs = arith.rhs if hasattr(arith, 'rhs') else None
+        # Arithmetic operations have lhs and rhs
+        if not isinstance(arith, MLILBinaryOp):
+            return changed
+
+        lhs = arith.lhs
+        rhs = arith.rhs
 
         # Variables in arithmetic should be numeric (at least int)
         if isinstance(lhs, MLILVarSSA):

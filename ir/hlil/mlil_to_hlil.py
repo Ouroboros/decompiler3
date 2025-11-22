@@ -5,41 +5,19 @@ Converts unstructured MLIL (with goto/label) to structured HLIL (with if/while/s
 '''
 
 from typing import Dict, List, Set, Optional
-from ir.mlil.mlil import (
-    MediumLevelILFunction,
-    MediumLevelILBasicBlock,
-    MediumLevelILInstruction,
-    MediumLevelILExpr,
-    MediumLevelILStatement,
-    MLILVariable,
-    MLILGoto,
-    MLILIf,
-    MLILRet,
-    MLILSetVar,
-    MLILVar,
-    MLILConst,
-    MLILBinaryOp,
-    MLILUnaryOp,
-    MLILCall,
-    MLILSyscall,
-    MLILCallScript,
-    MLILLoadReg,
-    MLILStoreReg,
-    MLILLoadGlobal,
-    MLILStoreGlobal,
-    MLILDebug,
-    MLILNop,
-)
-from .hlil import (
-    HighLevelILFunction, HLILBlock, HLILStatement, HLILExpression,
-    HLILVariable, HLILVar, HLILConst, HLILBinaryOp, HLILUnaryOp, HLILCall,
-    HLILAssign, HLILExprStmt, HLILReturn, HLILIf, HLILWhile, HLILBreak, HLILContinue,
-    HLILComment
-)
+
+from ir.mlil.mlil import *
+from .hlil import *
 
 
 class MLILToHLILConverter:
-    '''Convert MLIL function to HLIL function'''
+    '''Convert MLIL function to HLIL function
+
+    Performs structural conversion from unstructured MLIL (with goto/label)
+    to structured HLIL (with if/while/switch).
+
+    Type information should be added via separate passes after conversion.
+    '''
 
     def __init__(self, mlil_func: MediumLevelILFunction):
         self.mlil_func = mlil_func
@@ -67,16 +45,16 @@ class MLILToHLILConverter:
         elif isinstance(instr, (MLILSetVar, MLILStoreGlobal, MLILStoreReg)):
             return self._uses_reg0(instr.value)
 
-        elif isinstance(instr, (MLILIf, MLILRet)):
-            if hasattr(instr, 'condition'):
-                return self._uses_reg0(instr.condition)
-            elif hasattr(instr, 'value') and instr.value:
+        elif isinstance(instr, MLILIf):
+            return self._uses_reg0(instr.condition)
+
+        elif isinstance(instr, MLILRet):
+            if instr.value:
                 return self._uses_reg0(instr.value)
 
         elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
             # Check arguments
-            if hasattr(instr, 'args'):
-                return any(self._uses_reg0(arg) for arg in instr.args)
+            return any(self._uses_reg0(arg) for arg in instr.args)
 
         return False
 
@@ -131,27 +109,36 @@ class MLILToHLILConverter:
                 elif isinstance(inst, MLILStoreReg):
                     collect_used_vars(inst.value)
 
-        # Convert only used variables
+        # Collect parameters and variables separately
+        parameters = []
+        variables = []
+
         for mlil_var in self.mlil_func.variables.values():
             # Skip unused variables
             if mlil_var.name not in used_vars:
                 continue
 
-            # Convert type hint
-            type_hint = None
-            if hasattr(mlil_var, 'type') and mlil_var.type:
-                type_hint = str(mlil_var.type)
-
-            hlil_var = HLILVariable(mlil_var.name, type_hint)
-
             # Determine if parameter based on naming convention (arg0, arg1, etc.)
             is_parameter = mlil_var.name.startswith('arg')
 
+            # Type information will be added by separate passes
+            hlil_var = HLILVariable(mlil_var.name, None)
+
             # Add as parameter or local variable
             if is_parameter:
-                self.hlil_func.parameters.append(hlil_var)
+                # Extract parameter index for sorting
+                try:
+                    param_index = int(mlil_var.name[3:])  # arg1 -> 1
+                    parameters.append((param_index, hlil_var))
+                except ValueError:
+                    variables.append(hlil_var)
             else:
-                self.hlil_func.variables.append(hlil_var)
+                variables.append(hlil_var)
+
+        # Sort parameters by index and add to function
+        parameters.sort(key=lambda x: x[0])
+        self.hlil_func.parameters.extend([var for _, var in parameters])
+        self.hlil_func.variables.extend(variables)
 
     def _build_cfg(self):
         '''Build control flow graph from MLIL basic blocks'''
@@ -432,16 +419,16 @@ class MLILToHLILConverter:
 
         # Return statement
         if isinstance(instr, MLILRet):
-            if hasattr(instr, 'value') and instr.value:
+            if instr.value:
                 return HLILReturn(self._convert_expr(instr.value))
             return HLILReturn()
 
         # Assignment
         elif isinstance(instr, MLILSetVar):
             var_name = instr.var.name
-            type_hint = str(instr.var.type) if hasattr(instr.var, 'type') and instr.var.type else None
+            # Type information not available on non-SSA MLIL variables
             return HLILAssign(
-                HLILVar(HLILVariable(var_name, type_hint)),
+                HLILVar(HLILVariable(var_name, None)),
                 self._convert_expr(instr.value)
             )
 
@@ -479,8 +466,8 @@ class MLILToHLILConverter:
         # Variable reference
         if isinstance(expr, MLILVar):
             var_name = expr.var.name
-            type_hint = str(expr.var.type) if hasattr(expr.var, 'type') and expr.var.type else None
-            return HLILVar(HLILVariable(var_name, type_hint))
+            # Type information not available on non-SSA MLIL variables
+            return HLILVar(HLILVariable(var_name, None))
 
         # Constant
         elif isinstance(expr, MLILConst):
@@ -517,6 +504,12 @@ class MLILToHLILConverter:
                 self._convert_expr(expr.rhs)
             )
 
+        # Address-of operator (output parameters) - must come before MLILUnaryOp
+        elif isinstance(expr, MLILAddressOf):
+            # Convert &var to addr_of(var) intrinsic call
+            operand = self._convert_expr(expr.operand)
+            return HLILCall('addr_of', [operand])
+
         # Unary operation
         elif isinstance(expr, MLILUnaryOp):
             # Map MLIL operation to operator string
@@ -551,31 +544,27 @@ class MLILToHLILConverter:
 
         # Global variable load
         elif isinstance(expr, MLILLoadGlobal):
-            if hasattr(expr, 'offset'):
-                global_name = f'global_{expr.offset}'
-            else:
-                global_name = 'global'
+            global_name = f'global_{expr.index}'
             return HLILVar(HLILVariable(global_name))
 
         # Function call
         elif isinstance(expr, MLILCall):
             args = [self._convert_expr(arg) for arg in expr.args]
-            func_name = expr.target if hasattr(expr, 'target') else str(expr)
-            return HLILCall(str(func_name), args)
+            func_name = str(expr.target)
+            return HLILCall(func_name, args)
 
         # System call
         elif isinstance(expr, MLILSyscall):
             from .hlil import HLILSyscall
             args = [self._convert_expr(arg) for arg in expr.args]
-            subsystem = expr.subsystem if hasattr(expr, 'subsystem') else 'sys'
-            cmd = expr.cmd if hasattr(expr, 'cmd') else str(expr.syscall_id)
-            return HLILSyscall(subsystem, cmd, args)
+            return HLILSyscall(expr.subsystem, expr.cmd, args)
 
-        # Script call
+        # Script call (external module call)
         elif isinstance(expr, MLILCallScript):
+            from .hlil import HLILExternCall
             args = [self._convert_expr(arg) for arg in expr.args]
-            func_name = f'{expr.module}.{expr.func}'
-            return HLILCall(func_name, args)
+            target = f'{expr.module}:{expr.func}'
+            return HLILExternCall(target, args)
 
         # Fallback: create a constant with string representation
         else:
