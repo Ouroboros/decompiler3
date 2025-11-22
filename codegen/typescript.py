@@ -322,10 +322,10 @@ class TypeScriptGenerator:
             case_body_indent = default_indent() * 2
             for case in stmt.cases:
                 if case.is_default():
-                    lines.append(f'{indent_str}{case_indent}default:')
+                    lines.append(f'{indent_str}{case_indent}default: {{')
                 else:
                     case_val_str = cls._format_expr(case.value)
-                    lines.append(f'{indent_str}{case_indent}case {case_val_str}:')
+                    lines.append(f'{indent_str}{case_indent}case {case_val_str}: {{')
                 lines.extend(cls._generate_block(case.body, indent + 2))
 
                 # Add break if case doesn't end with return/break/continue
@@ -333,6 +333,8 @@ class TypeScriptGenerator:
                     last_stmt = case.body.statements[-1]
                     if not isinstance(last_stmt, (HLILReturn, HLILBreak, HLILContinue)):
                         lines.append(f'{indent_str}{case_body_indent}break;')
+
+                lines.append(f'{indent_str}{case_indent}}}')
 
             lines.append(f'{indent_str}}}')
 
