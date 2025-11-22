@@ -2,7 +2,12 @@
 
 ## Rules
 
-### -1. SPEAK CHINESE
+### -1. Language Usage
+- **User communication**: Chinese
+- **Code, comments, commit messages, tool descriptions**: English
+
+### -0.5. Git Commit Policy
+NEVER auto-commit. Only create commits when explicitly requested by user.
 
 ### 0. NEVER TOUCH binaryninja-api/
 READ ONLY - no writes, edits, or deletes.
@@ -43,11 +48,13 @@ Use `@classmethod` for inheritance support.
 Short (1-2 sentences), no signatures/metadata.
 
 ## Checklist
+- [ ] User communication in Chinese, everything else in English
+- [ ] No auto-commit (wait for user request)
 - [ ] No hardcoded numbers (use named constants)
 - [ ] Imports at top level
 - [ ] Spaces around `=`
 - [ ] Blank lines between conditional blocks
-- [ ] English-only comments
+- [ ] English-only code comments
 - [ ] `@classmethod` not `@staticmethod`
 - [ ] Concise commits (no signatures)
 
