@@ -23,7 +23,6 @@ __all__ = [
     'translate_llil_to_mlil',
     'MLILFormatter',
     'format_mlil_function',
-    'MLILOptimizer',
     'SSAOptimizer',
     'optimize_mlil',
 

@@ -140,6 +140,26 @@ class TypeScriptGenerator:
         return False
 
     @classmethod
+    def _is_boolean_expr(cls, expr: HLILExpression) -> bool:
+        '''Check if expression is already a boolean (comparison or logical operation)
+
+        Args:
+            expr: Expression to check
+
+        Returns:
+            True if expression is a boolean operation
+        '''
+        if isinstance(expr, HLILBinaryOp):
+            # Comparison and logical operators return boolean
+            return expr.op in ('==', '!=', '<', '<=', '>', '>=', '&&', '||')
+
+        elif isinstance(expr, HLILUnaryOp):
+            # Logical NOT returns boolean
+            return expr.op == '!'
+
+        return False
+
+    @classmethod
     def _format_expr(cls, expr: HLILExpression) -> str:
         '''Format an HLIL expression as TypeScript
 
@@ -167,6 +187,23 @@ class TypeScriptGenerator:
                 return str(expr.value)
 
         elif isinstance(expr, HLILBinaryOp):
+            # Simplify boolean comparisons with 0
+            # (bool_expr) != 0 -> bool_expr
+            # (bool_expr) == 0 -> !bool_expr
+            if isinstance(expr.rhs, HLILConst) and expr.rhs.value == 0:
+                if cls._is_boolean_expr(expr.lhs):
+                    if expr.op == '!=':
+                        # (bool) != 0 -> bool
+                        return cls._format_expr(expr.lhs)
+
+                    elif expr.op == '==':
+                        # (bool) == 0 -> !bool
+                        inner = cls._format_expr(expr.lhs)
+                        # Add parentheses if the inner expression has lower precedence than !
+                        if isinstance(expr.lhs, HLILBinaryOp) and expr.lhs.op in ('||', '&&'):
+                            inner = f'({inner})'
+                        return f'!{inner}'
+
             lhs_str = cls._format_expr(expr.lhs)
             rhs_str = cls._format_expr(expr.rhs)
 
