@@ -1,6 +1,4 @@
-'''
-LLIL v2 Builder - Layered architecture for convenience
-'''
+'''LLIL Builder'''
 
 from dataclasses import dataclass
 from typing import Union, Optional, List
@@ -28,14 +26,7 @@ class _VirtualStack:
         return self._items[offset]
 
     def peek_many(self, count: int) -> List[LowLevelILExpr]:
-        '''Peek at the last count items on the stack (in LIFO order)
-
-        Args:
-            count: Number of items to peek
-
-        Returns:
-            List of items in LIFO order (top of stack first)
-        '''
+        '''Peek last count items (LIFO order)'''
         if len(self._items) < count:
             raise RuntimeError(f'Vstack has only {len(self._items)} items, cannot peek {count}')
 
@@ -72,37 +63,14 @@ class LowLevelILBuilder:
     # === Function and Block Creation ===
 
     def create_function(self, name: str, start_addr: int, num_params: int = 0):
-        '''Create function inside builder
-
-        Args:
-            name: Function name
-            start_addr: Function start address
-            num_params: Number of parameters (default: 0)
-
-        Example:
-            builder = LowLevelILBuilder()
-            builder.create_function('my_func', 0x1000, 2)
-            # ... build instructions ...
-        '''
+        '''Create function inside builder'''
         if self.function is not None:
             raise RuntimeError('Function already created')
 
         self.function = LowLevelILFunction(name, start_addr, num_params)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
-        '''Create basic block and automatically add to function
-
-        Args:
-            start: Block start address
-            label: Optional label name (if None, uses default loc_{start:X})
-
-        Returns:
-            The created basic block
-
-        Example:
-            entry = builder.create_basic_block(0x1000, 'entry')
-            exit = builder.create_basic_block(0x1020, 'exit')
-        '''
+        '''Create basic block and automatically add to function'''
         if self.function is None:
             raise RuntimeError('No function created. Call create_function() first.')
 
@@ -121,35 +89,15 @@ class LowLevelILBuilder:
         return self.__current_sp
 
     def __sp_set(self, value: int):
-        '''Set shadow SP to absolute value (does NOT emit IL) - PRIVATE
-
-        Use cases (INTERNAL ONLY):
-        1. Initialize block SP state (set_current_block)
-
-        WARNING: This does NOT emit SpAdd IL. Only used internally.
-        To modify SP with IL emission, use emit_sp_add().
-        '''
+        '''Set shadow SP to absolute value (does NOT emit IL) - PRIVATE'''
         self.__current_sp = value
 
     def __sp_adjust(self, delta: int):
-        '''Adjust shadow SP by delta (does NOT emit IL) - PRIVATE
-
-        This is ONLY called by add_instruction() when it detects SpAdd IL.
-        It syncs the shadow SP to reflect the IL that was just added.
-
-        WARNING: NEVER call this directly! Use emit_sp_add() instead.
-        '''
+        '''Adjust shadow SP by delta (does NOT emit IL) - PRIVATE'''
         self.__current_sp += delta
 
     def _cleanup_stack(self, argc: int) -> list[LowLevelILExpr]:
-        '''Clean up stack and vstack without emitting IL - PRIVATE
-
-        Adjusts shadow SP and pops from vstack.
-        Used for callee cleanup convention where runtime handles stack cleanup.
-
-        Args:
-            argc: Number of stack slots to clean up
-        '''
+        '''Clean up stack and vstack without emitting IL - PRIVATE'''
 
         popped_values = []
 
@@ -162,18 +110,7 @@ class LowLevelILBuilder:
         return popped_values
 
     def emit_sp_add(self, delta: int, *, hidden_for_formatter: bool = False) -> LowLevelILSpAdd:
-        '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)
-
-        This is the ONLY method that should be used to modify SP.
-        Ensures all SP changes are represented in the IL.
-
-        Args:
-            delta: Number of words to add to sp (can be positive or negative)
-            hidden_for_formatter: If True, hide this instruction in formatted output (default: False)
-
-        Returns:
-            The emitted LowLevelILSpAdd instruction
-        '''
+        '''Emit SpAdd IL and sync shadow sp (single entry point for SP changes)'''
         sp_add = LowLevelILSpAdd(delta)
         sp_add.options.hidden_for_formatter = hidden_for_formatter
         self.add_instruction(sp_add)
@@ -197,14 +134,7 @@ class LowLevelILBuilder:
         return self.__vstack.peek(offset)
 
     def vstack_peek_many(self, count: int) -> List[LowLevelILExpr]:
-        '''Peek at multiple items from vstack in LIFO order
-
-        Args:
-            count: Number of items to peek
-
-        Returns:
-            List of expressions in LIFO order (top of stack first)
-        '''
+        '''Peek at multiple items from vstack in LIFO order'''
         return self.__vstack.peek_many(count)
 
     def vstack_size(self) -> int:
@@ -212,14 +142,7 @@ class LowLevelILBuilder:
         return self.__vstack.size()
 
     def set_current_block(self, block: LowLevelILBasicBlock):
-        '''Set the current basic block for instruction insertion
-
-        Args:
-            block: The block to set as current
-
-        Raises:
-            RuntimeError: If block has not been added to function
-        '''
+        '''Set the current basic block for instruction insertion'''
         # Verify block has been added to function
         if block not in self.function.basic_blocks:
             raise RuntimeError(f'Block {block} has not been added to function. Call function.add_basic_block() first.')
@@ -254,26 +177,12 @@ class LowLevelILBuilder:
         self.__vstack.restore(snapshot.values)
 
     def save_stack_for_offset(self, offset: int):
-        '''Save current stack state for given offset (branch target)
-
-        Args:
-            offset: Target block offset to save stack state for
-
-        Note: This is typically called before conditional branches to ensure
-              both branch targets start with the same stack state.
-        '''
+        '''Save current stack state for given offset (branch target)'''
 
         self.saved_stacks[offset] = self.save_stack_state()
 
     def restore_stack_for_offset(self, offset: int):
-        '''Restore stack state for given offset, if saved
-
-        Args:
-            offset: Block offset to restore stack state for
-
-        Note: This is typically called at the start of processing each block
-              to restore the stack state saved by a previous branch.
-        '''
+        '''Restore stack state for given offset, if saved'''
         if offset in self.saved_stacks:
             self.restore_stack_state(self.saved_stacks[offset])
 
@@ -319,19 +228,7 @@ class LowLevelILBuilder:
             raise TypeError(f'Cannot convert {type(value)} to expression')
 
     def push(self, value: Union[LowLevelILExpr, int, float, str], *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
-        '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)
-
-        Generates:
-          1. StackStore(sp+0, value)
-          2. SpAdd(+1)
-
-        Args:
-            value: Expression or primitive value to push (must be LowLevelILExpr or int/float/str)
-            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
-
-        Returns:
-            The expression that was pushed (LowLevelILExpr)
-        '''
+        '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)'''
         expr = self._to_expr(value)
         slot_index = self.sp_get()
         # 1. StackStore(sp+0, value)
@@ -343,13 +240,7 @@ class LowLevelILBuilder:
         return expr
 
     def pop(self, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
-        '''Pop value from stack and emit SpAdd
-
-        Emits SpAdd(-1) and returns the expression from vstack.
-
-        Args:
-            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
-        '''
+        '''Pop value from stack and emit SpAdd'''
         self.emit_sp_add(-1, hidden_for_formatter = hidden_for_formatter)
         return self.__vstack_pop()
 
@@ -374,47 +265,21 @@ class LowLevelILBuilder:
         self.add_instruction(LowLevelILStackStore(expr, offset = offset, slot_index = slot_index))
 
     def frame_load(self, offset: int) -> 'LowLevelILFrameLoad':
-        '''STACK[frame + offset] - Frame-relative load (for function parameters/locals)
-
-        Args:
-            offset: Byte offset relative to frame base (function entry sp)
-
-        Returns:
-            FrameLoad expression
-        '''
+        '''STACK[frame + offset] - Frame-relative load (for function parameters/locals)'''
         return LowLevelILFrameLoad(offset)
 
     def frame_store(self, value: Union[LowLevelILExpr, int, str], offset: int):
-        '''STACK[frame + offset] = value - Frame-relative store (for function parameters/locals)
-
-        Args:
-            value: Value to store (expression or primitive)
-            offset: Byte offset relative to frame base (function entry sp)
-        '''
+        '''STACK[frame + offset] = value - Frame-relative store (for function parameters/locals)'''
         expr = self._to_expr(value)
         self.add_instruction(LowLevelILFrameStore(expr, offset))
 
     def load_frame(self, offset: int):
-        '''Load from frame + offset and push to stack
-
-        Use this for accessing function parameters (frame-relative addressing).
-
-        Args:
-            offset: Byte offset relative to frame base
-        '''
+        '''Load from frame + offset and push to stack'''
         frame_val = self.frame_load(offset)
         self.stack_push(frame_val)
 
     def load_stack(self, offset: int):
-        '''Load from sp + offset and push to stack
-
-        Automatically determines whether to use sp-relative or fp-relative addressing:
-        - If accessing parameter area (STACK[0..num_params-1]), uses fp
-        - Otherwise uses sp
-
-        Args:
-            offset: Byte offset relative to current sp
-        '''
+        '''Load from sp + offset and push to stack'''
         # Calculate word offset
         word_offset = offset // WORD_SIZE
         # Calculate absolute stack position
@@ -435,15 +300,7 @@ class LowLevelILBuilder:
             self.stack_push(stack_val)
 
     def push_stack_addr(self, offset: int):
-        '''Push the address of stack location (sp + offset)
-
-        This is used for PUSH_STACK_OFFSET instruction which pushes the address
-        of a stack slot. The slot index is computed at build time using current_sp
-        and remains constant regardless of subsequent sp changes.
-
-        Args:
-            offset: Byte offset relative to current sp (at build time)
-        '''
+        '''Push the address of stack location (sp + offset)'''
         # Convert byte offset to word offset
         word_offset = offset // WORD_SIZE
         # Calculate absolute slot index using current sp
@@ -470,12 +327,7 @@ class LowLevelILBuilder:
     # === Constants ===
 
     def const_int(self, value: int, is_hex: bool = False) -> LowLevelILConst:
-        '''Integer constant
-
-        Args:
-            value: Integer value
-            is_hex: If True, display as hex; if False, use auto detection (default)
-        '''
+        '''Integer constant'''
         return LowLevelILConst(value, is_hex)
 
     def const_float(self, value: float) -> LowLevelILConst:
@@ -487,33 +339,13 @@ class LowLevelILBuilder:
         return LowLevelILConst(value, False)
 
     def const_raw(self, value: int) -> LowLevelILConst:
-        '''Raw constant (type-less, displayed as hex)
-
-        Args:
-            value: Raw value
-        '''
+        '''Raw constant (type-less, displayed as hex)'''
         return LowLevelILConst(value, is_hex = False, is_raw = True)
 
     # === Binary Operations ===
 
     def _binary_op(self, op_class, lhs = None, rhs = None, *, push: bool = True, hidden_for_formatter: bool = False) -> LowLevelILExpr:
-        '''Generic binary operation handler
-
-        Stack operation order (for implicit mode):
-          rhs = stack_pop();   // First pop gets right operand (top of stack)
-          lhs = stack_pop();   // Second pop gets left operand (below it)
-          result = (lhs OP rhs);
-
-        Args:
-            op_class: The operation class (e.g., LowLevelILAdd)
-            lhs: Left operand (None = pop from vstack) - must be expr or primitive
-            rhs: Right operand (None = pop from vstack) - must be expr or primitive
-            push: Whether to push result back to vstack
-            hidden_for_formatter: If True, hide SpAdd operations in formatted output (default: False)
-
-        Returns:
-            The operation expression (LowLevelILExpr)
-        '''
+        '''Generic binary operation handler'''
         # Get operands - both must be None or both must be provided
         if lhs is None and rhs is None:
             # Implicit mode: pop both from vstack (emit SpAdd for each)
@@ -661,13 +493,7 @@ class LowLevelILBuilder:
     def branch_if(self, condition: LowLevelILInstruction,
                   true_target: Union[str, LowLevelILBasicBlock],
                   false_target: Union[str, LowLevelILBasicBlock]):
-        '''Conditional branch - targets can be labels or blocks
-
-        Args:
-            condition: Condition expression
-            true_target: Block to jump to if condition is true
-            false_target: Block to jump to if condition is false
-        '''
+        '''Conditional branch - targets can be labels or blocks'''
         # Resolve true target
         if isinstance(true_target, str):
             true_block = self.get_block_by_label(true_target)
@@ -687,13 +513,7 @@ class LowLevelILBuilder:
     def call(self, target: str,
              return_target: LowLevelILBasicBlock,
              args: List[LowLevelILExpr] = None):
-        '''Function call (terminal instruction)
-
-        Args:
-            target: Function name or address
-            return_target: Block to return to after call
-            args: Call arguments (expressions from vstack)
-        '''
+        '''Function call (terminal instruction)'''
 
         self.add_instruction(LowLevelILCall(target, return_target, args))
 
@@ -704,11 +524,7 @@ class LowLevelILBuilder:
     # === Special ===
 
     def label(self, name: str):
-        '''Label - inserts a label instruction at current position
-
-        Note: Block labels should be set via LowLevelILBasicBlock constructor.
-        This method only adds a visual label instruction for display purposes.
-        '''
+        '''Label - inserts a label instruction at current position'''
         if self.current_block is None:
             raise RuntimeError('No current block to label')
         self.add_instruction(LowLevelILLabelInstr(name))
@@ -723,24 +539,12 @@ class LLILFormatter:
 
     @classmethod
     def indent_lines(cls, lines: List[str], indent: str) -> List[str]:
-        '''Add indentation to multiple lines
-
-        Args:
-            lines: List of lines to indent
-            indent: Indentation string to prepend
-
-        Returns:
-            List of indented lines
-        '''
+        '''Add indentation to multiple lines'''
         return [indent + line for line in lines]
 
     @classmethod
     def format_instruction(cls, inst: LowLevelILInstruction) -> str:
-        '''Format a single instruction - can be customized per instruction type
-
-        Returns a single line for simple instructions.
-        For multi-line instructions, use format_instruction_expanded().
-        '''
+        '''Format a single instruction - can be customized per instruction type'''
         # For now, use the instruction's __str__ method
         # This can be extended with custom formatting logic for specific instruction types
         return str(inst)
@@ -797,10 +601,7 @@ class LLILFormatter:
 
     @classmethod
     def _format_simplified(cls, inst: LowLevelILInstruction) -> List[str]:
-        '''Format instruction with simplified display (not expanded, just cleaner)
-
-        Returns None if no simplified format available.
-        '''
+        '''Format instruction with simplified display (not expanded, just cleaner)'''
         # RegStore: show as pop from stack
         if isinstance(inst, LowLevelILRegStore):
             return [f'REG[{inst.reg_index}] = STACK[--sp]  ; {inst.value}']
@@ -834,14 +635,7 @@ class LLILFormatter:
 
     @classmethod
     def format_instruction_expanded(cls, inst: LowLevelILInstruction) -> List[str]:
-        '''Format instruction with expanded stack operations (multi-line)
-
-        Returns a list of lines showing explicit stack behavior.
-        For binary operations like EQ, MUL, ADD, this shows:
-        - Pop operations to get operands
-        - The actual operation
-        - Push operation for result
-        '''
+        '''Format instruction with expanded stack operations (multi-line)'''
 
         if isinstance(inst, LowLevelILStackStore) and inst.offset == 0:
             # StackStore containing a binary operation: expand the binary op
@@ -866,15 +660,7 @@ class LLILFormatter:
 
     @classmethod
     def format_instruction_sequence(cls, instructions: List[LowLevelILInstruction], indent: str = '  ') -> list[str]:
-        '''Format sequence of instructions - returns list of lines
-
-        Args:
-            instructions: List of instructions to format
-            indent: Indentation string to prepend to each line (default: '  ')
-
-        Returns:
-            List of formatted lines with indentation
-        '''
+        '''Format sequence of instructions - returns list of lines'''
         result = []
 
         for inst in instructions:
@@ -937,22 +723,7 @@ class LLILFormatter:
 
     @classmethod
     def to_dot(cls, func: LowLevelILFunction) -> str:
-        '''Generate Graphviz DOT format for CFG visualization
-
-        Args:
-            func: LowLevelILFunction to visualize
-
-        Returns:
-            DOT format string that can be rendered with:
-            - Graphviz: dot -Tpng output.dot -o output.png
-            - Online: https://dreampuf.github.io/GraphvizOnline/
-
-        Example:
-            from ir.llil_builder import LLILFormatter
-            dot = LLILFormatter.to_dot(func)
-            with open('cfg.dot', 'w') as f:
-                f.write(dot)
-        '''
+        '''Generate Graphviz DOT format for CFG visualization'''
         lines = []
         lines.append(f'digraph "{func.name}" {{')
         lines.append('    rankdir=TB;')

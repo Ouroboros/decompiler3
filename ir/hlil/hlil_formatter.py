@@ -1,9 +1,4 @@
-'''
-HLIL Formatter - Format HLIL for debugging
-
-Outputs HLIL in a readable text format for debugging and IR inspection.
-NOT for generating final code - use dedicated code generators for that.
-'''
+'''HLIL Formatter - Format HLIL for debugging'''
 
 from common import *
 from typing import List
@@ -15,16 +10,7 @@ class HLILFormatter:
 
     @classmethod
     def _needs_parentheses(cls, child_op: str, parent_op: str, is_left: bool) -> bool:
-        '''Check if child expression needs parentheses based on operator precedence
-
-        Args:
-            child_op: Operator of child expression
-            parent_op: Operator of parent expression
-            is_left: True if child is left operand, False if right
-
-        Returns:
-            True if parentheses are needed
-        '''
+        '''Check if child expression needs parentheses based on operator precedence'''
         # Operator precedence (lower number = lower precedence)
         precedence = {
             '||': 1,
@@ -56,14 +42,7 @@ class HLILFormatter:
 
     @classmethod
     def _format_expr(cls, expr: HLILExpression) -> str:
-        '''Format an HLIL expression
-
-        Args:
-            expr: Expression to format
-
-        Returns:
-            Formatted expression string
-        '''
+        '''Format an HLIL expression'''
         if isinstance(expr, HLILVar):
             return expr.var.name
 
@@ -123,14 +102,7 @@ class HLILFormatter:
 
     @classmethod
     def format_function(cls, func: HighLevelILFunction) -> List[str]:
-        '''Format an HLIL function for debugging
-
-        Args:
-            func: HLIL function to format
-
-        Returns:
-            List of formatted lines (HLIL IR syntax)
-        '''
+        '''Format an HLIL function for debugging'''
         lines = []
 
         # Function header (simple, no types)
@@ -152,15 +124,7 @@ class HLILFormatter:
 
     @classmethod
     def _format_block(cls, block: HLILBlock, indent: int = 0) -> List[str]:
-        '''Format a block of statements
-
-        Args:
-            block: Block to format
-            indent: Indentation level
-
-        Returns:
-            List of formatted lines
-        '''
+        '''Format a block of statements'''
         lines = []
 
         for stmt in block.statements:
@@ -171,15 +135,7 @@ class HLILFormatter:
 
     @classmethod
     def _format_statement(cls, stmt: HLILStatement, indent: int = 0) -> List[str]:
-        '''Format a statement
-
-        Args:
-            stmt: Statement to format
-            indent: Indentation level
-
-        Returns:
-            List of formatted lines
-        '''
+        '''Format a statement'''
         indent_str = default_indent() * indent
         lines = []
 

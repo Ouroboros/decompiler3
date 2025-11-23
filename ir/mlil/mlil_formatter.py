@@ -1,8 +1,4 @@
-'''
-MLIL Formatter - Format MLIL for display
-
-Provides clean, readable output of MLIL functions.
-'''
+'''MLIL Formatter - Format MLIL for display'''
 
 from common import *
 from typing import List
@@ -16,14 +12,7 @@ class MLILFormatter:
 
     @classmethod
     def _format_const(cls, const: MLILConst) -> str:
-        '''Format a constant value
-
-        Args:
-            const: Constant to format
-
-        Returns:
-            Formatted constant string
-        '''
+        '''Format a constant value'''
         if isinstance(const.value, str):
             return f'"{const.value}"'
 
@@ -38,11 +27,7 @@ class MLILFormatter:
 
     @classmethod
     def format_function(cls, func: MediumLevelILFunction) -> List[str]:
-        '''Format entire MLIL function
-
-        Returns:
-            List of formatted lines
-        '''
+        '''Format entire MLIL function'''
         result = [
             f'; ===== MLIL Function {func.name} @ 0x{func.start_addr:X} =====',
             f'; Variables: {len(func.variables)}',
@@ -77,11 +62,7 @@ class MLILFormatter:
 
     @classmethod
     def format_block(cls, block: MediumLevelILBasicBlock) -> List[str]:
-        '''Format a single basic block
-
-        Returns:
-            List of formatted lines
-        '''
+        '''Format a single basic block'''
         result = [f'{block.label}:']
 
         for inst in block.instructions:
@@ -96,11 +77,7 @@ class MLILFormatter:
 
     @classmethod
     def format_instruction(cls, inst: MediumLevelILInstruction) -> str:
-        '''Format a single instruction
-
-        Returns:
-            Formatted instruction string
-        '''
+        '''Format a single instruction'''
         # Constants and Variables
         if isinstance(inst, MLILConst):
             return cls._format_const(inst)
@@ -203,21 +180,7 @@ class MLILFormatter:
 
     @classmethod
     def to_dot(cls, func: MediumLevelILFunction) -> str:
-        '''Generate Graphviz DOT format for CFG visualization
-
-        Args:
-            func: MLIL function to visualize
-
-        Returns:
-            DOT format string
-
-        Example:
-            from ir.mlil import MLILFormatter
-            dot = MLILFormatter.to_dot(mlil_func)
-            with open('cfg.dot', 'w') as f:
-                f.write(dot)
-            # Then: dot -Tpng cfg.dot -o cfg.png
-        '''
+        '''Generate Graphviz DOT format for CFG visualization'''
         lines = []
         lines.append(f'digraph "{func.name}" {{')
         lines.append('    rankdir=TB;')

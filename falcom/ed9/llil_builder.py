@@ -1,6 +1,4 @@
-'''
-Falcom VM Builder - High-level builder with Falcom VM patterns
-'''
+'''Falcom VM Builder - High-level builder with Falcom VM patterns'''
 
 from math import exp
 from typing import Union
@@ -10,28 +8,7 @@ from .llil_ext import *
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
-    '''High-level builder with Falcom VM patterns
-
-    Usage:
-        builder = FalcomVMBuilder()
-        builder.create_function('DOF_ON', 0x1FFDB6, num_params=2)
-
-        # Create blocks (auto-added to function)
-        entry = builder.create_basic_block(0x1FFDB6, 'DOF_ON')
-        loc_ret = builder.create_basic_block(0x1FFDCB, 'loc_ret')
-
-        # Build instructions
-        builder.set_current_block(entry)
-        builder.push_func_id()
-        builder.push_ret_addr('loc_ret')
-        builder.push_int(1)
-        builder.call('some_func')
-
-        builder.set_current_block(loc_ret)
-        builder.ret()
-
-        return builder.finalize()  # Returns function after validation
-    '''
+    '''High-level builder with Falcom VM patterns'''
 
     def __init__(self):
         '''Create builder without function (call create_function first)'''
@@ -47,14 +24,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         super().add_instruction(inst)
 
     def finalize(self) -> 'LowLevelILFunction':
-        '''Finalize builder and return function
-
-        Returns:
-            The constructed LowLevelILFunction
-
-        Raises:
-            RuntimeError: If function not created, already finalized, or pending call sequences
-        '''
+        '''Finalize builder and return function'''
 
         if self.sp_get() != 0:
             raise RuntimeError(f'Stack is not empty at the end of the function. Current sp: {self.sp_get()}')
@@ -88,19 +58,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     # === Virtual Stack Management ===
 
     def push(self, value: Union[LowLevelILExpr, int, float, str], *, hidden_for_formatter: bool = False):
-        '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)
-
-        Generates:
-          1. StackStore(sp+0, value)
-          2. SpAdd(+1)
-
-        Args:
-            value: Expression or primitive value to push (must be LowLevelILExpr or int/float/str)
-            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
-
-        Returns:
-            The expression that was pushed (LowLevelILExpr)
-        '''
+        '''Push value onto stack (SPEC-compliant: StackStore + SpAdd)'''
 
         if isinstance(value, LowLevelILConstScript):
             # 8 bytes script pointer
@@ -109,13 +67,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         return super().push(value, hidden_for_formatter = hidden_for_formatter)
 
     def pop(self, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:
-        '''Pop value from stack and emit SpAdd
-
-        Emits SpAdd(-1) and returns the expression from vstack.
-
-        Args:
-            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
-        '''
+        '''Pop value from stack and emit SpAdd'''
         expr = super().pop(hidden_for_formatter = hidden_for_formatter)
 
         if isinstance(expr, LowLevelILConstScript):
@@ -135,11 +87,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(FalcomConstants.current_func_id())
 
     def push_ret_addr(self, target: LowLevelILBasicBlock):
-        '''Push return address and remember it for call instruction
-
-        Args:
-            target: Basic block reference for return target
-        '''
+        '''Push return address and remember it for call instruction'''
         # Verify push_func_id was called first
 
         if not isinstance(target, LowLevelILBasicBlock):
@@ -155,19 +103,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(FalcomConstants.ret_addr_block(target))
 
     def push_caller_frame(self, return_target: LowLevelILBasicBlock):
-        '''PUSH_CALLER_FRAME operation - save caller frame for module call
-
-        VM behavior: Pushes 4 values onto stack atomically to save caller frame:
-          1. funcIndex (current function ID)
-          2. retAddr (return address label/block)
-          3. currScript (current script index)
-          4. 0xF0000000 (context marker)
-
-        This saves the current call frame so a module call can return properly.
-
-        Args:
-            return_target: Basic block reference for return target
-        '''
+        '''PUSH_CALLER_FRAME operation - save caller frame for module call'''
         # Save sp before we start pushing for the call (supports nesting)
         self.sp_before_call_stack.append(self.sp_get())
 
@@ -251,18 +187,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
             self._cleanup_stack(argc)
 
     def call_script(self, module: str, func: str, arg_count: int):
-        '''CALL_SCRIPT operation - call a script function
-
-        Args:
-            module: Script module name (e.g., 'system')
-            func: Function name (e.g., 'OnTalkBegin')
-            arg_count: Number of arguments on vstack
-
-        Note: Assumes push_caller_frame() was already called.
-        Pops arg_count arguments from vstack and creates CALL_SCRIPT IL.
-        The IL includes the caller_frame and arguments, representing the complete call operation.
-        Automatically cleans up arg_count + 4 caller frame values from stack.
-        '''
+        '''CALL_SCRIPT operation - call a script function'''
         # Verify call setup was done
         if not self.return_target_stack:
             raise RuntimeError(
@@ -321,12 +246,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     # === VM Operations ===
 
     def push_int(self, value: int, is_hex: bool = False):
-        '''PUSH_INT operation
-
-        Args:
-            value: Integer value to push
-            is_hex: If True, display as hex; if False, display as decimal (default)
-        '''
+        '''PUSH_INT operation'''
         self.stack_push(self.const_int(value, is_hex = is_hex))
 
     def push_str(self, value: str):
@@ -334,11 +254,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(self.const_str(value))
 
     def push_raw(self, value: int):
-        '''PUSH_RAW operation - push raw 4-byte value without type info
-
-        Args:
-            value: Raw 32-bit value to push (displayed as hex)
-        '''
+        '''PUSH_RAW operation - push raw 4-byte value without type info'''
         self.stack_push(self.const_raw(value))
 
     def set_reg(self, reg_index: int):
@@ -353,26 +269,13 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(reg_val)
 
     def pop_to(self, offset: int):
-        '''POP_TO operation - pop and store to STACK[sp + offset]
-
-        Args:
-            offset: Byte offset relative to sp (after pop)
-
-        Note: After pop, sp is decremented, so STACK[sp + offset] refers
-              to the new sp position. For example, POP_TO(-WORD_SIZE) stores the
-              popped value to STACK[sp - 1] where sp is the post-pop value.
-        '''
+        '''POP_TO operation - pop and store to STACK[sp + offset]'''
         val = self.pop(hidden_for_formatter = True)
         slot_index = self.sp_get() + offset // WORD_SIZE
         self.add_instruction(LowLevelILStackStore(val, offset = offset, slot_index = slot_index))
 
     def pop_jmp_zero(self, true_target, false_target):
-        '''POP_JMP_ZERO operation - branch if popped value is zero
-
-        Args:
-            true_target: Block to jump to if value is zero
-            false_target: Block to jump to if value is not zero
-        '''
+        '''POP_JMP_ZERO operation - branch if popped value is zero'''
         # Pop from stack using StackPop expression
         cond = self.pop(hidden_for_formatter = True)
         # Create EQ(cond, 0) without adding as instruction
@@ -383,24 +286,12 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.add_instruction(LowLevelILIf(is_zero, true_target, false_target))
 
     def pop_jmp_not_zero(self, true_target, false_target):
-        '''POP_JMP_NOT_ZERO operation - branch if popped value is not zero
-
-        Args:
-            true_target: Block to jump to if value is not zero
-            false_target: Block to jump to if value is zero
-        '''
+        '''POP_JMP_NOT_ZERO operation - branch if popped value is not zero'''
         # NOT_ZERO is the inverse of ZERO, so swap the targets
         self.pop_jmp_zero(false_target, true_target)
 
     def pop_bytes(self, num_bytes: int, *, hidden_for_formatter: bool = False):
-        '''POP operation - discard N bytes from stack
-
-        VM instruction: POP(size)
-
-        Args:
-            num_bytes: Number of bytes to pop (e.g., 4 to pop 1 word, 16 to pop 4 words)
-            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
-        '''
+        '''POP operation - discard N bytes from stack'''
         # Convert bytes to words
         if num_bytes % WORD_SIZE != 0:
             raise ValueError(f'num_bytes ({num_bytes}) must be a multiple of WORD_SIZE ({WORD_SIZE})')
@@ -409,14 +300,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.emit_sp_add(-num_words, hidden_for_formatter = hidden_for_formatter)
 
     def pop_n(self, count: int, *, hidden_for_formatter: bool = False):
-        '''POP_N operation - discard N slots from stack
-
-        VM instruction: POP_N(count)
-
-        Args:
-            count: Number of slots to pop (e.g., 1 to pop 1 slot)
-            hidden_for_formatter: If True, hide the SpAdd in formatted output (default: False)
-        '''
+        '''POP_N operation - discard N slots from stack'''
 
         if count <= 0:
             raise ValueError(f'count ({count}) must be positive')
@@ -424,31 +308,17 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.emit_sp_add(-count, hidden_for_formatter = hidden_for_formatter)
 
     def load_global(self, index: int):
-        '''LOAD_GLOBAL operation - push global variable onto stack
-
-        Args:
-            index: Global variable array index
-        '''
+        '''LOAD_GLOBAL operation - push global variable onto stack'''
         global_val = LowLevelILGlobalLoad(index)
         self.stack_push(global_val)
 
     def set_global(self, index: int):
-        '''SET_GLOBAL operation - pop from stack and store to global
-
-        Args:
-            index: Global variable array index
-        '''
+        '''SET_GLOBAL operation - pop from stack and store to global'''
         val = self.pop(hidden_for_formatter = True)
         self.add_instruction(LowLevelILGlobalStore(index, val))
 
     def syscall(self, subsystem: int, cmd: int, argc: int):
-        '''SYSCALL operation - Falcom VM system call
-
-        Args:
-            subsystem: System call category (e.g., 5 for UI, 6 for audio, etc.)
-            cmd: Command ID within the subsystem
-            argc: Number of arguments for this syscall
-        '''
+        '''SYSCALL operation - Falcom VM system call'''
         # Extract arguments from vstack (they were pushed before syscall)
         args = []
         if argc > 0:
