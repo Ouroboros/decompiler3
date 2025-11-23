@@ -20,6 +20,7 @@ class SSAOptimizer:
         while changed and iterations < max_iterations:
             changed = False
             changed |= self.propagate_constants()
+            # changed |= self.fold_constants()  # Temporarily disabled
             changed |= self.simplify_expressions()
             changed |= self.simplify_conditions()
             changed |= self.propagate_copies()
