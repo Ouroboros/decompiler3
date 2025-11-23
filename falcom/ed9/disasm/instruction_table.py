@@ -1,6 +1,4 @@
-"""
-Instruction table interface and descriptor
-"""
+"""Instruction table interface and descriptor"""
 
 from common import *
 from abc import ABC, abstractmethod
@@ -199,40 +197,21 @@ class InstructionDescriptor:
         return bool(self.flags & InstructionFlags.START_BLOCK)
 
     def get_branch_targets(self, inst: 'Instruction', current_pos: int) -> list[BranchTarget]:
-        """
-        Get branch targets from this instruction.
-
-        Returns:
-            List of branch targets.
-        """
+        """Get branch targets from this instruction"""
         return []
 
     def format_operands(self, operands: list['Operand'], context: 'FormatterContext') -> list[str]:
-        """
-        Format operands for display.
-
-        Returns:
-            List of formatted operand strings
-        """
+        """Format operands for display"""
         return [op.descriptor.format_operand(op, context) for op in operands]
 
     def format_instruction(self, inst: 'Instruction', context: 'FormatterContext') -> str:
-        """
-        Format instruction for display.
-
-        Returns:
-            Formatted instruction string
-        """
+        """Format instruction for display"""
         ops = self.format_operands(inst.operands, context)
         return f'{self.mnemonic}({", ".join(ops)})'
 
 
 class InstructionTable(ABC):
-    """
-    Abstract interface for instruction tables.
-
-    Subclasses must implement VM-specific instruction decoding.
-    """
+    """Abstract interface for instruction tables"""
 
     @abstractmethod
     def read_opcode(self, fs: 'fileio.FileStream') -> int:
@@ -251,17 +230,7 @@ class InstructionTable(ABC):
         inst: 'Instruction',
         offset: int
     ) -> list['Operand']:
-        """
-        Read operands for instruction.
-
-        Args:
-            fs: File stream positioned after opcode
-            inst: Instruction being decoded (may be modified)
-            offset: Instruction offset (for relative addressing)
-
-        Returns:
-            List of operands
-        """
+        """Read operands for instruction"""
         pass
 
     def decode_instruction(
@@ -269,16 +238,7 @@ class InstructionTable(ABC):
         fs: 'fileio.FileStream',
         offset: int
     ) -> 'Instruction':
-        """
-        Decode a complete instruction.
-
-        Args:
-            fs: File stream positioned at instruction start
-            offset: Instruction offset
-
-        Returns:
-            Decoded instruction
-        """
+        """Decode a complete instruction"""
         from .instruction import Instruction
 
         # Read opcode

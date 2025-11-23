@@ -1,8 +1,4 @@
-'''
-Falcom HLIL Passes
-
-Falcom-specific HLIL transformation and optimization passes.
-'''
+'''Falcom HLIL Passes'''
 
 from typing import Optional
 from ir.pipeline import Pass
@@ -11,29 +7,14 @@ from .parser.types_parser import Function
 
 
 class FalcomTypeInferencePass(Pass):
-    '''Falcom type inference pass
-
-    Extracts parameter type information from SCP function metadata
-    and adds it to HLIL function parameters.
-    '''
+    '''Falcom type inference pass'''
 
     def __init__(self, scp_func: Optional[Function] = None):
-        '''Initialize
-
-        Args:
-            scp_func: SCP function object containing parameter type information
-        '''
+        '''Initialize'''
         self.scp_func = scp_func
 
     def run(self, hlil_func: HighLevelILFunction) -> HighLevelILFunction:
-        '''Add type information to HLIL function
-
-        Args:
-            hlil_func: HLIL function
-
-        Returns:
-            HLIL function with type annotations
-        '''
+        '''Add type information to HLIL function'''
         if not self.scp_func:
             return hlil_func
 
@@ -68,14 +49,7 @@ class FalcomTypeInferencePass(Pass):
 
     @classmethod
     def _python_type_to_ts_type(cls, python_type: str) -> str:
-        '''Map Python parameter type to TypeScript type
-
-        Args:
-            python_type: Python type string from ScpParamFlags.get_python_type()
-
-        Returns:
-            TypeScript type string
-        '''
+        '''Map Python parameter type to TypeScript type'''
         type_map = {
             'Value32': 'number',            # int | float
             'str': 'string',
@@ -87,14 +61,7 @@ class FalcomTypeInferencePass(Pass):
 
     @classmethod
     def _scpvalue_to_ts_literal(cls, scpvalue) -> str:
-        '''Convert ScpValue to TypeScript literal
-
-        Args:
-            scpvalue: ScpValue object
-
-        Returns:
-            TypeScript literal string
-        '''
+        '''Convert ScpValue to TypeScript literal'''
         from common import format_float
 
         # Get the actual value from ScpValue

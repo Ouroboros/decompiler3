@@ -1,8 +1,4 @@
-'''
-Falcom-specific LLIL Extensions
-
-Defines Falcom VM-specific instructions that extend the generic LLIL.
-'''
+'''Falcom-specific LLIL Extensions'''
 
 from enum import IntEnum
 from typing import Optional, Union, List, TYPE_CHECKING
@@ -11,10 +7,7 @@ from .constants import *
 
 
 class LowLevelILFalcomOperation(IntEnum):
-    '''Falcom-specific LLIL operations
-
-    Independent enum that starts from LLIL_USER_DEFINED to avoid conflicts.
-    '''
+    '''Falcom-specific LLIL operations'''
     LLIL_PUSH_CALLER_FRAME = LowLevelILOperation.LLIL_PUSH_CALLER_FRAME  # Push caller frame (4 values)
     LLIL_CALL_SCRIPT = LowLevelILOperation.LLIL_CALL_SCRIPT              # Call script function
     LLIL_GLOBAL_LOAD = LowLevelILOperation.LLIL_USER_DEFINED     # Load from global variable array
@@ -22,17 +15,7 @@ class LowLevelILFalcomOperation(IntEnum):
 
 
 class LowLevelILPushCallerFrame(LowLevelILStatement):
-    '''PUSH_CALLER_FRAME - Push caller frame to save call context (statement)
-
-    Pushes 4 values onto stack for Falcom VM call convention:
-      1. funcIndex (current function ID)
-      2. retAddr (return address label/block)
-      3. currScript (current script index)
-      4. script_name (current script name, empty string for now)
-
-    This is an atomic operation that occupies 4 stack slots.
-    Saves the caller frame so the script call can return properly.
-    '''
+    '''PUSH_CALLER_FRAME - Push caller frame to save call context (statement)'''
 
     def __init__(
         self,
@@ -59,15 +42,7 @@ class LowLevelILPushCallerFrame(LowLevelILStatement):
 
 
 class LowLevelILCallScript(LowLevelILCall):
-    '''CALL_SCRIPT - Call a script function with automatic stack cleanup (statement)
-
-    Calls a script function and cleans up arguments + caller frame from stack.
-    All operands (caller frame + arguments) are popped from vstack.
-
-    Stack layout (bottom to top):
-      - caller frame (4 values): funcIndex, retAddr, currScript, context_marker
-      - arg0, arg1, ..., argN (arguments)
-    '''
+    '''CALL_SCRIPT - Call a script function with automatic stack cleanup (statement)'''
 
     def __init__(
         self,
@@ -92,10 +67,7 @@ class LowLevelILCallScript(LowLevelILCall):
 
 
 class LowLevelILGlobalLoad(LowLevelILExpr):
-    '''LOAD_GLOBAL - Load from global variable array (expression)
-
-    Reads from VM's global variable array and pushes to stack.
-    '''
+    '''LOAD_GLOBAL - Load from global variable array (expression)'''
 
     def __init__(self, index: int):
         super().__init__(LowLevelILFalcomOperation.LLIL_GLOBAL_LOAD)
@@ -106,10 +78,7 @@ class LowLevelILGlobalLoad(LowLevelILExpr):
 
 
 class LowLevelILGlobalStore(LowLevelILStatement):
-    '''SET_GLOBAL - Store to global variable array (statement)
-
-    Pops value from stack and writes to VM's global variable array.
-    '''
+    '''SET_GLOBAL - Store to global variable array (statement)'''
 
     def __init__(self, index: int, value: LowLevelILExpr):
         super().__init__(LowLevelILFalcomOperation.LLIL_GLOBAL_STORE)
