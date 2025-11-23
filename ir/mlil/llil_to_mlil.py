@@ -1,24 +1,4 @@
-'''
-Generic LLIL to MLIL Translator - Stack Elimination
-
-This module provides a base translator that handles core LLIL operations only.
-Architecture-specific instructions (e.g., Falcom VM globals, registers) should
-be handled in derived translators.
-
-Core operations handled:
-- Stack operations (StackStore, StackLoad, StackAddr, SpAdd)
-- Frame operations (FrameStore, FrameLoad)
-- Arithmetic/Logical/Comparison operations
-- Unary operations
-- Control flow (Jmp, If, Ret, Call)
-- Constants
-
-Architecture-specific operations (NOT handled, will raise):
-- Global variables
-- Registers
-- Custom syscalls
-- Architecture-specific constants
-'''
+'''LLIL to MLIL Translator - Stack elimination (core operations only)'''
 
 from typing import Dict, List, Optional
 
@@ -28,11 +8,7 @@ from .mlil_builder import *
 
 
 class LLILToMLILTranslator:
-    '''Generic LLIL to MLIL translator
-
-    Translates core LLIL operations to MLIL. Architecture-specific
-    operations should be handled in derived classes.
-    '''
+    '''LLIL to MLIL translator (base class)'''
 
     def __init__(self):
         self.builder = MLILBuilder()
@@ -66,11 +42,7 @@ class LLILToMLILTranslator:
             self._translate_instruction(llil_inst)
 
     def _translate_instruction(self, llil_inst: LowLevelILInstruction):
-        '''Translate a single LLIL instruction to MLIL
-
-        Handles core operations only. Override in derived classes for
-        architecture-specific operations.
-        '''
+        '''Translate LLIL instruction to MLIL'''
 
         # Stack operations
         if isinstance(llil_inst, LowLevelILStackStore):
@@ -114,33 +86,21 @@ class LLILToMLILTranslator:
             )
 
     def _translate_stack_store(self, llil_inst: LowLevelILStackStore):
-        '''Translate StackStore to SetVar
-
-        LLIL: STACK[slot_index] = value
-        MLIL: var_sN = translated_value (where N = slot_index)
-        '''
+        '''Translate StackStore to SetVar'''
         var_name = mlil_stack_var_name(llil_inst.slot_index)
         var = self.builder.get_or_create_var(var_name, llil_inst.slot_index)
         value = self._translate_expr(llil_inst.value)
         self.builder.set_var(var, value)
 
     def _translate_frame_store(self, llil_inst: LowLevelILFrameStore):
-        '''Translate FrameStore to SetVar
-
-        Frame stores are for function parameters/locals.
-        '''
+        '''Translate FrameStore to SetVar'''
         var_name = mlil_arg_var_name(llil_inst.offset // WORD_SIZE + 1)
         var = self.builder.get_or_create_var(var_name)
         value = self._translate_expr(llil_inst.value)
         self.builder.set_var(var, value)
 
     def _translate_call(self, llil_inst: LowLevelILCall):
-        '''Translate function call
-
-        In LLIL, Call is a terminal instruction. In MLIL, we translate it as:
-        1. Call instruction (non-terminal)
-        2. Goto to return target (terminal)
-        '''
+        '''Translate function call'''
         # Translate arguments
         mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
 
@@ -153,11 +113,7 @@ class LLILToMLILTranslator:
         self.builder.goto(return_block)
 
     def _translate_expr(self, llil_expr: LowLevelILInstruction) -> MediumLevelILInstruction:
-        '''Translate LLIL expression to MLIL expression
-
-        Handles core expression types only. Override in derived classes for
-        architecture-specific expressions.
-        '''
+        '''Translate LLIL expression to MLIL'''
 
         # Constants
         if isinstance(llil_expr, LowLevelILConst):
@@ -280,10 +236,6 @@ class LLILToMLILTranslator:
 
 
 def translate_llil_to_mlil(llil_func: LowLevelILFunction) -> MediumLevelILFunction:
-    '''Convenience function to translate LLIL to MLIL using generic translator
-
-    Note: This will raise NotImplementedError for architecture-specific
-    instructions. Use an architecture-specific translator for full support.
-    '''
+    '''Translate LLIL to MLIL (generic translator)'''
     translator = LLILToMLILTranslator()
     return translator.translate(llil_func)

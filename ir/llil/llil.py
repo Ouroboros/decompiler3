@@ -1,7 +1,4 @@
-'''
-Low Level IL v2 - Optimized Stack-based Design
-Following the confirmed VM semantics with layered architecture
-'''
+'''LLIL - Stack-based low-level IR'''
 
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Union, TYPE_CHECKING
@@ -104,34 +101,19 @@ class LowLevelILInstruction(ILInstruction):
 # === Instruction Categories (following BinaryNinja design) ===
 
 class LowLevelILExpr(LowLevelILInstruction):
-    '''Base class for value expressions (produces a value)
-
-    Expressions can be used as operands to other instructions.
-    Examples: CONST, StackLoad, FrameLoad, BinaryOp, UnaryOp
-
-    vstack only stores LowLevelILExpr instances.
-    '''
+    '''Base class for value expressions'''
     pass
 
 
 class LowLevelILStatement(LowLevelILInstruction):
-    '''Base class for statements (side effects, no value)
-
-    Statements have side effects but do not produce values.
-    Examples: StackStore, FrameStore, SpAdd, PUSH_CALLER_FRAME
-
-    Basic blocks only store LowLevelILStatement instances.
-    '''
+    '''Base class for statements'''
     pass
 
 
 # === Atomic Stack Operations ===
 
 class LowLevelILStackStore(LowLevelILStatement):
-    '''STACK[sp + offset] = value (statement)
-
-    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
-    '''
+    '''STACK[sp + offset] = value'''
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, slot_index: int = None):
         super().__init__(LowLevelILOperation.LLIL_STACK_STORE)
@@ -151,10 +133,7 @@ class LowLevelILStackStore(LowLevelILStatement):
 
 
 class LowLevelILStackLoad(LowLevelILExpr):
-    '''load STACK[sp + offset] (expression)
-
-    Note: offset is in bytes, but displayed as word offset (offset // WORD_SIZE)
-    '''
+    '''Load STACK[sp + offset]'''
 
     def __init__(self, offset: int, slot_index: int):
         super().__init__(LowLevelILOperation.LLIL_STACK_LOAD)
@@ -173,19 +152,7 @@ class LowLevelILStackLoad(LowLevelILExpr):
 
 
 class LowLevelILFrameLoad(LowLevelILExpr):
-    '''load STACK[frame + offset] (expression)
-
-    Frame-relative load for function parameters and local variables.
-    frame = sp at function entry.
-
-    Function parameters are at negative offsets (pushed by caller):
-      STACK[frame - 8] = arg1
-      STACK[frame - 7] = arg2
-      ...
-      STACK[frame - 1] = argN
-
-    Note: offset is in bytes, converted to word offset for display
-    '''
+    '''Load STACK[frame + offset]'''
 
     def __init__(self, offset: int = 0):
         super().__init__(LowLevelILOperation.LLIL_FRAME_LOAD)
@@ -202,13 +169,7 @@ class LowLevelILFrameLoad(LowLevelILExpr):
 
 
 class LowLevelILFrameStore(LowLevelILStatement):
-    '''STACK[frame + offset] = value (statement)
-
-    Frame-relative store for function parameters and local variables.
-    frame = sp at function entry.
-
-    Note: offset is in bytes, converted to word offset for display
-    '''
+    '''STACK[frame + offset] = value'''
 
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0):
         super().__init__(LowLevelILOperation.LLIL_FRAME_STORE)
@@ -246,12 +207,7 @@ class LowLevelILSpAdd(LowLevelILStatement):
 
 
 class LowLevelILStackAddr(LowLevelILExpr):
-    '''Address of a specific stack slot (constant, independent of sp changes)
-
-    Used for PUSH_STACK_OFFSET which pushes the address of a stack slot.
-    The slot_index is computed at build time and remains constant regardless
-    of subsequent sp changes.
-    '''
+    '''Address of stack slot (sp-independent)'''
 
     def __init__(self, slot_index: int):
         super().__init__(LowLevelILOperation.LLIL_STACK_ADDR)
@@ -467,12 +423,7 @@ class LowLevelILIf(LowLevelILStatement, Terminal):
 
 
 class LowLevelILCall(LowLevelILStatement, Terminal):
-    '''Function call (terminal)
-
-    In Falcom VM, call is a terminal instruction because control transfers
-    to the called function, then returns to an explicit return address
-    (not fall-through).
-    '''
+    '''Function call (terminal)'''
 
     def __init__(
         self,

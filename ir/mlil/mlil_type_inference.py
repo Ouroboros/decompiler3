@@ -1,12 +1,4 @@
-'''
-MLIL Type Inference - Infer types for MLIL variables using SSA
-
-Uses SSA def-use chains to propagate types through the program:
-1. Infer types from constants and operations
-2. Propagate types through assignments
-3. Merge types at Phi nodes
-4. Iterate until convergence
-'''
+'''MLIL Type Inference - SSA-based type propagation'''
 
 from typing import Dict, Set, List
 from .mlil import *
@@ -22,11 +14,7 @@ class MLILTypeInference:
         self.var_types: Dict[MLILVariableSSA, MLILType] = {}
 
     def infer_types(self) -> Dict[MLILVariableSSA, MLILType]:
-        '''Infer types for all SSA variables
-
-        Returns:
-            Mapping from SSA variables to their inferred types
-        '''
+        '''Infer types for all SSA variables'''
         # Initialize all variables to unknown
         self._initialize_types()
 

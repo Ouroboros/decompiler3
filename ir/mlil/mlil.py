@@ -1,15 +1,4 @@
-'''
-Medium Level IL - Stack-free intermediate representation
-
-MLIL eliminates stack semantics from LLIL, converting stack operations to variables.
-This makes data flow analysis and optimization much easier.
-
-Design principles:
-- No stack operations (no sp, no STACK[sp+offset])
-- Variables instead of stack slots
-- Same CFG structure as LLIL
-- Each MLIL instruction maps to one or more LLIL instructions
-'''
+'''MLIL - Stack-free IR (variables instead of stack operations)'''
 
 from __future__ import annotations
 
@@ -30,26 +19,12 @@ if TYPE_CHECKING:
 # === Naming Utilities ===
 
 def mlil_stack_var_name(slot_index: int) -> str:
-    '''Generate variable name for stack slot
-
-    Args:
-        slot_index: Stack slot index
-
-    Returns:
-        Variable name (e.g., 'var_s0', 'var_s1', ...)
-    '''
+    '''Generate stack variable name (var_s0, var_s1, ...)'''
     return f'var_s{slot_index}'
 
 
 def mlil_arg_var_name(arg_index: int) -> str:
-    '''Generate variable name for function argument
-
-    Args:
-        arg_index: Argument index
-
-    Returns:
-        Variable name (e.g., 'arg_0', 'arg_1', ...)
-    '''
+    '''Generate argument variable name (arg0, arg1, ...)'''
     return f'arg{arg_index}'
 
 
@@ -126,11 +101,7 @@ class MediumLevelILOperation(IntEnum2):
 
 
 class MediumLevelILInstruction(ILInstruction):
-    '''Base class for all MLIL instructions
-
-    Unlike LLIL, MLIL instructions don't have stack semantics.
-    All values are stored in variables.
-    '''
+    '''Base class for MLIL instructions'''
 
     def __init__(self, operation: MediumLevelILOperation):
         super().__init__()
@@ -155,31 +126,19 @@ class MediumLevelILInstruction(ILInstruction):
 # === Instruction Categories ===
 
 class MediumLevelILExpr(MediumLevelILInstruction):
-    '''Base class for value expressions (produces a value)
-
-    Expressions can be used as operands to other instructions.
-    Examples: Const, Var, BinaryOp, UnaryOp, LoadGlobal, LoadReg
-    '''
+    '''Base class for value expressions'''
     pass
 
 
 class MediumLevelILStatement(MediumLevelILInstruction):
-    '''Base class for statements (side effects, no value)
-
-    Statements have side effects but do not produce values.
-    Examples: SetVar, StoreGlobal, StoreReg, Goto, If, Ret, Call
-    '''
+    '''Base class for statements'''
     pass
 
 
 # === Variables ===
 
 class MLILVariable:
-    '''A variable in MLIL (non-SSA form)
-
-    Variables represent abstract storage locations that replace stack slots.
-    Each variable has a name and optionally tracks its source stack slot.
-    '''
+    '''MLIL variable (non-SSA)'''
 
     def __init__(self, name: str, slot_index: int = -1):
         self.name = name

@@ -1,11 +1,4 @@
-'''
-High Level Intermediate Language (HLIL)
-
-Structured control flow representation for decompiled code.
-Converts unstructured MLIL (goto/label) to structured constructs (if/while/for).
-
-HLIL is completely independent from MLIL - it has its own expression and statement types.
-'''
+'''HLIL - Structured control flow (if/while/for) from unstructured MLIL (goto/label)'''
 
 from typing import List, Optional, Union
 from enum import Enum, auto
@@ -211,10 +204,7 @@ class HLILExternCall(HLILExpression):
 # ============================================================================
 
 class HLILBlock(HLILStatement):
-    '''Block of statements
-
-    Represents a sequence of statements executed in order.
-    '''
+    '''Block of statements'''
 
     def __init__(self, statements: Optional[List[HLILStatement]] = None):
         super().__init__(HLILOperation.HLIL_BLOCK)
@@ -234,14 +224,7 @@ class HLILBlock(HLILStatement):
 
 
 class HLILIf(HLILStatement):
-    '''Conditional statement
-
-    if (condition) {
-        true_block
-    } else {
-        false_block
-    }
-    '''
+    '''Conditional: if (cond) { ... } else { ... }'''
 
     def __init__(self, condition: HLILExpression, true_block: 'HLILBlock', false_block: Optional['HLILBlock'] = None):
         super().__init__(HLILOperation.HLIL_IF)
@@ -259,12 +242,7 @@ class HLILIf(HLILStatement):
 
 
 class HLILWhile(HLILStatement):
-    '''While loop
-
-    while (condition) {
-        body
-    }
-    '''
+    '''While loop: while (cond) { ... }'''
 
     def __init__(self, condition: HLILExpression, body: 'HLILBlock'):
         super().__init__(HLILOperation.HLIL_WHILE)
@@ -279,12 +257,7 @@ class HLILWhile(HLILStatement):
 
 
 class HLILDoWhile(HLILStatement):
-    '''Do-while loop
-
-    do {
-        body
-    } while (condition);
-    '''
+    '''Do-while loop: do { ... } while (cond);'''
 
     def __init__(self, condition: HLILExpression, body: 'HLILBlock'):
         super().__init__(HLILOperation.HLIL_DO_WHILE)
@@ -299,12 +272,7 @@ class HLILDoWhile(HLILStatement):
 
 
 class HLILFor(HLILStatement):
-    '''For loop
-
-    for (init; condition; update) {
-        body
-    }
-    '''
+    '''For loop: for (init; cond; update) { ... }'''
 
     def __init__(self, init: Optional[HLILStatement], condition: Optional[HLILExpression],
                  update: Optional[HLILStatement], body: 'HLILBlock'):
@@ -322,11 +290,7 @@ class HLILFor(HLILStatement):
 
 
 class HLILSwitchCase:
-    '''Switch case clause
-
-    case value:
-        body
-    '''
+    '''Switch case: case value: { ... }'''
 
     def __init__(self, value: Optional[HLILExpression], body: 'HLILBlock'):
         self.value = value  # None for default case
@@ -348,14 +312,7 @@ class HLILSwitchCase:
 
 
 class HLILSwitch(HLILStatement):
-    '''Switch statement
-
-    switch (scrutinee) {
-        case val1: body1
-        case val2: body2
-        default: default_body
-    }
-    '''
+    '''Switch statement: switch (scrutinee) { case ...: ... }'''
 
     def __init__(self, scrutinee: HLILExpression, cases: List[HLILSwitchCase]):
         super().__init__(HLILOperation.HLIL_SWITCH)
@@ -370,10 +327,7 @@ class HLILSwitch(HLILStatement):
 
 
 class HLILBreak(HLILStatement):
-    '''Break statement
-
-    break;
-    '''
+    '''Break statement'''
 
     def __init__(self):
         super().__init__(HLILOperation.HLIL_BREAK)
@@ -386,10 +340,7 @@ class HLILBreak(HLILStatement):
 
 
 class HLILContinue(HLILStatement):
-    '''Continue statement
-
-    continue;
-    '''
+    '''Continue statement'''
 
     def __init__(self):
         super().__init__(HLILOperation.HLIL_CONTINUE)
@@ -402,10 +353,7 @@ class HLILContinue(HLILStatement):
 
 
 class HLILReturn(HLILStatement):
-    '''Return statement
-
-    return [value];
-    '''
+    '''Return statement'''
 
     def __init__(self, value: Optional[HLILExpression] = None):
         super().__init__(HLILOperation.HLIL_RETURN)
@@ -425,10 +373,7 @@ class HLILReturn(HLILStatement):
 # ============================================================================
 
 class HLILAssign(HLILStatement):
-    '''Assignment statement
-
-    dest = src;
-    '''
+    '''Assignment: dest = src'''
 
     def __init__(self, dest: HLILExpression, src: HLILExpression):
         super().__init__(HLILOperation.HLIL_ASSIGN)
@@ -443,12 +388,7 @@ class HLILAssign(HLILStatement):
 
 
 class HLILExprStmt(HLILStatement):
-    '''Expression statement
-
-    expression;
-
-    Used for function calls and other expressions executed for side effects.
-    '''
+    '''Expression statement (for side effects)'''
 
     def __init__(self, expr: HLILExpression):
         super().__init__(HLILOperation.HLIL_EXPR_STMT)
@@ -462,12 +402,7 @@ class HLILExprStmt(HLILStatement):
 
 
 class HLILComment(HLILStatement):
-    '''Comment statement
-
-    // comment
-
-    Used for debug information and annotations.
-    '''
+    '''Comment statement (debug/annotations)'''
 
     def __init__(self, text: str):
         super().__init__(HLILOperation.HLIL_COMMENT)
@@ -485,10 +420,7 @@ class HLILComment(HLILStatement):
 # ============================================================================
 
 class HighLevelILFunction:
-    '''HLIL function container
-
-    Represents a function in structured high-level form.
-    '''
+    '''HLIL function container'''
 
     def __init__(self, name: str, start_addr: int = 0):
         self.name = name
