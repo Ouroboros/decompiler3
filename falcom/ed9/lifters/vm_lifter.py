@@ -1,9 +1,4 @@
-"""
-ED9 VM bytecode → Falcom LLIL lifter.
-
-Reuses the disassembler output (basic blocks + instructions) and rebuilds the
-same CFG inside `FalcomVMBuilder`, emitting `LowLevelILFunction` objects.
-"""
+"""ED9 VM bytecode → Falcom LLIL lifter"""
 
 from dataclasses import dataclass
 from typing import *

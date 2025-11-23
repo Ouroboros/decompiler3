@@ -1,6 +1,4 @@
-"""
-Instruction and Operand definitions
-"""
+"""Instruction and Operand definitions"""
 
 from common import *
 from dataclasses import dataclass, field

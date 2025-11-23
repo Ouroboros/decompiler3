@@ -1,3 +1,1 @@
-'''
-IR formatters and pretty printers (placeholder)
-'''
+'''IR formatters and pretty printers (placeholder)'''

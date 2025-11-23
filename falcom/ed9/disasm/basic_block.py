@@ -1,6 +1,4 @@
-"""
-Basic Block representation
-"""
+"""Basic Block representation"""
 
 from common import *
 from dataclasses import dataclass, field

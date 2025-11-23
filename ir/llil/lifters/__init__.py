@@ -1,3 +1,1 @@
-'''
-LLIL to MLIL lifters (placeholder)
-'''
+'''LLIL to MLIL lifters (placeholder)'''

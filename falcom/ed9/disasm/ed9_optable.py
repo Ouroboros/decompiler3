@@ -1,8 +1,4 @@
-"""
-ED9 (Kuro no Kiseki) Instruction Table
-
-Based on Decompiler2/Falcom/ED9/InstructionTable/scena.py
-"""
+"""ED9 (Kuro no Kiseki) Instruction Table"""
 
 from common import *
 from ml import fileio
@@ -387,17 +383,7 @@ class ED9InstructionTable(InstructionTable):
 
 
 def ed9_create_fallthrough_jump(offset: int, target: int, inst_table: 'InstructionTable') -> Instruction:
-    """
-    Create a synthetic JMP instruction for split blocks.
-
-    Args:
-        offset: Instruction offset (split point)
-        target: Jump target offset
-        inst_table: Instruction table
-
-    Returns:
-        Synthetic JMP instruction
-    """
+    """Create a synthetic JMP instruction for split blocks"""
 
     # Get JMP descriptor from instruction table
     jmp_descriptor = inst_table.get_descriptor(ED9Opcode.JMP)

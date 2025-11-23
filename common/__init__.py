@@ -1,6 +1,4 @@
-'''
-Common utilities shared across the entire project
-'''
+'''Common utilities shared across the entire project'''
 
 from .strict_base import *
 from .enum import *

@@ -1,6 +1,4 @@
-'''
-Falcom script parsers for different binary formats
-'''
+'''Falcom script parsers for different binary formats'''
 
 from .scp import ScpParser
 from .types_scp import *

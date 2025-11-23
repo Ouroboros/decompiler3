@@ -398,13 +398,7 @@ class LowLevelILJmp(LowLevelILGoto):
 
 
 class LowLevelILIf(LowLevelILStatement, Terminal):
-    '''Conditional branch - targets must be BasicBlocks (terminal)
-
-    condition: LowLevelILInstruction that evaluates to true/false
-
-    Note: This is a terminal instruction - no more instructions can be added
-    to the block after an If instruction.
-    '''
+    '''Conditional branch - targets must be BasicBlocks (terminal)'''
 
     def __init__(self, condition: 'LowLevelILBinaryOp', true_target: 'LowLevelILBasicBlock',
                  false_target: Optional['LowLevelILBasicBlock'] = None):
@@ -543,14 +537,7 @@ class LowLevelILSyscall(LowLevelILStatement):
 # === Helper Functions ===
 
 def default_label_for_addr(addr: int) -> str:
-    '''Generate default label name from address
-
-    Args:
-        addr: Block start address
-
-    Returns:
-        Label in format 'loc_{addr:X}' (e.g., 'loc_1FFDB6')
-    '''
+    '''Generate default label name from address'''
     return f'loc_{addr:X}'
 
 
@@ -574,11 +561,7 @@ class LowLevelILBasicBlock:
         self.incoming_edges: List['LowLevelILBasicBlock'] = []
 
     def add_instruction(self, inst: LowLevelILInstruction):
-        '''Add instruction to this block
-
-        Raises:
-            RuntimeError: If block already has a terminal instruction
-        '''
+        '''Add instruction to this block'''
         if self.has_terminal:
             raise RuntimeError(
                 f'Cannot add instruction to {self.block_name}: '
@@ -612,11 +595,7 @@ class LowLevelILBasicBlock:
 
     @property
     def block_name(self) -> str:
-        '''Get canonical block name for jump targets and references
-
-        Always returns "block_N" format for consistency.
-        Use label_name property to get the user-defined label if present.
-        '''
+        '''Get canonical block name for jump targets and references'''
         return f'block_{self.index}'
 
     @property
@@ -689,11 +668,7 @@ class LowLevelILFunction:
         return self._label_map.get(label)
 
     def build_cfg(self):
-        '''Build control flow graph from terminal instructions
-
-        Note: With block-based targets, edges are created when instructions
-        are added. This method handles fall-through edges for non-terminal blocks.
-        '''
+        '''Build control flow graph from terminal instructions'''
         for block in self.basic_blocks:
             if not block.instructions:
                 continue

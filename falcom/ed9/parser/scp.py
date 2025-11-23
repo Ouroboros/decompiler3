@@ -359,15 +359,7 @@ class ScpParser(StrictBase):
         return []
 
     def disasm_all_functions(self, filter_func = None) -> list[Function]:
-        """
-        Disassemble all functions in the SCP file.
-
-        Args:
-            filter_func: Optional function to filter which functions to disassemble (func) -> bool
-
-        Returns:
-            List of Function objects with entry_block set
-        """
+        """Disassemble all functions in the SCP file"""
         disassembled_functions = []
 
         for func in self.functions:

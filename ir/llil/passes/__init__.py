@@ -1,3 +1,1 @@
-'''
-LLIL optimization and verification passes (placeholder)
-'''
+'''LLIL optimization and verification passes (placeholder)'''

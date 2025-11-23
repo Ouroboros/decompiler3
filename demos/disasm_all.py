@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Disassemble all functions from .dat files and output to .py files
-"""
+"""Disassemble all functions from"""
 
 import sys
 import os

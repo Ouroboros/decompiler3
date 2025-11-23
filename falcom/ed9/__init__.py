@@ -1,6 +1,4 @@
-'''
-ED9 (Kuro no Kiseki series) specific implementation
-'''
+'''ED9 (Kuro no Kiseki series) specific implementation'''
 
 from .llil_builder import *
 from .constants import *

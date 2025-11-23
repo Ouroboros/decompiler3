@@ -1,8 +1,4 @@
-"""
-Falcom ED9 Disassembler
-
-Generic bytecode disassembler framework with pluggable instruction tables.
-"""
+"""Falcom ED9 Disassembler"""
 
 from .instruction import *
 from .basic_block import *

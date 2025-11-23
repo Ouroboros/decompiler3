@@ -1,6 +1,4 @@
-'''
-Base IL traits for LLIL, MLIL, HLIL
-'''
+'''Base IL traits for LLIL, MLIL, HLIL'''
 
 from abc import ABC, abstractmethod
 

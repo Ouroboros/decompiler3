@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Disassembler Demo - Test the ED9 disassembler
-"""
+"""Disassembler Demo - Test the ED9 disassembler"""
 
 import sys
 import os

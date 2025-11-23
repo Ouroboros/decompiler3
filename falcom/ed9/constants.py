@@ -1,6 +1,4 @@
-'''
-Falcom VM specific constants and types
-'''
+'''Falcom VM specific constants and types'''
 
 from typing import TYPE_CHECKING
 from ir.llil.llil import *

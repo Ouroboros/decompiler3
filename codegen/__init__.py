@@ -1,8 +1,4 @@
-'''
-Code Generators
-
-Generate source code from HLIL in various target languages.
-'''
+'''Code Generators'''
 
 from .typescript import *
 

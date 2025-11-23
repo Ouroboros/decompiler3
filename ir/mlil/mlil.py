@@ -413,11 +413,7 @@ class MLILIf(MediumLevelILStatement, Terminal):
 
 
 class MLILRet(MediumLevelILStatement, Terminal):
-    '''Return from function
-
-    Args:
-        value: Return value expression, or None for void return
-    '''
+    '''Return from function'''
 
     def __init__(self, value: Optional[MediumLevelILInstruction] = None):
         super().__init__(MediumLevelILOperation.MLIL_RET)

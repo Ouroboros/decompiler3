@@ -1,13 +1,4 @@
-'''
-Falcom ED9 VM LLIL to MLIL Translator
-
-Extends the generic LLILToMLILTranslator to handle Falcom-specific instructions:
-- Global variables (LowLevelILGlobalStore/Load)
-- Registers (LowLevelILRegStore/Load)
-- Script calls (LowLevelILCallScript)
-- Syscalls (LowLevelILSyscall)
-- Falcom-specific constants (LowLevelILConstFuncId, LowLevelILConstRetAddrBlock, etc.)
-'''
+'''Falcom ED9 VM LLIL to MLIL Translator'''
 
 from ir.llil import *
 from ir.mlil import *
@@ -59,12 +50,7 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
         ))
 
     def _translate_call_script(self, llil_inst: LowLevelILCallScript):
-        '''Translate Falcom script call
-
-        Like regular Call, CallScript is terminal in LLIL. In MLIL:
-        1. CallScript instruction (non-terminal)
-        2. Goto to return target (terminal)
-        '''
+        '''Translate Falcom script call'''
         # Translate arguments
         mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
 

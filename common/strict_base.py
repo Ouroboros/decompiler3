@@ -1,14 +1,8 @@
-'''
-Strict base class that prevents dynamic attribute assignment
-'''
+'''Strict base class that prevents dynamic attribute assignment'''
 
 
 class StrictBase:
-    '''Base class that only allows annotated attributes
-
-    Prevents accidental typos when setting attributes.
-    Subclasses must use type annotations to declare allowed attributes.
-    '''
+    '''Base class that only allows annotated attributes'''
     _allowed_attrs_: frozenset[str]
 
     def __init_subclass__(cls):

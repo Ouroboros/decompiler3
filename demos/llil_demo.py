@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-'''
-LLIL Demo - Expression-based Architecture
-Demonstrates real game functions from Kuro no Kiseki
-'''
+'''LLIL Demo - Expression-based Architecture'''
 
 import sys
 import os
@@ -15,34 +12,7 @@ DOT_FILE_NAME = 'cfg.dot'
 
 
 def create_AV_04_0017():
-    '''
-    AV_04_0017 - Strict 1:1 translation from real game bytecode
-    Source: m4000.py from Kuro no Kiseki
-
-    Original bytecode:
-    # id: 0x0000 offset: 0x243C5
-    @scena.Code('AV_04_0017')
-    def AV_04_0017():
-        DEBUG_SET_LINENO(2519)
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_243E3')
-        PUSH_INT(0)
-        PUSH_STR('AV_04_0017')
-        CALL(map_event_box_set_enable)
-
-        label('loc_243E3')
-        DEBUG_SET_LINENO(2520)
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_243FB')
-        PUSH_INT(427)
-        CALL(avoice_play)
-
-        label('loc_243FB')
-        DEBUG_SET_LINENO(2521)
-        PUSH(0x00000000)
-        SET_REG(0)
-        RETURN()
-    '''
+    '''AV_04_0017 - Strict 1:1 translation from real game bytecode'''
 
     # Create builder and function
     builder = FalcomVMBuilder()
@@ -103,57 +73,7 @@ def create_AV_04_0017():
 
 
 def create_DOF_ON():
-    '''
-    DOF_ON - Strict 1:1 translation from real game bytecode
-    Source: c0000.py from Kuro no Kiseki
-
-    Original bytecode:
-    # id: 0x003F offset: 0x1FFDB6
-    @scena.Code('DOF_ON')
-    def DOF_ON(arg1, arg2 = 0):
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_1FFDCB')
-        PUSH_INT(1)
-        CALL(screen_dof_set_enable)
-
-        label('loc_1FFDCB')
-        LOAD_STACK(-8)
-        PUSH_INT(0)
-        EQ()
-        POP_JMP_ZERO('loc_1FFE07')
-
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_1FFE02')
-        LOAD_STACK(-12)
-        LOAD_STACK(-16)
-        PUSH_FLOAT(0.1)
-        MUL()
-        ADD()
-        LOAD_STACK(-16)
-        CALL(screen_dof_set_focus_range)
-
-        label('loc_1FFE02')
-        JMP('loc_1FFE20')
-
-        label('loc_1FFE07')
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_1FFE20')
-        LOAD_STACK(-12)
-        LOAD_STACK(-20)
-        CALL(screen_dof_set_focus_range)
-
-        label('loc_1FFE20')
-        PUSH_CURRENT_FUNC_ID()
-        PUSH_RET_ADDR('loc_1FFE35')
-        PUSH_INT(3)
-        CALL(screen_dof_set_blur_level)
-
-        label('loc_1FFE35')
-        PUSH(0x00000000)
-        SET_REG(0)
-        POP(8)
-        RETURN()
-    '''
+    '''DOF_ON - Strict 1:1 translation from real game bytecode'''
 
     # Create builder and function
     builder = FalcomVMBuilder()
@@ -273,29 +193,7 @@ def create_DOF_ON():
 
 
 def create_sound_play_se():
-    '''
-    sound_play_se - Strict 1:1 translation from real game bytecode
-    Source: c0000.py from Kuro no Kiseki
-
-    Original bytecode:
-    # id: 0x008F offset: 0x149B2
-    @scena.Code('sound_play_se')
-    def sound_play_se(arg1, arg2 = -1, arg3 = 0, arg4 = -1, arg5 = 1.0, arg6 = 0.0, arg7 = 0.0, arg8 = 0.0):
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        LOAD_STACK(-32)
-        SYSCALL(6, 0x10, 0x08)
-        POP(32)
-        PUSH(0x00000000)
-        SET_REG(0)
-        POP(32)
-        RETURN()
-    '''
+    '''sound_play_se - Strict 1:1 translation from real game bytecode'''
 
     # Create builder and function
     builder = FalcomVMBuilder()
@@ -339,17 +237,7 @@ def create_sound_play_se():
 
 
 def create_Dummy_m3010_talk0():
-    '''
-    Dummy_m3010_talk0 - Complex menu system with nested conditionals
-    Source: m3010.py from Kuro no Kiseki
-
-    Original bytecode: (see user's provided code)
-    This demonstrates:
-    - Complex control flow with multiple conditional branches
-    - Menu creation and selection handling
-    - Nested if-else-if chains
-    - Multiple merge points
-    '''
+    '''Dummy_m3010_talk0 - Complex menu system with nested conditionals'''
 
     # Create builder and function
     builder = FalcomVMBuilder()

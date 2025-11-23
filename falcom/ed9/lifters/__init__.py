@@ -1,6 +1,4 @@
-"""
-Falcom ED9 lifter package.
-"""
+"""Falcom ED9 lifter package"""
 
 from .vm_lifter import ED9VMLifter, LiftResult
 
