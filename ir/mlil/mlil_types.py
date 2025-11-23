@@ -161,3 +161,23 @@ def get_operation_result_type(op_name: str, lhs_type: MLILType, rhs_type: Option
     # Unknown operation
     else:
         return MLILType.unknown()
+
+
+# ============================================================================
+# Function Signature Database Interface (Platform-agnostic)
+# ============================================================================
+
+class FunctionSignatureDB:
+    '''Interface for platform-specific function signature databases'''
+
+    def get_call_return_type(self, target) -> Optional[MLILType]:
+        '''Get return type for function call (target can be any type)'''
+        return None
+
+    def get_syscall_return_type(self, subsystem: int, cmd: int) -> Optional[MLILType]:
+        '''Get return type for syscall (subsystem, cmd)'''
+        return None
+
+    def get_script_call_return_type(self, module: str, func: str) -> Optional[MLILType]:
+        '''Get return type for script call (module, func)'''
+        return None

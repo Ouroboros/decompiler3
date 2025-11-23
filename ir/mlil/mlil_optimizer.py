@@ -1,11 +1,11 @@
 '''MLIL Optimizer - SSA-based optimization'''
 
-from typing import Dict
+from typing import Dict, Optional
 from .mlil import *
 from .mlil_ssa import convert_to_ssa, convert_from_ssa, MLILVariableSSA
 from .mlil_ssa_optimizer import SSAOptimizer
 from .mlil_type_inference import infer_types
-from .mlil_types import MLILType, unify_types
+from .mlil_types import MLILType, unify_types, FunctionSignatureDB
 
 
 def _map_ssa_types_to_base(ssa_var_types: Dict[MLILVariableSSA, MLILType],
@@ -95,7 +95,9 @@ def _eliminate_dead_code_post_ssa(function: MediumLevelILFunction) -> bool:
     return changed
 
 
-def optimize_mlil(function: MediumLevelILFunction, infer_types_enabled: bool = True) -> MediumLevelILFunction:
+def optimize_mlil(function: MediumLevelILFunction,
+                  infer_types_enabled: bool = True,
+                  signature_db: Optional[FunctionSignatureDB] = None) -> MediumLevelILFunction:
     '''Optimize MLIL function using SSA-based analysis'''
     # Convert to SSA form
     convert_to_ssa(function)
@@ -106,7 +108,7 @@ def optimize_mlil(function: MediumLevelILFunction, infer_types_enabled: bool = T
 
     # Infer types (before de-SSA, so we have def-use chains)
     if infer_types_enabled:
-        ssa_var_types = infer_types(function)
+        ssa_var_types = infer_types(function, signature_db)
         # Map SSA types back to base variables
         function.var_types = _map_ssa_types_to_base(ssa_var_types, function)
 

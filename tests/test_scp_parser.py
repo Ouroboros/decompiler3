@@ -206,8 +206,8 @@ class TestScpParser(unittest.TestCase):
                 llil_lines.extend(FalcomLLILFormatter.format_llil_function(llil_func))
                 llil_lines.append('')
 
-                # Generate MLIL from LLIL
-                mlil_func = translate_falcom_llil_to_mlil(llil_func)
+                # Generate MLIL from LLIL (with parser for type signatures)
+                mlil_func = translate_falcom_llil_to_mlil(llil_func, parser)
                 mlil_lines.extend(MLILFormatter.format_function(mlil_func))
                 mlil_lines.append('')
 

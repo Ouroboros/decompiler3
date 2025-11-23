@@ -1,16 +1,17 @@
 '''MLIL Type Inference - SSA-based type propagation'''
 
-from typing import Dict, Set, List
+from typing import Dict, Set, List, Optional
 from .mlil import *
 from .mlil_ssa import MLILVariableSSA, MLILVarSSA, MLILSetVarSSA, MLILPhi
-from .mlil_types import MLILType, unify_types, get_operation_result_type
+from .mlil_types import MLILType, unify_types, get_operation_result_type, FunctionSignatureDB
 
 
 class MLILTypeInference:
     '''Type inference for MLIL using SSA form'''
 
-    def __init__(self, function: MediumLevelILFunction):
+    def __init__(self, function: MediumLevelILFunction, signature_db: Optional[FunctionSignatureDB] = None):
         self.function = function
+        self.signature_db = signature_db
         self.var_types: Dict[MLILVariableSSA, MLILType] = {}
 
     def infer_types(self) -> Dict[MLILVariableSSA, MLILType]:
@@ -161,19 +162,29 @@ class MLILTypeInference:
 
     def _infer_call_type(self, call: MLILCall) -> MLILType:
         '''Infer return type from function call'''
-        # TODO: Add function signature database
-        # For now, assume unknown
+        if self.signature_db:
+            inferred_type = self.signature_db.get_call_return_type(call.target)
+            if inferred_type:
+                return inferred_type
+
         return MLILType.unknown()
 
     def _infer_syscall_type(self, syscall: MLILSyscall) -> MLILType:
         '''Infer return type from syscall'''
-        # Heuristic: some syscalls return specific types
-        # This would need a syscall signature database
+        if self.signature_db:
+            inferred_type = self.signature_db.get_syscall_return_type(syscall.subsystem, syscall.cmd)
+            if inferred_type:
+                return inferred_type
+
         return MLILType.unknown()
 
     def _infer_script_call_type(self, call: MLILCallScript) -> MLILType:
         '''Infer return type from script call'''
-        # TODO: Add script function signature database
+        if self.signature_db:
+            inferred_type = self.signature_db.get_script_call_return_type(call.module, call.func)
+            if inferred_type:
+                return inferred_type
+
         return MLILType.unknown()
 
     def _infer_from_usage(self) -> bool:
@@ -310,7 +321,7 @@ class MLILTypeInference:
             return 'unknown'
 
 
-def infer_types(function: MediumLevelILFunction) -> Dict[MLILVariableSSA, MLILType]:
+def infer_types(function: MediumLevelILFunction, signature_db: Optional[FunctionSignatureDB] = None) -> Dict[MLILVariableSSA, MLILType]:
     '''Convenience function to infer types for MLIL function'''
-    inference = MLILTypeInference(function)
+    inference = MLILTypeInference(function, signature_db)
     return inference.infer_types()
