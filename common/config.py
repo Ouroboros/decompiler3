@@ -1,6 +1,4 @@
-'''
-Global configuration system supporting JSON5 files and command-line overrides
-'''
+'''Global configuration system supporting JSON5 files and command-line overrides'''
 
 import json5
 import argparse
@@ -9,15 +7,7 @@ from typing import Any
 
 
 class Config:
-    '''
-    Global configuration singleton
-
-    Priority (highest to lowest):
-    1. Command-line arguments
-    2. User config file (~/.decompiler3/config.json5)
-    3. Project config file (./config.json5)
-    4. Default values
-    '''
+    '''Global configuration singleton'''
 
     _instance = None
     _initialized = False
@@ -159,11 +149,7 @@ def default_indent() -> str:
     return '    '
 
 def init_config(args: list[str] = None):
-    '''
-    Initialize configuration system
-
-    Call this at program startup to load configs and parse arguments
-    '''
+    '''Initialize configuration system'''
     _config.load_defaults()
     if args is not None:
         _config.parse_args(args)

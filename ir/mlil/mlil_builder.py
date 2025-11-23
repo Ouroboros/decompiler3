@@ -1,9 +1,4 @@
-'''
-MLIL Builder - Helper for constructing MLIL functions
-
-Unlike LLIL Builder which manages stack pointer and virtual stack,
-MLIL Builder only needs to manage variables and blocks.
-'''
+'''MLIL Builder - Helper for constructing MLIL functions'''
 
 from typing import Optional, Union
 
@@ -11,39 +6,7 @@ from .mlil import *
 
 
 class MLILBuilder:
-    '''Builder for constructing MLIL functions
-
-    Usage:
-        builder = MLILBuilder()
-        builder.create_function('test_func', 0x1000)
-
-        # Create blocks
-        entry = builder.create_block(0x1000, 'entry')
-        exit_block = builder.create_block(0x1020, 'exit')
-
-        # Build instructions
-        builder.set_current_block(entry)
-
-        # Create variables
-        var_x = builder.get_or_create_var('x', slot_index = 0)
-        var_y = builder.get_or_create_var('y', slot_index = 1)
-
-        # Set var_x = 10
-        builder.set_var(var_x, builder.const_int(10))
-
-        # Set var_y = var_x + 5
-        x_val = builder.var(var_x)
-        add_result = builder.add(x_val, builder.const_int(5))
-        builder.set_var(var_y, add_result)
-
-        # goto exit
-        builder.goto(exit_block)
-
-        builder.set_current_block(exit_block)
-        builder.ret()
-
-        return builder.finalize()
-    '''
+    '''Builder for constructing MLIL functions'''
 
     def __init__(self):
         self.function: Optional[MediumLevelILFunction] = None
@@ -248,11 +211,7 @@ class MLILBuilder:
         self.current_block.add_outgoing_edge(false_target)
 
     def ret(self, value: Optional[MediumLevelILInstruction] = None):
-        '''Return from function
-
-        Args:
-            value: Return value expression, or None for void return
-        '''
+        '''Return from function'''
         inst = MLILRet(value)
         self.add_instruction(inst)
 

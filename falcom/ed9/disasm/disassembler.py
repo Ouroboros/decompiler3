@@ -1,6 +1,4 @@
-"""
-Generic recursive descent disassembler
-"""
+"""Generic recursive descent disassembler"""
 
 from common import *
 from ml import fileio
@@ -46,17 +44,7 @@ class Disassembler:
         offset: int = 0,
         name: str = ''
     ) -> BasicBlock:
-        """
-        Disassemble a function starting at offset.
-
-        Args:
-            bytecode: Function bytecode or stream
-            offset: Starting offset in bytecode
-            name: Optional function name
-
-        Returns:
-            Entry basic block
-        """
+        """Disassemble a function starting at offset"""
         # Create FileStream from bytecode
 
         if isinstance(stream, fileio.FileStream):
@@ -83,15 +71,7 @@ class Disassembler:
         return entry_block
 
     def disasm_block(self, fs) -> BasicBlock:
-        """
-        Iteratively disassemble blocks using worklist algorithm.
-
-        Args:
-            fs: File stream positioned at entry block start
-
-        Returns:
-            Entry basic block
-        """
+        """Iteratively disassemble blocks using worklist algorithm"""
         entry_offset = fs.Position
 
         # Worklist of block offsets to process
@@ -121,15 +101,7 @@ class Disassembler:
         return entry_block
 
     def _disasm_block_single(self, fs) -> BasicBlock:
-        """
-        Disassemble a single basic block (non-recursive).
-
-        Args:
-            fs: File stream positioned at block start
-
-        Returns:
-            Disassembled basic block
-        """
+        """Disassemble a single basic block (non-recursive)"""
         offset = fs.Position
 
         # Create new block
@@ -204,14 +176,7 @@ class Disassembler:
         return block
 
     def _add_fallthrough_jump(self, block: BasicBlock, src_offset: int, target_offset: int):
-        """
-        Emit a synthetic fallthrough jump from block to the block at target_offset.
-
-        Args:
-            block: Current basic block
-            src_offset: Offset of the last decoded instruction (jump origin)
-            target_offset: Offset of the next block (jump destination)
-        """
+        """Emit a synthetic fallthrough jump from block to the block at target_offset"""
         next_block = self.ensure_block_at(target_offset)
         synthetic_jmp = self.context.create_fallthrough_jump(
             src_offset,
@@ -222,15 +187,7 @@ class Disassembler:
         block.add_branch(next_block, BranchKind.UNCONDITIONAL)
 
     def create_block(self, offset: int) -> BasicBlock:
-        """
-        Create or get a basic block at offset.
-
-        Args:
-            offset: Block starting offset
-
-        Returns:
-            BasicBlock instance
-        """
+        """Create or get a basic block at offset"""
         if offset in self.allocated_blocks:
             return self.allocated_blocks[offset]
 
@@ -240,17 +197,7 @@ class Disassembler:
         return block
 
     def ensure_block_at(self, target_offset: int) -> BasicBlock:
-        """
-        Ensure target_offset is the start of a BasicBlock.
-
-        If target_offset is in the middle of an existing block, split that block.
-
-        Args:
-            target_offset: Target offset
-
-        Returns:
-            BasicBlock starting at target_offset
-        """
+        """Ensure target_offset is the start of a BasicBlock"""
         # Already a block start
         if target_offset in self.allocated_blocks:
             return self.allocated_blocks[target_offset]
@@ -271,16 +218,7 @@ class Disassembler:
         return block
 
     def split_block(self, owner: BasicBlock, split_offset: int) -> BasicBlock:
-        """
-        Split a block at split_offset.
-
-        Args:
-            owner: Block to split
-            split_offset: Offset to split at
-
-        Returns:
-            Tail block (starts at split_offset)
-        """
+        """Split a block at split_offset"""
         # Find split index
         split_idx = None
         for i, inst in enumerate(owner.instructions):
@@ -335,16 +273,7 @@ class Disassembler:
         return tail
 
     def add_branch(self, offset: int, kind: BranchKind | None = None) -> BasicBlock:
-        """
-        Add a branch from current block to target offset.
-
-        Args:
-            offset: Target offset
-            kind: Branch kind (for conditional branches)
-
-        Returns:
-            Target basic block
-        """
+        """Add a branch from current block to target offset"""
         target = self.create_block(offset)
 
         if self.current_block:

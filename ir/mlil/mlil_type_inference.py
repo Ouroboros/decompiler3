@@ -46,11 +46,7 @@ class MLILTypeInference:
                     self.var_types[inst.dest] = MLILType.unknown()
 
     def _propagate_types(self) -> bool:
-        '''Propagate types through SSA variables
-
-        Returns:
-            True if any type changed
-        '''
+        '''Propagate types through SSA variables'''
         changed = False
 
         for block in self.function.basic_blocks:
@@ -68,11 +64,7 @@ class MLILTypeInference:
         return changed
 
     def _update_var_type(self, var: MLILVariableSSA, new_type: MLILType) -> bool:
-        '''Update variable type, unifying with existing type
-
-        Returns:
-            True if type changed
-        '''
+        '''Update variable type, unifying with existing type'''
         old_type = self.var_types.get(var, MLILType.unknown())
         unified_type = unify_types(old_type, new_type)
 
@@ -83,11 +75,7 @@ class MLILTypeInference:
         return False
 
     def _infer_expr_type(self, expr: MediumLevelILInstruction) -> MLILType:
-        '''Infer type of an expression
-
-        Returns:
-            Inferred type of the expression
-        '''
+        '''Infer type of an expression'''
         # Constant
         if isinstance(expr, MLILConst):
             return self._infer_const_type(expr)
@@ -143,11 +131,7 @@ class MLILTypeInference:
             return MLILType.unknown()
 
     def _infer_const_type(self, const: MLILConst) -> MLILType:
-        '''Infer type from constant value
-
-        Returns:
-            Type inferred from constant
-        '''
+        '''Infer type from constant value'''
         # Check if it's a string (heuristic: non-numeric representation)
         if not const.is_hex and isinstance(const.value, str):
             return MLILType.string_type()
@@ -166,11 +150,7 @@ class MLILTypeInference:
         return MLILType.unknown()
 
     def _infer_phi_type(self, phi: MLILPhi) -> MLILType:
-        '''Infer type from Phi node by unifying source types
-
-        Returns:
-            Unified type of all Phi sources
-        '''
+        '''Infer type from Phi node by unifying source types'''
         result_type = MLILType.unknown()
 
         for source_var, _ in phi.sources:
@@ -180,40 +160,24 @@ class MLILTypeInference:
         return result_type
 
     def _infer_call_type(self, call: MLILCall) -> MLILType:
-        '''Infer return type from function call
-
-        Returns:
-            Inferred return type
-        '''
+        '''Infer return type from function call'''
         # TODO: Add function signature database
         # For now, assume unknown
         return MLILType.unknown()
 
     def _infer_syscall_type(self, syscall: MLILSyscall) -> MLILType:
-        '''Infer return type from syscall
-
-        Returns:
-            Inferred return type based on syscall
-        '''
+        '''Infer return type from syscall'''
         # Heuristic: some syscalls return specific types
         # This would need a syscall signature database
         return MLILType.unknown()
 
     def _infer_script_call_type(self, call: MLILCallScript) -> MLILType:
-        '''Infer return type from script call
-
-        Returns:
-            Inferred return type
-        '''
+        '''Infer return type from script call'''
         # TODO: Add script function signature database
         return MLILType.unknown()
 
     def _infer_from_usage(self) -> bool:
-        '''Infer types from how variables are used (backward inference)
-
-        Returns:
-            True if any type changed
-        '''
+        '''Infer types from how variables are used (backward inference)'''
         changed = False
 
         for block in self.function.basic_blocks:
@@ -301,11 +265,7 @@ class MLILTypeInference:
         return changed
 
     def _get_op_name(self, expr: MediumLevelILInstruction) -> str:
-        '''Get operation name for type inference
-
-        Returns:
-            Operation name (lowercase)
-        '''
+        '''Get operation name for type inference'''
         if isinstance(expr, MLILAdd):
             return 'add'
         elif isinstance(expr, MLILSub):
@@ -351,13 +311,6 @@ class MLILTypeInference:
 
 
 def infer_types(function: MediumLevelILFunction) -> Dict[MLILVariableSSA, MLILType]:
-    '''Convenience function to infer types for MLIL function
-
-    Args:
-        function: MLIL function in SSA form
-
-    Returns:
-        Mapping from SSA variables to their inferred types
-    '''
+    '''Convenience function to infer types for MLIL function'''
     inference = MLILTypeInference(function)
     return inference.infer_types()

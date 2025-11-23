@@ -1,11 +1,4 @@
-'''
-MLIL Type System - Type definitions for type inference
-
-Defines types that can be inferred for MLIL variables:
-- Primitive types: int, bool, string, float
-- Pointer types
-- Unknown/variant types
-'''
+'''MLIL Type System - Type definitions for type inference'''
 
 from typing import Optional, Set
 from enum import Enum, auto
@@ -112,21 +105,7 @@ class MLILVariantType(MLILType):
 
 
 def unify_types(t1: MLILType, t2: MLILType) -> MLILType:
-    '''Unify two types, returning the most specific common type
-
-    Args:
-        t1: First type
-        t2: Second type
-
-    Returns:
-        Unified type, or variant if incompatible
-
-    Examples:
-        unify_types(int, int) → int
-        unify_types(int, unknown) → int
-        unify_types(int, string) → variant<int, string>
-        unify_types(bool, int) → int (bool is subset of int)
-    '''
+    '''Unify two types, returning the most specific common type'''
     # Same type
     if t1 == t2:
         return t1
@@ -156,16 +135,7 @@ def unify_types(t1: MLILType, t2: MLILType) -> MLILType:
 
 
 def get_operation_result_type(op_name: str, lhs_type: MLILType, rhs_type: Optional[MLILType] = None) -> MLILType:
-    '''Get the result type of an operation
-
-    Args:
-        op_name: Operation name (e.g., 'add', 'eq', 'neg')
-        lhs_type: Left operand type
-        rhs_type: Right operand type (None for unary ops)
-
-    Returns:
-        Result type of the operation
-    '''
+    '''Get the result type of an operation'''
     # Arithmetic operations: preserve numeric type
     if op_name in ('add', 'sub', 'mul', 'div', 'mod', 'neg'):
         if rhs_type is None:

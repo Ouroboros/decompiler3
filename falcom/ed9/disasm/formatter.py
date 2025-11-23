@@ -1,6 +1,4 @@
-"""
-Formatter for ED9 VM disassembly output
-"""
+"""Formatter for ED9 VM disassembly output"""
 
 from common import *
 from typing import TYPE_CHECKING, Callable
@@ -33,15 +31,7 @@ class Formatter:
         self.formatted_labels: set[str] = set()
 
     def format_entry_block(self, entry_block: 'BasicBlock') -> list[str]:
-        """
-        Format blocks starting from entry block (without function header).
-
-        Args:
-            entry_block: Entry basic block
-
-        Returns:
-            List of formatted block lines (indented)
-        """
+        """Format blocks starting from entry block (without function header)"""
         # Reset formatted tracking
         self.formatted_offsets.clear()
         self.formatted_labels.clear()
@@ -67,15 +57,7 @@ class Formatter:
         return lines
 
     def format_function(self, func: 'Function') -> list[str]:
-        """
-        Format a complete function with header.
-
-        Args:
-            func: Function object
-
-        Returns:
-            List of formatted lines
-        """
+        """Format a complete function with header"""
         lines = []
         param_names = [f'arg{i + 1}: {param.type.get_python_type()}' for i, param in enumerate(func.params)]
         param_str = ', '.join(param_names) if param_names else ''
@@ -87,15 +69,7 @@ class Formatter:
         return lines
 
     def format_block(self, block: 'BasicBlock') -> list[str]:
-        """
-        Format a single basic block.
-
-        Args:
-            block: Basic block to format
-
-        Returns:
-            List of formatted lines
-        """
+        """Format a single basic block"""
         return self._format_block(block, gen_label = True)
 
     def _collect_blocks(self, entry: 'BasicBlock') -> list['BasicBlock']:
