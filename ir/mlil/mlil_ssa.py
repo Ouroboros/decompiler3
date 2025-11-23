@@ -1,12 +1,4 @@
-'''
-MLIL SSA - Static Single Assignment form for MLIL
-
-Clean SSA implementation with:
-- Iterative algorithms (no recursion)
-- Proper dominance analysis
-- Standard Phi placement
-- SSA construction and deconstruction
-'''
+'''MLIL SSA - SSA form with dominance analysis and Phi placement'''
 
 from __future__ import annotations
 from typing import Dict, List, Set, Optional, Tuple, Deque
@@ -68,10 +60,7 @@ class MLILSetVarSSA(MediumLevelILStatement):
 
 
 class MLILPhi(MediumLevelILStatement):
-    '''Phi node: merge values from multiple predecessors
-
-    Example: var_s0#3 = φ(var_s0#1 from block1, var_s0#2 from block2)
-    '''
+    '''Phi node: merge values from predecessors'''
 
     def __init__(self, dest: MLILVariableSSA, sources: List[Tuple[MLILVariableSSA, MediumLevelILBasicBlock]]):
         super().__init__(MediumLevelILOperation.MLIL_PHI)
@@ -659,26 +648,12 @@ class SSADeconstructor:
 # ============================================================================
 
 def convert_to_ssa(function: MediumLevelILFunction) -> MediumLevelILFunction:
-    '''Convert MLIL function to SSA form (in-place)
-
-    Args:
-        function: MLIL function
-
-    Returns:
-        Same function, modified to SSA form
-    '''
+    '''Convert MLIL to SSA (in-place)'''
     constructor = SSAConstructor(function)
     return constructor.construct()
 
 
 def convert_from_ssa(function: MediumLevelILFunction) -> MediumLevelILFunction:
-    '''Convert MLIL function from SSA back to non-SSA (in-place)
-
-    Args:
-        function: MLIL function in SSA form
-
-    Returns:
-        Same function, modified to non-SSA form
-    '''
+    '''Convert from SSA to non-SSA (in-place)'''
     deconstructor = SSADeconstructor(function)
     return deconstructor.deconstruct()

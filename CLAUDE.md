@@ -47,6 +47,13 @@ Use `@classmethod` for inheritance support.
 ### 8. Concise Git Commit Messages
 Short (1-2 sentences), no signatures/metadata.
 
+### 9. Concise Comments
+Keep comments brief and meaningful. Avoid redundant explanations.
+- ✅ `# Skip self-assignment (var = var)`
+- ❌ `# This code checks if the variable is equal to itself and if so we skip it`
+- ✅ Use self-explanatory names instead of verbose comments
+- ❌ Don't state the obvious: `x = 5  # Set x to 5`
+
 ## Checklist
 - [ ] User communication in Chinese, everything else in English
 - [ ] No auto-commit (wait for user request)
@@ -57,6 +64,7 @@ Short (1-2 sentences), no signatures/metadata.
 - [ ] English-only code comments
 - [ ] `@classmethod` not `@staticmethod`
 - [ ] Concise commits (no signatures)
+- [ ] Concise comments (no redundant explanations)
 
 ## Environment
 

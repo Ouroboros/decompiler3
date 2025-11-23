@@ -1,8 +1,4 @@
-'''
-TypeScript Code Generator
-
-Generates production-quality TypeScript code from HLIL.
-'''
+'''TypeScript Code Generator - HLIL to production TypeScript'''
 
 from common import *
 from typing import List, Optional
@@ -10,18 +6,9 @@ from ir.hlil import *
 
 
 class TypeScriptGenerator:
-    '''Generate TypeScript code from HLIL'''
-
     @classmethod
     def _format_type(cls, type_hint: Optional[str]) -> str:
-        '''Map HLIL type to TypeScript type
-
-        Args:
-            type_hint: Type hint string from HLIL
-
-        Returns:
-            TypeScript type string
-        '''
+        '''Map HLIL type to TypeScript'''
         if not type_hint:
             return 'any'
 
@@ -43,14 +30,7 @@ class TypeScriptGenerator:
 
     @classmethod
     def _infer_return_type(cls, block: HLILBlock) -> str:
-        '''Infer function return type from return statements
-
-        Args:
-            block: Function body block
-
-        Returns:
-            TypeScript return type
-        '''
+        '''Infer return type from return statements'''
         # Recursively search for return statements
         def find_returns(blk: HLILBlock) -> List[HLILReturn]:
             returns = []
@@ -100,16 +80,6 @@ class TypeScriptGenerator:
 
     @classmethod
     def _needs_parentheses(cls, child_op: str, parent_op: str, is_left: bool) -> bool:
-        '''Check if child expression needs parentheses based on operator precedence
-
-        Args:
-            child_op: Operator of child expression
-            parent_op: Operator of parent expression
-            is_left: True if child is left operand, False if right
-
-        Returns:
-            True if parentheses are needed
-        '''
         # Operator precedence (lower number = lower precedence)
         precedence = {
             '||': 1,
@@ -141,14 +111,6 @@ class TypeScriptGenerator:
 
     @classmethod
     def _is_boolean_expr(cls, expr: HLILExpression) -> bool:
-        '''Check if expression is already a boolean (comparison or logical operation)
-
-        Args:
-            expr: Expression to check
-
-        Returns:
-            True if expression is a boolean operation
-        '''
         if isinstance(expr, HLILBinaryOp):
             # Comparison and logical operators return boolean
             return expr.op in ('==', '!=', '<', '<=', '>', '>=', '&&', '||')
@@ -161,14 +123,6 @@ class TypeScriptGenerator:
 
     @classmethod
     def _format_expr(cls, expr: HLILExpression) -> str:
-        '''Format an HLIL expression as TypeScript
-
-        Args:
-            expr: Expression to format
-
-        Returns:
-            TypeScript expression string
-        '''
         if isinstance(expr, HLILVar):
             return expr.var.name
 
@@ -247,14 +201,6 @@ class TypeScriptGenerator:
 
     @classmethod
     def generate_function(cls, func: HighLevelILFunction) -> List[str]:
-        '''Generate TypeScript code for an HLIL function
-
-        Args:
-            func: HLIL function to generate code for
-
-        Returns:
-            List of TypeScript code lines
-        '''
         lines = []
 
         # Function signature with types
@@ -285,15 +231,6 @@ class TypeScriptGenerator:
 
     @classmethod
     def _generate_block(cls, block: HLILBlock, indent: int = 0) -> List[str]:
-        '''Generate TypeScript code for a block of statements
-
-        Args:
-            block: Block to generate code for
-            indent: Indentation level
-
-        Returns:
-            List of TypeScript code lines
-        '''
         lines = []
 
         for stmt in block.statements:
@@ -304,15 +241,6 @@ class TypeScriptGenerator:
 
     @classmethod
     def _generate_statement(cls, stmt: HLILStatement, indent: int = 0) -> List[str]:
-        '''Generate TypeScript code for a statement
-
-        Args:
-            stmt: Statement to generate code for
-            indent: Indentation level
-
-        Returns:
-            List of TypeScript code lines
-        '''
         indent_str = default_indent() * indent
         lines = []
 
@@ -413,11 +341,6 @@ class TypeScriptGenerator:
 
 
 def generate_typescript_header() -> str:
-    '''Generate TypeScript type definitions header
-
-    Returns:
-        TypeScript type definitions
-    '''
     return '''// Intrinsic function: address-of operator (for output parameters)
 // Can be recognized and transformed during compilation
 function addr_of<T>(value: T): T { return value; }
@@ -432,13 +355,5 @@ function syscall(subsystem: number, cmd: number, ...args: any[]): any { return u
 
 
 def generate_typescript(func: HighLevelILFunction) -> str:
-    '''Generate TypeScript code from HLIL function
-
-    Args:
-        func: HLIL function
-
-    Returns:
-        Generated TypeScript code
-    '''
     lines = TypeScriptGenerator.generate_function(func)
     return '\n'.join(lines)

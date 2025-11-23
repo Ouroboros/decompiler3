@@ -1,8 +1,4 @@
-'''
-MLIL to HLIL Converter
-
-Converts unstructured MLIL (with goto/label) to structured HLIL (with if/while/switch).
-'''
+'''MLIL to HLIL Converter - goto/label to if/while/switch'''
 
 from typing import Dict, List, Set, Optional
 
@@ -11,31 +7,19 @@ from .hlil import *
 
 
 class MLILToHLILConverter:
-    '''Convert MLIL function to HLIL function
-
-    Performs structural conversion from unstructured MLIL (with goto/label)
-    to structured HLIL (with if/while/switch).
-
-    Type information should be added via separate passes after conversion.
-    '''
 
     def __init__(self, mlil_func: MediumLevelILFunction):
         self.mlil_func = mlil_func
         self.hlil_func = HighLevelILFunction(mlil_func.name, mlil_func.start_addr)
 
-        # Control flow graph
-        self.block_successors: Dict[int, List[int]] = {}  # block_index -> [successor_indices]
+        self.block_successors: Dict[int, List[int]] = {}
         self.visited_blocks: Set[int] = set()
-
-        # Track last function call for return value substitution
-        self.last_call: Optional[HLILExpression] = None  # Track last call expression for REG[0] substitution
+        self.last_call: Optional[HLILExpression] = None
 
     def _uses_reg0(self, instr: MediumLevelILInstruction) -> bool:
-        '''Check if instruction uses REG[0]'''
         if isinstance(instr, MLILLoadReg) and instr.index == 0:
             return True
 
-        # Recursively check expressions
         if isinstance(instr, MLILBinaryOp):
             return self._uses_reg0(instr.lhs) or self._uses_reg0(instr.rhs)
 
@@ -59,7 +43,6 @@ class MLILToHLILConverter:
         return False
 
     def convert(self) -> HighLevelILFunction:
-        '''Convert MLIL function to HLIL function'''
         # Phase 1: Convert variables
         self._convert_variables()
 
@@ -73,12 +56,10 @@ class MLILToHLILConverter:
         return self.hlil_func
 
     def _convert_variables(self):
-        '''Convert MLIL variables to HLIL variables (only used ones)'''
-        # Collect used variables
+        '''Convert used MLIL variables to HLIL'''
         used_vars = set()
 
         def collect_used_vars(expr):
-            '''Recursively collect variable names from expression'''
             if isinstance(expr, MLILVar):
                 used_vars.add(expr.var.name)
             elif isinstance(expr, MLILBinaryOp):
@@ -141,56 +122,39 @@ class MLILToHLILConverter:
         self.hlil_func.variables.extend(variables)
 
     def _build_cfg(self):
-        '''Build control flow graph from MLIL basic blocks'''
+        '''Build CFG from MLIL blocks'''
         for i, block in enumerate(self.mlil_func.basic_blocks):
             successors = []
 
-            # Check last instruction for control flow
             if block.instructions:
                 last_instr = block.instructions[-1]
 
                 if isinstance(last_instr, MLILIf):
-                    # Conditional branch: has true and false successors
                     if last_instr.true_target is not None:
                         successors.append(last_instr.true_target.index)
                     if last_instr.false_target is not None:
                         successors.append(last_instr.false_target.index)
 
                 elif isinstance(last_instr, MLILGoto):
-                    # Unconditional jump
                     if last_instr.target is not None:
                         successors.append(last_instr.target.index)
 
                 elif not isinstance(last_instr, MLILRet):
-                    # Fall-through to next block
                     if i + 1 < len(self.mlil_func.basic_blocks):
                         successors.append(i + 1)
 
             self.block_successors[i] = successors
 
     def _find_merge_block(self, block1_idx: int, block2_idx: int) -> Optional[int]:
-        '''Find the merge block where two branches converge
-
-        Args:
-            block1_idx: First branch block index
-            block2_idx: Second branch block index
-
-        Returns:
-            Merge block index, or None if no merge block found
-        '''
-        # Check direct successors first
+        '''Find merge block where branches converge'''
         succ1 = set(self.block_successors.get(block1_idx, []))
         succ2 = set(self.block_successors.get(block2_idx, []))
 
-        # If there's a common direct successor, that's the merge block
         common = succ1 & succ2
         if common:
             return min(common)
 
-        # Check if one branch target is reachable from the other
-        # This handles: if (cond) goto merge; else goto path_to_merge;
         def is_reachable(from_idx: int, to_idx: int, max_depth: int = 10) -> bool:
-            '''Check if to_idx is reachable from from_idx'''
             if from_idx == to_idx:
                 return True
             visited = set()
@@ -207,16 +171,12 @@ class MLILToHLILConverter:
                         queue.append((succ, depth + 1))
             return False
 
-        # If block1 is reachable from block2, block1 is the merge
         if is_reachable(block2_idx, block1_idx):
             return block1_idx
-        # If block2 is reachable from block1, block2 is the merge
         if is_reachable(block1_idx, block2_idx):
             return block2_idx
 
-        # Otherwise, do limited BFS (max 3 levels)
         def get_reachable(start_idx: int, max_depth: int = 3) -> Dict[int, int]:
-            '''Returns {block_idx: depth}'''
             reachable = {}
             queue = [(start_idx, 0)]
             visited = set()
@@ -246,14 +206,7 @@ class MLILToHLILConverter:
         return min(common_blocks, key=lambda idx: reachable1[idx] + reachable2[idx])
 
     def _is_passthrough_block(self, block_idx: int) -> bool:
-        '''Check if a block is a passthrough (only goto, no real statements)
-
-        Args:
-            block_idx: Block index to check
-
-        Returns:
-            True if the block only contains goto/debug, False otherwise
-        '''
+        '''Check if block is passthrough (only goto)'''
         if block_idx >= len(self.mlil_func.basic_blocks):
             return False
 
@@ -272,17 +225,7 @@ class MLILToHLILConverter:
         return isinstance(last_instr, MLILGoto)
 
     def _reconstruct_control_flow(self, block_idx: int, target_block: HLILBlock, stop_at: Optional[int] = None) -> Optional[int]:
-        '''Recursively reconstruct structured control flow
-
-        Args:
-            block_idx: Current MLIL basic block index
-            target_block: HLIL block to add statements to
-            stop_at: Stop processing at this block index (for handling merge blocks)
-
-        Returns:
-            Next block index to process, or None if control flow ends
-        '''
-        # Skip passthrough blocks
+        '''Reconstruct structured control flow from goto/label'''
         original_idx = block_idx
         while self._is_passthrough_block(block_idx):
             mlil_block = self.mlil_func.basic_blocks[block_idx]
@@ -408,7 +351,6 @@ class MLILToHLILConverter:
         return None
 
     def _convert_instruction(self, instr: MediumLevelILInstruction) -> Optional[HLILStatement]:
-        '''Convert a single MLIL instruction to HLIL statement'''
         # Convert debug information to comments
         if isinstance(instr, MLILDebug):
             return HLILComment(f'{instr.debug_type}({instr.value})')
@@ -462,7 +404,6 @@ class MLILToHLILConverter:
         return None
 
     def _convert_expr(self, expr: MediumLevelILExpr) -> HLILExpression:
-        '''Convert MLIL expression to HLIL expression'''
         # Variable reference
         if isinstance(expr, MLILVar):
             var_name = expr.var.name
@@ -572,13 +513,5 @@ class MLILToHLILConverter:
 
 
 def convert_mlil_to_hlil(mlil_func: MediumLevelILFunction) -> HighLevelILFunction:
-    '''Convert MLIL function to HLIL function
-
-    Args:
-        mlil_func: MLIL function to convert
-
-    Returns:
-        Converted HLIL function
-    '''
     converter = MLILToHLILConverter(mlil_func)
     return converter.convert()

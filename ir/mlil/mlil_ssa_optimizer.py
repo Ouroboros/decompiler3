@@ -1,11 +1,4 @@
-'''
-MLIL SSA Optimizer - SSA-based optimizations using def-use chains
-
-Performs SSA-based optimization passes:
-- Constant Propagation: Propagate constant values through SSA variables
-- Copy Propagation: Eliminate copy assignments (x#1 = x#0)
-- Dead Code Elimination: Remove unused SSA variable assignments
-'''
+'''MLIL SSA Optimizer - constant/copy propagation and DCE'''
 
 from typing import Dict, List, Optional
 from .mlil import *
@@ -13,16 +6,13 @@ from .mlil_ssa import *
 
 
 class SSAOptimizer:
-    '''SSA-based optimizer using def-use chains'''
-
     def __init__(self, function: MediumLevelILFunction):
         self.function = function
-        self.ssa_defs: Dict[MLILVariableSSA, MLILSetVarSSA] = {}  # SSA var -> definition
-        self.ssa_uses: Dict[MLILVariableSSA, List[MediumLevelILInstruction]] = {}  # SSA var -> uses
-        self.constants: Dict[MLILVariableSSA, int] = {}  # SSA var -> constant value
+        self.ssa_defs: Dict[MLILVariableSSA, MLILSetVarSSA] = {}
+        self.ssa_uses: Dict[MLILVariableSSA, List[MediumLevelILInstruction]] = {}
+        self.constants: Dict[MLILVariableSSA, int] = {}
 
     def optimize(self) -> MediumLevelILFunction:
-        '''Run all SSA-based optimization passes'''
         changed = True
         iterations = 0
         max_iterations = 10
@@ -30,7 +20,6 @@ class SSAOptimizer:
         while changed and iterations < max_iterations:
             changed = False
             changed |= self.propagate_constants()
-            # changed |= self.fold_constants()     # Constant folding - temporarily disabled
             changed |= self.simplify_expressions()
             changed |= self.simplify_conditions()
             changed |= self.propagate_copies()
@@ -47,28 +36,24 @@ class SSAOptimizer:
 
         for block in self.function.basic_blocks:
             for inst in block.instructions:
-                # Track definitions
                 if isinstance(inst, MLILSetVarSSA):
                     self.ssa_defs[inst.var] = inst
 
-                    # Track constants
                     if isinstance(inst.value, MLILConst):
                         self.constants[inst.var] = inst.value.value
 
                 elif isinstance(inst, MLILPhi):
                     self.ssa_defs[inst.dest] = inst
 
-                # Track uses
                 self._collect_uses_in_inst(inst)
 
     def _collect_uses_in_inst(self, inst: MediumLevelILInstruction):
-        '''Recursively collect SSA variable uses'''
+        '''Collect SSA variable uses in instruction'''
         if isinstance(inst, MLILVarSSA):
             if inst.var not in self.ssa_uses:
                 self.ssa_uses[inst.var] = []
             self.ssa_uses[inst.var].append(inst)
 
-        # Recurse into sub-expressions
         elif isinstance(inst, MLILSetVarSSA):
             self._collect_uses_in_expr(inst.value)
 
@@ -103,15 +88,10 @@ class SSAOptimizer:
             self._collect_uses_in_expr(inst.value)
 
     def _collect_uses_in_expr(self, expr: MediumLevelILInstruction):
-        '''Helper to collect uses in expression'''
         self._collect_uses_in_inst(expr)
 
     def propagate_constants(self) -> bool:
-        '''Propagate constant values through SSA variables
-
-        If x#0 = 5, replace all uses of x#0 with 5
-        Does NOT fold constants (5 + 3 stays as 5 + 3)
-        '''
+        '''Replace SSA variables with constant values (no folding)'''
         self._build_def_use_chains()
         changed = False
 
@@ -168,8 +148,7 @@ class SSAOptimizer:
         return inst
 
     def _propagate_constants_in_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
-        '''Replace SSA variables with their constant values (NO folding)'''
-        # Replace SSA variable with constant
+        '''Replace SSA variables with constants'''
         if isinstance(expr, MLILVarSSA):
             if expr.var in self.constants:
                 return MLILConst(self.constants[expr.var], is_hex = False)
@@ -182,15 +161,12 @@ class SSAOptimizer:
             lhs = self._propagate_constants_in_expr(expr.lhs)
             rhs = self._propagate_constants_in_expr(expr.rhs)
 
-            # Rebuild if children changed (NO folding)
             if lhs is not expr.lhs or rhs is not expr.rhs:
                 return self._reconstruct_binary_op(expr, lhs, rhs)
 
-        # Recurse into unary operations
         elif isinstance(expr, (MLILNeg, MLILLogicalNot)):
             operand = self._propagate_constants_in_expr(expr.operand)
 
-            # Rebuild if operand changed (NO folding)
             if operand is not expr.operand:
                 return self._reconstruct_unary_op(expr, operand)
 
@@ -251,10 +227,7 @@ class SSAOptimizer:
         return None
 
     def fold_constants(self) -> bool:
-        '''Fold constant expressions at compile time
-
-        Evaluates expressions like (5 + 3) to 8
-        '''
+        '''Evaluate constant expressions (5 + 3 → 8)'''
         changed = False
 
         for block in self.function.basic_blocks:
@@ -311,7 +284,6 @@ class SSAOptimizer:
 
     def _fold_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
         '''Recursively fold constant expressions'''
-        # Recurse into binary operations
         if isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod,
                              MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr,
                              MLILLogicalAnd, MLILLogicalOr,
@@ -319,48 +291,38 @@ class SSAOptimizer:
             lhs = self._fold_expr(expr.lhs)
             rhs = self._fold_expr(expr.rhs)
 
-            # Fold if both sides are constants
             if isinstance(lhs, MLILConst) and isinstance(rhs, MLILConst):
                 result = self._eval_binary_const(type(expr), lhs.value, rhs.value)
                 if result is not None:
                     return MLILConst(result, is_hex = False)
 
-            # Rebuild if children changed
             if lhs is not expr.lhs or rhs is not expr.rhs:
                 return self._reconstruct_binary_op(expr, lhs, rhs)
 
-        # Recurse into unary operations
         elif isinstance(expr, (MLILNeg, MLILLogicalNot)):
             operand = self._fold_expr(expr.operand)
 
-            # Fold if operand is constant
             if isinstance(operand, MLILConst):
                 result = self._eval_unary_const(type(expr), operand.value)
                 if result is not None:
                     return MLILConst(result, is_hex = False)
 
-            # Rebuild if operand changed
             if operand is not expr.operand:
                 return self._reconstruct_unary_op(expr, operand)
 
         return expr
 
     def propagate_copies(self) -> bool:
-        '''Propagate SSA variable copies
-
-        If x#1 = x#0, replace all uses of x#1 with x#0
-        '''
+        '''Replace SSA variable copies (x#1 = x#0 → use x#0)'''
         self._build_def_use_chains()
         changed = False
 
-        # Find copy assignments
         copies: Dict[MLILVariableSSA, MLILVariableSSA] = {}
         for ssa_var, defn in self.ssa_defs.items():
             if isinstance(defn, MLILSetVarSSA):
                 if isinstance(defn.value, MLILVarSSA):
                     copies[ssa_var] = defn.value.var
 
-        # Replace uses
         for block in self.function.basic_blocks:
             new_instructions = []
 
@@ -428,24 +390,20 @@ class SSAOptimizer:
             new_instructions = []
 
             for inst in block.instructions:
-                # Keep non-assignment instructions
                 if not isinstance(inst, (MLILSetVarSSA, MLILPhi)):
                     new_instructions.append(inst)
                     continue
 
-                # For assignments, check if the variable is used
                 if isinstance(inst, MLILSetVarSSA):
                     if len(self.ssa_uses.get(inst.var, [])) > 0:
                         new_instructions.append(inst)
                     else:
-                        # Dead code - variable never used
                         changed = True
 
                 elif isinstance(inst, MLILPhi):
                     if len(self.ssa_uses.get(inst.dest, [])) > 0:
                         new_instructions.append(inst)
                     else:
-                        # Dead phi node
                         changed = True
 
             block.instructions = new_instructions
@@ -506,11 +464,7 @@ class SSAOptimizer:
             raise NotImplementedError(f'Unhandled unary operation: {type(expr).__name__}')
 
     def simplify_expressions(self) -> bool:
-        '''Apply algebraic simplification rules
-
-        Returns:
-            True if any simplification occurred
-        '''
+        '''Apply algebraic simplification (x + 0 → x, x * 1 → x)'''
         changed = False
 
         for block in self.function.basic_blocks:
@@ -549,18 +503,15 @@ class SSAOptimizer:
 
     def _simplify_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
         '''Recursively apply algebraic simplifications'''
-        # First simplify children
         if isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod,
                              MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr)):
             lhs = self._simplify_expr(expr.lhs)
             rhs = self._simplify_expr(expr.rhs)
 
-            # Apply algebraic identities
             simplified = self._apply_algebraic_identity(type(expr), lhs, rhs)
             if simplified is not None:
                 return simplified
 
-            # Rebuild if children changed
             if lhs is not expr.lhs or rhs is not expr.rhs:
                 return self._reconstruct_binary_op(expr, lhs, rhs)
 
@@ -573,19 +524,16 @@ class SSAOptimizer:
 
     def _apply_algebraic_identity(self, op_type, lhs, rhs) -> Optional[MediumLevelILInstruction]:
         '''Apply algebraic identity rules'''
-        # x + 0 = x
         if op_type == MLILAdd:
             if isinstance(rhs, MLILConst) and rhs.value == 0:
                 return lhs
             if isinstance(lhs, MLILConst) and lhs.value == 0:
                 return rhs
 
-        # x - 0 = x
         elif op_type == MLILSub:
             if isinstance(rhs, MLILConst) and rhs.value == 0:
                 return lhs
 
-        # x * 0 = 0, x * 1 = x
         elif op_type == MLILMul:
             if isinstance(rhs, MLILConst):
                 if rhs.value == 0:
@@ -598,12 +546,10 @@ class SSAOptimizer:
                 elif lhs.value == 1:
                     return rhs
 
-        # x / 1 = x
         elif op_type == MLILDiv:
             if isinstance(rhs, MLILConst) and rhs.value == 1:
                 return lhs
 
-        # x & 0 = 0, x & 0xFFFFFFFF = x
         elif op_type == MLILAnd:
             if isinstance(rhs, MLILConst):
                 if rhs.value == 0:
@@ -616,7 +562,6 @@ class SSAOptimizer:
                 elif lhs.value == 0xFFFFFFFF:
                     return rhs
 
-        # x | 0 = x, x | 0xFFFFFFFF = 0xFFFFFFFF
         elif op_type == MLILOr:
             if isinstance(rhs, MLILConst):
                 if rhs.value == 0:
@@ -629,14 +574,12 @@ class SSAOptimizer:
                 elif lhs.value == 0xFFFFFFFF:
                     return MLILConst(0xFFFFFFFF, is_hex = True)
 
-        # x ^ 0 = x
         elif op_type == MLILXor:
             if isinstance(rhs, MLILConst) and rhs.value == 0:
                 return lhs
             if isinstance(lhs, MLILConst) and lhs.value == 0:
                 return rhs
 
-        # x << 0 = x, x >> 0 = x
         elif op_type in (MLILShl, MLILShr):
             if isinstance(rhs, MLILConst) and rhs.value == 0:
                 return lhs
@@ -644,13 +587,7 @@ class SSAOptimizer:
         return None
 
     def simplify_conditions(self) -> bool:
-        '''Simplify condition expressions in If instructions
-
-        Transforms patterns like ((a >= b) == 0) to (a < b)
-
-        Returns:
-            True if any simplification occurred
-        '''
+        '''Simplify conditionals: (expr == 0) → !expr, (expr != 0) → expr'''
         changed = False
 
         for block in self.function.basic_blocks:
@@ -658,35 +595,27 @@ class SSAOptimizer:
                 if not isinstance(inst, MLILIf):
                     continue
 
-                # Check if condition needs simplification
                 condition = inst.condition
                 new_condition = None
 
-                # Pattern: !(comparison) -> invert comparison
                 if isinstance(condition, MLILLogicalNot):
                     inverted = self._invert_comparison(condition.operand)
                     if inverted is not None:
                         new_condition = inverted
 
-                # Pattern: (expr == 0)
                 elif isinstance(condition, MLILEq):
                     if isinstance(condition.rhs, MLILConst) and condition.rhs.value == 0:
-                        # Try to invert comparison
                         inverted = self._invert_comparison(condition.lhs)
                         if inverted is not None:
                             new_condition = inverted
                         else:
-                            # Complex expression - use LogicalNot
                             new_condition = MLILLogicalNot(condition.lhs)
 
-                # Pattern: (expr != 0)
                 elif isinstance(condition, MLILNe):
                     if isinstance(condition.rhs, MLILConst) and condition.rhs.value == 0:
-                        # For (expr != 0), just use expr directly if it's a comparison
                         if isinstance(condition.lhs, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
                             new_condition = condition.lhs
 
-                # Apply simplification
                 if new_condition is not None:
                     block.instructions[i] = MLILIf(new_condition, inst.true_target, inst.false_target)
                     changed = True
@@ -694,19 +623,7 @@ class SSAOptimizer:
         return changed
 
     def _invert_comparison(self, expr: MediumLevelILInstruction) -> Optional[MediumLevelILInstruction]:
-        '''Invert a comparison expression
-
-        Examples:
-            a >= b  ->  a < b
-            a > b   ->  a <= b
-            a < b   ->  a >= b
-            a <= b  ->  a > b
-            a == b  ->  a != b
-            a != b  ->  a == b
-
-        Returns:
-            Inverted expression, or None if not a comparison
-        '''
+        '''Invert comparison: >= → <, > → <=, == → !=, etc.'''
         if isinstance(expr, MLILGe):
             return MLILLt(expr.lhs, expr.rhs)
         elif isinstance(expr, MLILGt):
