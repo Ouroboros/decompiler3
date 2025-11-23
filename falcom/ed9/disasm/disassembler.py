@@ -24,11 +24,7 @@ class DisassemblerContext:
 
 
 class Disassembler:
-    """
-    Generic recursive descent disassembler.
-
-    Works with any instruction set via pluggable InstructionTable.
-    """
+    """Recursive descent disassembler"""
 
     def __init__(self, instruction_table: InstructionTable, context: DisassemblerContext):
         self.instruction_table = instruction_table
