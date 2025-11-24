@@ -84,12 +84,40 @@ class DominanceAnalysis:
 
     def __init__(self, function: MediumLevelILFunction):
         self.function = function
-        self.blocks = function.basic_blocks
+        self.blocks = self._compute_rpo(function.basic_blocks)
 
         # Results
         self.idom: Dict[MediumLevelILBasicBlock, Optional[MediumLevelILBasicBlock]] = {}
         self.dom_tree: Dict[MediumLevelILBasicBlock, List[MediumLevelILBasicBlock]] = defaultdict(list)
         self.dom_frontier: Dict[MediumLevelILBasicBlock, Set[MediumLevelILBasicBlock]] = defaultdict(set)
+
+    def _compute_rpo(self, blocks: List[MediumLevelILBasicBlock]) -> List[MediumLevelILBasicBlock]:
+        '''Compute Reverse Postorder via DFS (only reachable blocks)'''
+        if not blocks:
+            return []
+
+        visited = set()
+        postorder = []
+        stack = [(blocks[0], False)]
+
+        while stack:
+            block, processed = stack.pop()
+
+            if processed:
+                postorder.append(block)
+                continue
+
+            if block in visited:
+                continue
+
+            visited.add(block)
+            stack.append((block, True))
+
+            for succ in reversed(block.outgoing_edges):
+                if succ not in visited:
+                    stack.append((succ, False))
+
+        return list(reversed(postorder))
 
     def analyze(self):
         '''Run dominance analysis'''
@@ -201,6 +229,10 @@ class SSAConstructor:
         '''Convert function to SSA form (modifies in-place)'''
         # Step 1: Dominance analysis
         self.dom_analysis.analyze()
+
+        # Remove unreachable blocks from function
+        reachable_set = set(self.dom_analysis.blocks)
+        self.function.basic_blocks = [b for b in self.function.basic_blocks if b in reachable_set]
 
         # Step 2: Collect variable definitions
         self._collect_defs()
