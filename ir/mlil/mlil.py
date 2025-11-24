@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterator, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, Iterator, List, Optional, Union, TYPE_CHECKING
 
 from common import *
 from ir.core import *
@@ -598,9 +598,9 @@ class MediumLevelILFunction:
         self.start_addr = start_addr
         self.basic_blocks: List[MediumLevelILBasicBlock] = []
         self.variables: Dict[str, MLILVariable] = {}
-        self.llil_function: Optional[LowLevelILFunction] = None  # Source LLIL function
+        self.llil_function: Optional[LowLevelILFunction] = None
         self._inst_block_map: Dict[int, MediumLevelILBasicBlock] = {}
-        self.var_types: Dict[Any, Any] = {}  # SSA variable -> type mapping
+        self.var_types: Dict[str, 'MLILType'] = {}  # Variable name -> inferred type
 
     def add_basic_block(self, block: MediumLevelILBasicBlock):
         self.basic_blocks.append(block)
