@@ -4,7 +4,6 @@ from ir.llil import *
 from ir.mlil import *
 from .llil_ext import *
 from .constants import *
-from .type_signatures import ED9TypeSignatures
 
 
 class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
@@ -100,25 +99,3 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
         else:
             # Fall back to generic handling
             return super()._translate_expr(llil_expr)
-
-
-def translate_falcom_llil_to_mlil(llil_func: LowLevelILFunction, parser = None) -> MediumLevelILFunction:
-    '''Convenience function to translate Falcom LLIL to MLIL with optimization
-
-    Args:
-        llil_func: LLIL function to translate
-        parser: Optional ScpParser for extracting function signatures
-    '''
-
-    print(f'Translating {llil_func.name} @ 0x{llil_func.start_addr:08X}')
-
-    translator = FalcomLLILToMLILTranslator()
-    mlil_func = translator.translate(llil_func)
-
-    # Create ED9-specific type signature database (with parser for signature extraction)
-    signature_db = ED9TypeSignatures(parser)
-
-    # Apply optimizations with type inference
-    mlil_func = optimize_mlil(mlil_func, signature_db=signature_db)
-
-    return mlil_func

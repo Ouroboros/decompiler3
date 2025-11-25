@@ -8,6 +8,7 @@ from .mlil_ssa_optimizer import *
 from .mlil_ssa import *
 from .mlil_types import *
 from .mlil_type_inference import *
+from .mlil_passes import *
 from .mlil import *
 
 __all__ = [
@@ -23,6 +24,14 @@ __all__ = [
     'format_mlil_function',
     'SSAOptimizer',
     'optimize_mlil',
+
+    # Passes
+    'LLILToMLILPass',
+    'SSAConversionPass',
+    'SSAOptimizationPass',
+    'TypeInferencePass',
+    'SSADeconstructionPass',
+    'DeadCodeEliminationPass',
 
     # SSA
     'MLILVariableSSA',

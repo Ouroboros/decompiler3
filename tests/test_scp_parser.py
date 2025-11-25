@@ -13,7 +13,7 @@ from common import *
 from falcom.ed9 import *
 from falcom.ed9.lifters import ED9VMLifter
 from falcom.ed9.llil_builder import FalcomLLILFormatter
-from falcom.ed9.mlil_translator import translate_falcom_llil_to_mlil
+from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
 from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
 from ir.llil.llil import LowLevelILFunction
 from ir.mlil import *
@@ -179,8 +179,8 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                filter_func = lambda f: f.name == 'Dummy_m0000_talk0'
-                # filter_func = lambda f: f.name != 'FC_Event_PartySet'
+                # filter_func = lambda f: f.name == 'Dummy_m0000_talk0'
+                filter_func = lambda f: f.name != 'FC_Event_PartySet'
                 # filter_func = lambda f: f.name in ['EVENT_END_BTL']
             )
 
@@ -207,7 +207,7 @@ class TestScpParser(unittest.TestCase):
                 llil_lines.append('')
 
                 # Generate MLIL from LLIL (with parser for type signatures)
-                mlil_func = translate_falcom_llil_to_mlil(llil_func, parser)
+                mlil_func = convert_falcom_llil_to_mlil(llil_func, parser)
                 mlil_lines.extend(MLILFormatter.format_function(mlil_func))
                 mlil_lines.append('')
 
