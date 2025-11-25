@@ -3,7 +3,23 @@
 from typing import Dict, List, Set, Optional
 
 from ir.mlil.mlil import *
+from ir.mlil.mlil_types import MLILType, MLILTypeKind
 from .hlil import *
+
+
+def _mlil_type_to_hlil(mlil_type: MLILType) -> HLILTypeKind:
+    '''Convert MLIL type to HLIL type kind'''
+    kind_map = {
+        MLILTypeKind.UNKNOWN    : HLILTypeKind.UNKNOWN,
+        MLILTypeKind.INT        : HLILTypeKind.INT,
+        MLILTypeKind.FLOAT      : HLILTypeKind.FLOAT,
+        MLILTypeKind.STRING     : HLILTypeKind.STRING,
+        MLILTypeKind.BOOL       : HLILTypeKind.INT,      # Bool is represented as int
+        MLILTypeKind.POINTER    : HLILTypeKind.INT,      # Pointer is represented as int
+        MLILTypeKind.VARIANT    : HLILTypeKind.UNKNOWN,
+        MLILTypeKind.VOID       : HLILTypeKind.VOID,
+    }
+    return kind_map.get(mlil_type.kind, HLILTypeKind.UNKNOWN)
 
 
 class MLILToHLILConverter:
@@ -62,11 +78,14 @@ class MLILToHLILConverter:
         def collect_used_vars(expr):
             if isinstance(expr, MLILVar):
                 used_vars.add(expr.var.name)
+
             elif isinstance(expr, MLILBinaryOp):
                 collect_used_vars(expr.lhs)
                 collect_used_vars(expr.rhs)
+
             elif isinstance(expr, MLILUnaryOp):
                 collect_used_vars(expr.operand)
+
             elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
                 for arg in expr.args:
                     collect_used_vars(arg)
@@ -77,16 +96,21 @@ class MLILToHLILConverter:
                 if isinstance(inst, MLILSetVar):
                     used_vars.add(inst.var.name)  # Var is defined (may be used later)
                     collect_used_vars(inst.value)
+
                 elif isinstance(inst, MLILIf):
                     collect_used_vars(inst.condition)
+
                 elif isinstance(inst, MLILRet):
                     if inst.value:
                         collect_used_vars(inst.value)
+
                 elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
                     for arg in inst.args:
                         collect_used_vars(arg)
+
                 elif isinstance(inst, MLILStoreGlobal):
                     collect_used_vars(inst.value)
+
                 elif isinstance(inst, MLILStoreReg):
                     collect_used_vars(inst.value)
 
@@ -94,15 +118,27 @@ class MLILToHLILConverter:
         for mlil_var in self.mlil_func.parameters:
             if mlil_var is None or mlil_var.name not in used_vars:
                 continue
-            hlil_var = HLILVariable(mlil_var.name, kind=VariableKind.PARAM)
+            type_hint = self._get_type_hint(mlil_var.name)
+            hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint, kind=VariableKind.PARAM)
             self.hlil_func.parameters.append(hlil_var)
 
         # Convert local variables
         for mlil_var in self.mlil_func.locals.values():
             if mlil_var.name not in used_vars:
                 continue
-            hlil_var = HLILVariable(mlil_var.name)
+            type_hint = self._get_type_hint(mlil_var.name)
+            hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint)
             self.hlil_func.variables.append(hlil_var)
+
+    def _get_type_hint(self, var_name: str) -> Optional[HLILTypeKind]:
+        '''Get HLIL type hint from MLIL var_types'''
+        mlil_type = self.mlil_func.var_types.get(var_name)
+        if mlil_type is None:
+            return None
+        hlil_type = _mlil_type_to_hlil(mlil_type)
+        if hlil_type == HLILTypeKind.UNKNOWN:
+            return None
+        return hlil_type
 
     def _build_cfg(self):
         '''Build CFG from MLIL blocks'''
@@ -215,6 +251,7 @@ class MLILToHLILConverter:
             last_instr = mlil_block.instructions[-1]
             if isinstance(last_instr, MLILGoto) and last_instr.target:
                 block_idx = last_instr.target.index
+
             else:
                 break
 
@@ -241,6 +278,7 @@ class MLILToHLILConverter:
                 next_instr = None
                 if i + 1 < len(instructions):
                     next_instr = instructions[i + 1]
+
                 elif mlil_block.instructions:
                     next_instr = mlil_block.instructions[-1]  # terminator
 
