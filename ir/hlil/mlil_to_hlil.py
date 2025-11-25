@@ -1,25 +1,53 @@
 '''MLIL to HLIL Converter - goto/label to if/while/switch'''
 
+from collections import deque
 from typing import Dict, List, Set, Optional
 
 from ir.mlil.mlil import *
 from ir.mlil.mlil_types import MLILType, MLILTypeKind
 from .hlil import *
 
+# Operator mapping tables
+_BINARY_OP_MAP = {
+    MediumLevelILOperation.MLIL_ADD         : '+',
+    MediumLevelILOperation.MLIL_SUB         : '-',
+    MediumLevelILOperation.MLIL_MUL         : '*',
+    MediumLevelILOperation.MLIL_DIV         : '/',
+    MediumLevelILOperation.MLIL_MOD         : '%',
+    MediumLevelILOperation.MLIL_AND         : '&',
+    MediumLevelILOperation.MLIL_OR          : '|',
+    MediumLevelILOperation.MLIL_XOR         : '^',
+    MediumLevelILOperation.MLIL_SHL         : '<<',
+    MediumLevelILOperation.MLIL_SHR         : '>>',
+    MediumLevelILOperation.MLIL_LOGICAL_AND : '&&',
+    MediumLevelILOperation.MLIL_LOGICAL_OR  : '||',
+    MediumLevelILOperation.MLIL_EQ          : '==',
+    MediumLevelILOperation.MLIL_NE          : '!=',
+    MediumLevelILOperation.MLIL_LT          : '<',
+    MediumLevelILOperation.MLIL_LE          : '<=',
+    MediumLevelILOperation.MLIL_GT          : '>',
+    MediumLevelILOperation.MLIL_GE          : '>=',
+}
+
+_UNARY_OP_MAP = {
+    MediumLevelILOperation.MLIL_NEG : '-',
+}
+
+_MLIL_TYPE_MAP = {
+    MLILTypeKind.UNKNOWN  : HLILTypeKind.UNKNOWN,
+    MLILTypeKind.INT      : HLILTypeKind.INT,
+    MLILTypeKind.FLOAT    : HLILTypeKind.FLOAT,
+    MLILTypeKind.STRING   : HLILTypeKind.STRING,
+    MLILTypeKind.BOOL     : HLILTypeKind.INT,      # Bool is represented as int
+    MLILTypeKind.POINTER  : HLILTypeKind.INT,      # Pointer is represented as int
+    MLILTypeKind.VARIANT  : HLILTypeKind.UNKNOWN,
+    MLILTypeKind.VOID     : HLILTypeKind.VOID,
+}
+
 
 def _mlil_type_to_hlil(mlil_type: MLILType) -> HLILTypeKind:
     '''Convert MLIL type to HLIL type kind'''
-    kind_map = {
-        MLILTypeKind.UNKNOWN    : HLILTypeKind.UNKNOWN,
-        MLILTypeKind.INT        : HLILTypeKind.INT,
-        MLILTypeKind.FLOAT      : HLILTypeKind.FLOAT,
-        MLILTypeKind.STRING     : HLILTypeKind.STRING,
-        MLILTypeKind.BOOL       : HLILTypeKind.INT,      # Bool is represented as int
-        MLILTypeKind.POINTER    : HLILTypeKind.INT,      # Pointer is represented as int
-        MLILTypeKind.VARIANT    : HLILTypeKind.UNKNOWN,
-        MLILTypeKind.VOID       : HLILTypeKind.VOID,
-    }
-    return kind_map.get(mlil_type.kind, HLILTypeKind.UNKNOWN)
+    return _MLIL_TYPE_MAP[mlil_type.kind]
 
 
 class MLILToHLILConverter:
@@ -40,6 +68,9 @@ class MLILToHLILConverter:
             return self._uses_reg0(instr.lhs) or self._uses_reg0(instr.rhs)
 
         elif isinstance(instr, MLILUnaryOp):
+            return self._uses_reg0(instr.operand)
+
+        elif isinstance(instr, MLILAddressOf):
             return self._uses_reg0(instr.operand)
 
         elif isinstance(instr, (MLILSetVar, MLILStoreGlobal, MLILStoreReg)):
@@ -73,51 +104,60 @@ class MLILToHLILConverter:
 
     def _convert_variables(self):
         '''Convert used MLIL variables to HLIL'''
-        used_vars = set()
+        defined_vars = set()
+        read_vars = set()
 
-        def collect_used_vars(expr):
+        def collect_read_vars(expr):
+            '''Recursively collect variables read in expression'''
             if isinstance(expr, MLILVar):
-                used_vars.add(expr.var.name)
+                read_vars.add(expr.var.name)
 
             elif isinstance(expr, MLILBinaryOp):
-                collect_used_vars(expr.lhs)
-                collect_used_vars(expr.rhs)
+                collect_read_vars(expr.lhs)
+                collect_read_vars(expr.rhs)
 
             elif isinstance(expr, MLILUnaryOp):
-                collect_used_vars(expr.operand)
+                collect_read_vars(expr.operand)
+
+            elif isinstance(expr, MLILAddressOf):
+                collect_read_vars(expr.operand)
 
             elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
                 for arg in expr.args:
-                    collect_used_vars(arg)
+                    collect_read_vars(arg)
 
         # Scan all instructions
         for block in self.mlil_func.basic_blocks:
             for inst in block.instructions:
                 if isinstance(inst, MLILSetVar):
-                    used_vars.add(inst.var.name)  # Var is defined (may be used later)
-                    collect_used_vars(inst.value)
+                    defined_vars.add(inst.var.name)
+                    collect_read_vars(inst.value)
 
                 elif isinstance(inst, MLILIf):
-                    collect_used_vars(inst.condition)
+                    collect_read_vars(inst.condition)
 
                 elif isinstance(inst, MLILRet):
                     if inst.value:
-                        collect_used_vars(inst.value)
+                        collect_read_vars(inst.value)
 
                 elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
                     for arg in inst.args:
-                        collect_used_vars(arg)
+                        collect_read_vars(arg)
 
                 elif isinstance(inst, MLILStoreGlobal):
-                    collect_used_vars(inst.value)
+                    collect_read_vars(inst.value)
 
                 elif isinstance(inst, MLILStoreReg):
-                    collect_used_vars(inst.value)
+                    collect_read_vars(inst.value)
+
+        # Only keep variables that are both defined and read
+        used_vars = defined_vars & read_vars
 
         # Convert parameters (already ordered in MLIL)
         for mlil_var in self.mlil_func.parameters:
-            if mlil_var is None or mlil_var.name not in used_vars:
+            if mlil_var is None or mlil_var.name not in read_vars:
                 continue
+
             type_hint = self._get_type_hint(mlil_var.name)
             hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint, kind=VariableKind.PARAM)
             self.hlil_func.parameters.append(hlil_var)
@@ -126,6 +166,7 @@ class MLILToHLILConverter:
         for mlil_var in self.mlil_func.locals.values():
             if mlil_var.name not in used_vars:
                 continue
+
             type_hint = self._get_type_hint(mlil_var.name)
             hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint)
             self.hlil_func.variables.append(hlil_var)
@@ -135,9 +176,11 @@ class MLILToHLILConverter:
         mlil_type = self.mlil_func.var_types.get(var_name)
         if mlil_type is None:
             return None
+
         hlil_type = _mlil_type_to_hlil(mlil_type)
         if hlil_type == HLILTypeKind.UNKNOWN:
             return None
+
         return hlil_type
 
     def _build_cfg(self):
@@ -164,64 +207,53 @@ class MLILToHLILConverter:
 
             self.block_successors[i] = successors
 
+    def _get_reachable(self, start_idx: int, max_depth: int = 10) -> Dict[int, int]:
+        '''BFS to get reachable blocks with their depths'''
+        reachable = {}
+        queue = deque([(start_idx, 0)])
+        visited = set()
+
+        while queue:
+            idx, depth = queue.popleft()
+            if idx in visited or depth > max_depth:
+                continue
+            visited.add(idx)
+            reachable[idx] = depth
+
+            for succ in self.block_successors.get(idx, []):
+                if succ not in visited:
+                    queue.append((succ, depth + 1))
+
+        return reachable
+
     def _find_merge_block(self, block1_idx: int, block2_idx: int) -> Optional[int]:
         '''Find merge block where branches converge'''
+        # Same target means immediate merge
+        if block1_idx == block2_idx:
+            return block1_idx
+
+        # Fast path: check direct successors
         succ1 = set(self.block_successors.get(block1_idx, []))
         succ2 = set(self.block_successors.get(block2_idx, []))
-
         common = succ1 & succ2
         if common:
             return min(common)
 
-        def is_reachable(from_idx: int, to_idx: int, max_depth: int = 10) -> bool:
-            if from_idx == to_idx:
-                return True
-            visited = set()
-            queue = [(from_idx, 0)]
-            while queue:
-                idx, depth = queue.pop(0)
-                if idx == to_idx:
-                    return True
-                if idx in visited or depth >= max_depth:
-                    continue
-                visited.add(idx)
-                for succ in self.block_successors.get(idx, []):
-                    if succ not in visited:
-                        queue.append((succ, depth + 1))
-            return False
+        # Check if one branch reaches the other
+        reachable1 = self._get_reachable(block1_idx)
+        reachable2 = self._get_reachable(block2_idx)
 
-        if is_reachable(block2_idx, block1_idx):
+        if block1_idx in reachable2:
             return block1_idx
-        if is_reachable(block1_idx, block2_idx):
+
+        if block2_idx in reachable1:
             return block2_idx
 
-        def get_reachable(start_idx: int, max_depth: int = 3) -> Dict[int, int]:
-            reachable = {}
-            queue = [(start_idx, 0)]
-            visited = set()
-
-            while queue:
-                idx, depth = queue.pop(0)
-                if idx in visited or depth > max_depth:
-                    continue
-                visited.add(idx)
-                reachable[idx] = depth
-
-                for succ in self.block_successors.get(idx, []):
-                    if succ not in visited:
-                        queue.append((succ, depth + 1))
-
-            return reachable
-
-        reachable1 = get_reachable(block1_idx)
-        reachable2 = get_reachable(block2_idx)
-
-        # Find common blocks
+        # Find common reachable block with minimum combined depth
         common_blocks = set(reachable1.keys()) & set(reachable2.keys())
         if not common_blocks:
             return None
 
-        # Return the closest common block (minimum combined depth)
         return min(common_blocks, key=lambda idx: reachable1[idx] + reachable2[idx])
 
     def _is_passthrough_block(self, block_idx: int) -> bool:
@@ -233,20 +265,18 @@ class MLILToHLILConverter:
         if not block.instructions:
             return False
 
-        # Check all instructions except the last one
-        for instr in block.instructions[:-1]:
-            # Allow only debug/nop instructions
-            if not isinstance(instr, (MLILDebug, MLILNop)):
-                return False
-
-        # Last instruction must be a goto
-        last_instr = block.instructions[-1]
-        return isinstance(last_instr, MLILGoto)
+        # All non-terminator instructions must be debug/nop, last must be goto
+        return (
+            all(isinstance(instr, (MLILDebug, MLILNop)) for instr in block.instructions[:-1]) and
+            isinstance(block.instructions[-1], MLILGoto)
+        )
 
     def _reconstruct_control_flow(self, block_idx: int, target_block: HLILBlock, stop_at: Optional[int] = None) -> Optional[int]:
         '''Reconstruct structured control flow from goto/label'''
-        original_idx = block_idx
-        while self._is_passthrough_block(block_idx):
+        # Skip passthrough blocks (with cycle detection, but not past stop_at)
+        seen_passthrough = set()
+        while self._is_passthrough_block(block_idx) and block_idx not in seen_passthrough and block_idx != stop_at:
+            seen_passthrough.add(block_idx)
             mlil_block = self.mlil_func.basic_blocks[block_idx]
             last_instr = mlil_block.instructions[-1]
             if isinstance(last_instr, MLILGoto) and last_instr.target:
@@ -264,26 +294,26 @@ class MLILToHLILConverter:
 
         # Stop if we reached the merge block
         if stop_at is not None and block_idx == stop_at:
+            self.visited_blocks.add(block_idx)  # Mark as visited before returning
             return block_idx
 
         self.visited_blocks.add(block_idx)
         mlil_block = self.mlil_func.basic_blocks[block_idx]
 
         # Convert all instructions except the last (terminator)
-        instructions = mlil_block.instructions[:-1] if mlil_block.instructions else []
+        instructions = mlil_block.instructions[:-1]
         for i, instr in enumerate(instructions):
             # Check if this is a call and next instruction uses REG[0]
             if isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
                 # Check next instruction (or terminator)
-                next_instr = None
                 if i + 1 < len(instructions):
                     next_instr = instructions[i + 1]
 
-                elif mlil_block.instructions:
+                else:
                     next_instr = mlil_block.instructions[-1]  # terminator
 
                 should_skip = False
-                if next_instr and self._uses_reg0(next_instr):
+                if self._uses_reg0(next_instr):
                     should_skip = True
 
                 # Special case: if terminator is goto, check target block's first instruction
@@ -317,21 +347,42 @@ class MLILToHLILConverter:
                 if true_target_idx is not None and false_target_idx is not None:
                     merge_block_idx = self._find_merge_block(true_target_idx, false_target_idx)
 
-                # Process branches (stop at merge block)
+                # Process branches (stop at merge block or parent's stop_at)
                 true_block = HLILBlock()
                 false_block = HLILBlock()
 
+                # Use merge_block if found, otherwise inherit parent's stop_at
+                branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
+
                 saved_visited = self.visited_blocks.copy()
+                saved_last_call = self.last_call
+
+                # Mark parent's stop_at as visited to prevent branches from processing it
+                branch_visited_base = saved_visited.copy()
+                if stop_at is not None and stop_at != merge_block_idx:
+                    branch_visited_base.add(stop_at)
 
                 if true_target_idx is not None:
-                    self.visited_blocks = saved_visited.copy()
-                    self._reconstruct_control_flow(true_target_idx, true_block, stop_at=merge_block_idx)
+                    self.visited_blocks = branch_visited_base.copy()
+                    self.last_call = saved_last_call
+                    self._reconstruct_control_flow(true_target_idx, true_block, stop_at=branch_stop)
+
+                true_visited = self.visited_blocks
+                # Remove parent's stop_at from true_visited (shouldn't pollute merge)
+                if stop_at is not None:
+                    true_visited = true_visited - {stop_at}
 
                 if false_target_idx is not None:
-                    self.visited_blocks = saved_visited.copy()
-                    self._reconstruct_control_flow(false_target_idx, false_block, stop_at=merge_block_idx)
+                    self.visited_blocks = branch_visited_base.copy()
+                    self.last_call = saved_last_call
+                    self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
 
-                self.visited_blocks = saved_visited
+                # Merge visited from both branches (exclude parent's stop_at)
+                false_visited = self.visited_blocks
+                if stop_at is not None:
+                    false_visited = false_visited - {stop_at}
+                self.visited_blocks = saved_visited | true_visited | false_visited
+                self.last_call = None  # Clear after branches
 
                 # Add if statement
                 if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
@@ -342,6 +393,8 @@ class MLILToHLILConverter:
                     # Don't process merge block if it's our stop point (belongs to parent)
                     if stop_at is not None and merge_block_idx == stop_at:
                         return merge_block_idx
+                    # Remove from visited (was marked during branch processing at stop_at)
+                    self.visited_blocks.discard(merge_block_idx)
                     return self._reconstruct_control_flow(merge_block_idx, target_block, stop_at=stop_at)
 
                 return None
@@ -388,10 +441,8 @@ class MLILToHLILConverter:
 
         # Assignment
         elif isinstance(instr, MLILSetVar):
-            var_name = instr.var.name
-            # Type information not available on non-SSA MLIL variables
             return HLILAssign(
-                HLILVar(HLILVariable(var_name, None)),
+                HLILVar(HLILVariable(instr.var.name, None)),
                 self._convert_expr(instr.value)
             )
 
@@ -412,13 +463,9 @@ class MLILToHLILConverter:
             self.last_call = call_expr
             return HLILExprStmt(call_expr)
 
-        # Conditional jump -> skip for now (needs control flow restructuring)
-        elif isinstance(instr, MLILIf):
-            return None  # TODO: Implement control flow restructuring
-
-        # Unconditional jump -> skip for now
-        elif isinstance(instr, MLILGoto):
-            return None  # TODO: Implement control flow restructuring
+        # Control flow handled by _reconstruct_control_flow
+        elif isinstance(instr, (MLILIf, MLILGoto)):
+            return None
 
         # Expression statement (catch-all for other expressions)
         elif isinstance(instr, MediumLevelILExpr):
@@ -429,9 +476,7 @@ class MLILToHLILConverter:
     def _convert_expr(self, expr: MediumLevelILExpr) -> HLILExpression:
         # Variable reference
         if isinstance(expr, MLILVar):
-            var_name = expr.var.name
-            # Type information not available on non-SSA MLIL variables
-            return HLILVar(HLILVariable(var_name, None))
+            return HLILVar(HLILVariable(expr.var.name, None))
 
         # Constant
         elif isinstance(expr, MLILConst):
@@ -439,29 +484,7 @@ class MLILToHLILConverter:
 
         # Binary operation
         elif isinstance(expr, MLILBinaryOp):
-            # Map MLIL operation to operator string
-            from ir.mlil.mlil import MediumLevelILOperation
-            op_map = {
-                MediumLevelILOperation.MLIL_ADD: '+',
-                MediumLevelILOperation.MLIL_SUB: '-',
-                MediumLevelILOperation.MLIL_MUL: '*',
-                MediumLevelILOperation.MLIL_DIV: '/',
-                MediumLevelILOperation.MLIL_MOD: '%',
-                MediumLevelILOperation.MLIL_AND: '&',
-                MediumLevelILOperation.MLIL_OR: '|',
-                MediumLevelILOperation.MLIL_XOR: '^',
-                MediumLevelILOperation.MLIL_SHL: '<<',
-                MediumLevelILOperation.MLIL_SHR: '>>',
-                MediumLevelILOperation.MLIL_LOGICAL_AND: '&&',
-                MediumLevelILOperation.MLIL_LOGICAL_OR: '||',
-                MediumLevelILOperation.MLIL_EQ: '==',
-                MediumLevelILOperation.MLIL_NE: '!=',
-                MediumLevelILOperation.MLIL_LT: '<',
-                MediumLevelILOperation.MLIL_LE: '<=',
-                MediumLevelILOperation.MLIL_GT: '>',
-                MediumLevelILOperation.MLIL_GE: '>=',
-            }
-            op = op_map.get(expr.operation, '?')
+            op = _BINARY_OP_MAP.get(expr.operation, '?')
             return HLILBinaryOp(
                 op,
                 self._convert_expr(expr.lhs),
@@ -476,19 +499,12 @@ class MLILToHLILConverter:
 
         # Unary operation
         elif isinstance(expr, MLILUnaryOp):
-            # Map MLIL operation to operator string
-            from ir.mlil.mlil import MediumLevelILOperation
-
             # Convert logical NOT to explicit comparison with 0
             if expr.operation in (MediumLevelILOperation.MLIL_LOGICAL_NOT, MediumLevelILOperation.MLIL_TEST_ZERO):
                 operand = self._convert_expr(expr.operand)
                 return HLILBinaryOp('==', operand, HLILConst(0))
 
-            # Other unary operations
-            op_map = {
-                MediumLevelILOperation.MLIL_NEG: '-',
-            }
-            op = op_map.get(expr.operation, '?')
+            op = _UNARY_OP_MAP.get(expr.operation, '?')
             return HLILUnaryOp(
                 op,
                 self._convert_expr(expr.operand)
@@ -513,21 +529,17 @@ class MLILToHLILConverter:
         # Function call
         elif isinstance(expr, MLILCall):
             args = [self._convert_expr(arg) for arg in expr.args]
-            func_name = str(expr.target)
-            return HLILCall(func_name, args)
+            return HLILCall(str(expr.target), args)
 
         # System call
         elif isinstance(expr, MLILSyscall):
-            from .hlil import HLILSyscall
             args = [self._convert_expr(arg) for arg in expr.args]
             return HLILSyscall(expr.subsystem, expr.cmd, args)
 
         # Script call (external module call)
         elif isinstance(expr, MLILCallScript):
-            from .hlil import HLILExternCall
             args = [self._convert_expr(arg) for arg in expr.args]
-            target = f'{expr.module}:{expr.func}'
-            return HLILExternCall(target, args)
+            return HLILExternCall(f'{expr.module}:{expr.func}', args)
 
         # Fallback: create a constant with string representation
         else:

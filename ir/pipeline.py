@@ -23,9 +23,13 @@ class Pipeline:
         self.passes.append(pass_obj)
         return self
 
-    def run(self, input_data: Any) -> Any:
+    def run(self, input_data: Any, debug: bool = False) -> Any:
         '''Run all passes in the pipeline'''
         result = input_data
         for pass_obj in self.passes:
+            if debug:
+                print(f'  Running {pass_obj.__class__.__name__}...')
             result = pass_obj.run(result)
+            if debug:
+                print(f'  {pass_obj.__class__.__name__} done')
         return result

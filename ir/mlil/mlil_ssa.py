@@ -171,11 +171,22 @@ class DominanceAnalysis:
         finger1 = b1
         finger2 = b2
 
+        # Build index cache for O(1) lookup
+        if not hasattr(self, '_block_index'):
+            self._block_index = {b: i for i, b in enumerate(self.blocks)}
+
+        max_iterations = len(self.blocks) * 2
+        iterations = 0
+
         while finger1 != finger2:
-            while self.blocks.index(finger1) > self.blocks.index(finger2):
+            iterations += 1
+            if iterations > max_iterations:
+                raise RuntimeError(f'_intersect: infinite loop detected between {b1} and {b2}')
+
+            while self._block_index[finger1] > self._block_index[finger2]:
                 finger1 = self.idom[finger1]
 
-            while self.blocks.index(finger2) > self.blocks.index(finger1):
+            while self._block_index[finger2] > self._block_index[finger1]:
                 finger2 = self.idom[finger2]
 
         return finger1
@@ -194,14 +205,21 @@ class DominanceAnalysis:
             for succ in block.outgoing_edges:
                 preds[succ].append(block)
 
+        max_iterations = len(self.blocks)
+
         for block in self.blocks:
             if len(preds[block]) < 2:
                 continue
 
             for pred in preds[block]:
                 runner = pred
+                iterations = 0
 
                 while runner != self.idom.get(block):
+                    iterations += 1
+                    if iterations > max_iterations:
+                        raise RuntimeError(f'_compute_dom_frontiers: infinite loop at block {block}')
+
                     self.dom_frontier[runner].add(block)
                     runner = self.idom.get(runner)
 
