@@ -90,36 +90,19 @@ class MLILToHLILConverter:
                 elif isinstance(inst, MLILStoreReg):
                     collect_used_vars(inst.value)
 
-        # Collect parameters and variables separately
-        parameters = []
-        variables = []
+        # Convert parameters (already ordered in MLIL)
+        for mlil_var in self.mlil_func.parameters:
+            if mlil_var is None or mlil_var.name not in used_vars:
+                continue
+            hlil_var = HLILVariable(mlil_var.name, kind=VariableKind.PARAM)
+            self.hlil_func.parameters.append(hlil_var)
 
-        for mlil_var in self.mlil_func.variables.values():
-            # Skip unused variables
+        # Convert local variables
+        for mlil_var in self.mlil_func.locals.values():
             if mlil_var.name not in used_vars:
                 continue
-
-            # Determine if parameter based on naming convention (arg0, arg1, etc.)
-            is_parameter = mlil_var.name.startswith('arg')
-
-            # Type information will be added by separate passes
-            hlil_var = HLILVariable(mlil_var.name, None)
-
-            # Add as parameter or local variable
-            if is_parameter:
-                # Extract parameter index for sorting
-                try:
-                    param_index = int(mlil_var.name[3:])  # arg1 -> 1
-                    parameters.append((param_index, hlil_var))
-                except ValueError:
-                    variables.append(hlil_var)
-            else:
-                variables.append(hlil_var)
-
-        # Sort parameters by index and add to function
-        parameters.sort(key=lambda x: x[0])
-        self.hlil_func.parameters.extend([var for _, var in parameters])
-        self.hlil_func.variables.extend(variables)
+            hlil_var = HLILVariable(mlil_var.name)
+            self.hlil_func.variables.append(hlil_var)
 
     def _build_cfg(self):
         '''Build CFG from MLIL blocks'''

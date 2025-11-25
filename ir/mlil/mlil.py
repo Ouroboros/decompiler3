@@ -597,7 +597,8 @@ class MediumLevelILFunction:
         self.name = name
         self.start_addr = start_addr
         self.basic_blocks: List[MediumLevelILBasicBlock] = []
-        self.variables: Dict[str, MLILVariable] = {}
+        self.parameters: List[MLILVariable] = []  # Ordered parameter list
+        self.locals: Dict[str, MLILVariable] = {}  # Local variables
         self.llil_function: Optional[LowLevelILFunction] = None
         self._inst_block_map: Dict[int, MediumLevelILBasicBlock] = {}
         self.var_types: Dict[str, 'MLILType'] = {}  # Variable name -> inferred type
@@ -610,11 +611,22 @@ class MediumLevelILFunction:
         self.add_basic_block(block)
         return block
 
-    def get_or_create_variable(self, name: str, slot_index: int = -1) -> MLILVariable:
-        '''Get existing variable or create new one'''
-        if name not in self.variables:
-            self.variables[name] = MLILVariable(name, slot_index)
-        return self.variables[name]
+    def get_or_create_parameter(self, param_index: int, name: str) -> MLILVariable:
+        '''Get existing parameter or create new one (1-based index)'''
+        # Extend list if needed
+        while len(self.parameters) < param_index:
+            self.parameters.append(None)
+
+        if self.parameters[param_index - 1] is None:
+            self.parameters[param_index - 1] = MLILVariable(name)
+
+        return self.parameters[param_index - 1]
+
+    def get_or_create_local(self, name: str, slot_index: int = -1) -> MLILVariable:
+        '''Get existing local variable or create new one'''
+        if name not in self.locals:
+            self.locals[name] = MLILVariable(name, slot_index)
+        return self.locals[name]
 
     def register_instruction(self, block: MediumLevelILBasicBlock, inst: MediumLevelILInstruction):
         if inst.inst_index == -1:

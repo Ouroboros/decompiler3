@@ -284,7 +284,12 @@ class SSAConstructor:
 
         # Initialize all function variables (especially parameters) to version 0
         # Parameters and globals are "defined" at function entry
-        for var in self.function.variables.values():
+        for var in self.function.parameters:
+            if var is not None:
+                self.var_versions[var] = 0
+                self.var_stack[var].append(0)
+
+        for var in self.function.locals.values():
             self.var_versions[var] = 0
             self.var_stack[var].append(0)
 

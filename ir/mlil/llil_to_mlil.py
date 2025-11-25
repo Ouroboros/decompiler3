@@ -86,16 +86,17 @@ class LLILToMLILTranslator:
             )
 
     def _translate_stack_store(self, llil_inst: LowLevelILStackStore):
-        '''Translate StackStore to SetVar'''
+        '''Translate StackStore to SetVar (local variable)'''
         var_name = mlil_stack_var_name(llil_inst.slot_index)
-        var = self.builder.get_or_create_var(var_name, llil_inst.slot_index)
+        var = self.builder.get_or_create_local(var_name, llil_inst.slot_index)
         value = self._translate_expr(llil_inst.value)
         self.builder.set_var(var, value)
 
     def _translate_frame_store(self, llil_inst: LowLevelILFrameStore):
-        '''Translate FrameStore to SetVar'''
-        var_name = mlil_arg_var_name(llil_inst.offset // WORD_SIZE + 1)
-        var = self.builder.get_or_create_var(var_name)
+        '''Translate FrameStore to SetVar (parameter)'''
+        param_index = llil_inst.offset // WORD_SIZE + 1
+        var_name = mlil_arg_var_name(param_index)
+        var = self.builder.get_or_create_parameter(param_index, var_name)
         value = self._translate_expr(llil_inst.value)
         self.builder.set_var(var, value)
 
@@ -122,18 +123,19 @@ class LLILToMLILTranslator:
         # Stack operations → Variables
         elif isinstance(llil_expr, LowLevelILStackLoad):
             var_name = mlil_stack_var_name(llil_expr.slot_index)
-            var = self.builder.get_or_create_var(var_name, llil_expr.slot_index)
+            var = self.builder.get_or_create_local(var_name, llil_expr.slot_index)
             return self.builder.var(var)
 
         elif isinstance(llil_expr, LowLevelILFrameLoad):
-            var_name = mlil_arg_var_name(llil_expr.offset // WORD_SIZE + 1)
-            var = self.builder.get_or_create_var(var_name)
+            param_index = llil_expr.offset // WORD_SIZE + 1
+            var_name = mlil_arg_var_name(param_index)
+            var = self.builder.get_or_create_parameter(param_index, var_name)
             return self.builder.var(var)
 
         elif isinstance(llil_expr, LowLevelILStackAddr):
-            # Stack address → address of variable (&var)
+            # Stack address → address of local variable (&var)
             var_name = mlil_stack_var_name(llil_expr.slot_index)
-            var = self.builder.get_or_create_var(var_name, llil_expr.slot_index)
+            var = self.builder.get_or_create_local(var_name, llil_expr.slot_index)
             return self.builder.address_of(self.builder.var(var))
 
         # Binary operations

@@ -30,16 +30,26 @@ class MLILFormatter:
         '''Format entire MLIL function'''
         result = [
             f'; ===== MLIL Function {func.name} @ 0x{func.start_addr:X} =====',
-            f'; Variables: {len(func.variables)}',
+            f'; Parameters: {len([p for p in func.parameters if p])}, Locals: {len(func.locals)}',
         ]
 
-        # List variables
-        if func.variables:
+        # List parameters
+        if func.parameters:
             result.append(';')
-            for var_name in sorted(func.variables.keys()):
-                var = func.variables[var_name]
+            result.append('; Parameters:')
+            for i, param in enumerate(func.parameters):
+                if param:
+                    result.append(f';   {param.name}')
+
+        # List local variables
+        if func.locals:
+            result.append(';')
+            result.append('; Locals:')
+            for var_name in sorted(func.locals.keys()):
+                var = func.locals[var_name]
                 if var.slot_index >= 0:
                     result.append(f';   {var.name} (slot {var.slot_index})')
+
                 else:
                     result.append(f';   {var.name}')
 

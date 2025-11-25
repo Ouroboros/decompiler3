@@ -68,11 +68,17 @@ class MLILBuilder:
 
     # === Variable Management ===
 
-    def get_or_create_var(self, name: str, slot_index: int = -1) -> MLILVariable:
-        '''Get or create a variable'''
+    def get_or_create_parameter(self, param_index: int, name: str) -> MLILVariable:
+        '''Get or create a parameter (1-based index)'''
         if self.function is None:
             raise RuntimeError('No function created')
-        return self.function.get_or_create_variable(name, slot_index)
+        return self.function.get_or_create_parameter(param_index, name)
+
+    def get_or_create_local(self, name: str, slot_index: int = -1) -> MLILVariable:
+        '''Get or create a local variable'''
+        if self.function is None:
+            raise RuntimeError('No function created')
+        return self.function.get_or_create_local(name, slot_index)
 
     # === Constants ===
 
