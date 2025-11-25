@@ -374,13 +374,15 @@ class MLILToHLILConverter:
                 self._convert_expr(instr.value)
             )
 
-        # Store to register (treat as assignment to special variable)
+        # Store to register
         elif isinstance(instr, MLILStoreReg):
-            reg_name = f'REG[{instr.index}]'
-            return HLILAssign(
-                HLILVar(HLILVariable(reg_name)),
-                self._convert_expr(instr.value)
-            )
+            var = HLILVariable(kind=VariableKind.REG, index=instr.index)
+            return HLILAssign(HLILVar(var), self._convert_expr(instr.value))
+
+        # Store to global
+        elif isinstance(instr, MLILStoreGlobal):
+            var = HLILVariable(kind=VariableKind.GLOBAL, index=instr.index)
+            return HLILAssign(HLILVar(var), self._convert_expr(instr.value))
 
         # Function calls (convert to expression statements)
         elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
@@ -474,19 +476,18 @@ class MLILToHLILConverter:
         # Register load
         elif isinstance(expr, MLILLoadReg):
             # Special case: REG[0] is used for return values
-            # If last_call exists, substitute it instead of REG[0]
             if expr.index == 0 and self.last_call is not None:
                 call_expr = self.last_call
-                self.last_call = None  # Clear after use
+                self.last_call = None
                 return call_expr
 
-            reg_name = f'REG[{expr.index}]'
-            return HLILVar(HLILVariable(reg_name))
+            var = HLILVariable(kind=VariableKind.REG, index=expr.index)
+            return HLILVar(var)
 
         # Global variable load
         elif isinstance(expr, MLILLoadGlobal):
-            global_name = f'global_{expr.index}'
-            return HLILVar(HLILVariable(global_name))
+            var = HLILVariable(kind=VariableKind.GLOBAL, index=expr.index)
+            return HLILVar(var)
 
         # Function call
         elif isinstance(expr, MLILCall):

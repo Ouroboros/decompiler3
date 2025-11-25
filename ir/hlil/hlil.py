@@ -58,15 +58,32 @@ class HLILExpression(HLILInstruction):
 # Variables and Types
 # ============================================================================
 
+class VariableKind(Enum):
+    '''Variable storage kind'''
+    LOCAL = auto()
+    PARAM = auto()
+    GLOBAL = auto()
+    REG = auto()
+
+
 class HLILVariable:
     '''HLIL variable with optional type information'''
 
-    def __init__(self, name: str, type_hint: Optional[str] = None, default_value: Optional[str] = None):
+    def __init__(self, name: Optional[str] = None, type_hint: Optional[str] = None, default_value: Optional[str] = None,
+                 kind: VariableKind = None, index: Optional[int] = None):
         self.name = name
-        self.type_hint = type_hint  # 'int', 'bool', 'string', 'float', etc.
-        self.default_value = default_value  # Default value as TypeScript literal
+        self.type_hint = type_hint
+        self.default_value = default_value
+        self.kind = kind if kind is not None else VariableKind.LOCAL
+        self.index = index  # For GLOBAL/REG: the slot index
 
     def __str__(self) -> str:
+        if self.kind == VariableKind.GLOBAL:
+            return f'GLOBALS[{self.index}]'
+
+        elif self.kind == VariableKind.REG:
+            return f'REGS[{self.index}]'
+
         return self.name
 
     def __repr__(self) -> str:
@@ -77,7 +94,7 @@ class HLILVariable:
     def __eq__(self, other) -> bool:
         if not isinstance(other, HLILVariable):
             return False
-        return self.name == other.name
+        return self.name == other.name and self.kind == other.kind and self.index == other.index
 
     def __hash__(self) -> int:
         return hash(self.name)

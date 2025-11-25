@@ -15,6 +15,7 @@ __all__ = [
     'HLILExpression',
 
     # Variables
+    'VariableKind',
     'HLILVariable',
 
     # Expressions
