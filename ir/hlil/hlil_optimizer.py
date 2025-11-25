@@ -211,19 +211,23 @@ class HLILOptimizer:
 
     @classmethod
     def _is_reg0_assignment(cls, stmt: HLILStatement) -> bool:
+        '''Check if statement assigns from REGS[0]'''
         if not isinstance(stmt, HLILAssign):
             return False
 
-        # Check if source is REG[0]
         if isinstance(stmt.src, HLILVar):
-            return stmt.src.var.name == 'REG[0]'
+            var = stmt.src.var
+            return var.kind == VariableKind.REG and var.index == 0
 
         return False
 
     @classmethod
     def _is_reg0_var(cls, expr: HLILExpression) -> bool:
+        '''Check if expression is REGS[0]'''
         if isinstance(expr, HLILVar):
-            return expr.var.name == 'REG[0]'
+            var = expr.var
+            return var.kind == VariableKind.REG and var.index == 0
+
         return False
 
     @classmethod

@@ -7,26 +7,35 @@ from ir.hlil import *
 
 class TypeScriptGenerator:
     @classmethod
-    def _format_type(cls, type_hint: Optional[str]) -> str:
+    def _format_type(cls, type_hint) -> str:
         '''Map HLIL type to TypeScript'''
         if not type_hint:
             return 'any'
 
-        # Map common types
-        type_map = {
-            'int': 'number',
-            'int32': 'number',
-            'int64': 'number',
-            'float': 'number',
-            'float32': 'number',
-            'float64': 'number',
-            'bool': 'boolean',
-            'str': 'string',
-            'string': 'string',
-            'void': 'void',
-        }
+        # Handle HLILTypeKind enum
+        if isinstance(type_hint, HLILTypeKind):
+            type_map = {
+                HLILTypeKind.INT: 'number',
+                HLILTypeKind.FLOAT: 'number',
+                HLILTypeKind.STRING: 'string',
+                HLILTypeKind.BOOL: 'boolean',
+                HLILTypeKind.VOID: 'void',
+            }
+            return type_map.get(type_hint, 'any')
 
-        return type_map.get(type_hint.lower(), type_hint)
+        # Handle string type hints (from FalcomTypeInferencePass)
+        if isinstance(type_hint, str):
+            type_map = {
+                'int': 'number',
+                'float': 'number',
+                'number': 'number',
+                'bool': 'boolean',
+                'string': 'string',
+                'void': 'void',
+            }
+            return type_map.get(type_hint.lower(), type_hint)
+
+        return 'any'
 
     @classmethod
     def _infer_return_type(cls, block: HLILBlock) -> str:

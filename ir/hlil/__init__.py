@@ -6,6 +6,9 @@ from .mlil_to_hlil import *
 from .hlil_optimizer import *
 
 __all__ = [
+    # Types
+    'HLILTypeKind',
+
     # Operations
     'HLILOperation',
 

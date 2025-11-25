@@ -1,34 +1,45 @@
 '''HLIL - Structured control flow (if/while/for) from unstructured MLIL (goto/label)'''
 
 from typing import List, Optional, Union
-from enum import Enum, auto
+from enum import auto
+from common import *
 
 
-class HLILOperation(Enum):
+class HLILTypeKind(IntEnum2):
+    '''HLIL type kinds'''
+    UNKNOWN = auto()
+    INT     = auto()
+    FLOAT   = auto()
+    STRING  = auto()
+    BOOL    = auto()
+    VOID    = auto()
+
+
+class HLILOperation(IntEnum2):
     '''HLIL operation types'''
     # Control flow statements
-    HLIL_IF = auto()
-    HLIL_WHILE = auto()
-    HLIL_DO_WHILE = auto()
-    HLIL_FOR = auto()
-    HLIL_SWITCH = auto()
-    HLIL_BREAK = auto()
-    HLIL_CONTINUE = auto()
-    HLIL_RETURN = auto()
+    HLIL_IF             = auto()
+    HLIL_WHILE          = auto()
+    HLIL_DO_WHILE       = auto()
+    HLIL_FOR            = auto()
+    HLIL_SWITCH         = auto()
+    HLIL_BREAK          = auto()
+    HLIL_CONTINUE       = auto()
+    HLIL_RETURN         = auto()
 
     # Other statements
-    HLIL_BLOCK = auto()
-    HLIL_ASSIGN = auto()
-    HLIL_EXPR_STMT = auto()
-    HLIL_COMMENT = auto()
+    HLIL_BLOCK          = auto()
+    HLIL_ASSIGN         = auto()
+    HLIL_EXPR_STMT      = auto()
+    HLIL_COMMENT        = auto()
 
     # Expressions
-    HLIL_VAR = auto()
-    HLIL_CONST = auto()
-    HLIL_BINARY_OP = auto()
-    HLIL_UNARY_OP = auto()
-    HLIL_CALL = auto()
-    HLIL_SYSCALL = auto()
+    HLIL_VAR            = auto()
+    HLIL_CONST          = auto()
+    HLIL_BINARY_OP      = auto()
+    HLIL_UNARY_OP       = auto()
+    HLIL_CALL           = auto()
+    HLIL_SYSCALL        = auto()
 
 
 class HLILInstruction:
@@ -58,12 +69,12 @@ class HLILExpression(HLILInstruction):
 # Variables and Types
 # ============================================================================
 
-class VariableKind(Enum):
+class VariableKind(IntEnum2):
     '''Variable storage kind'''
-    LOCAL = auto()
-    PARAM = auto()
-    GLOBAL = auto()
-    REG = auto()
+    LOCAL   = auto()
+    PARAM   = auto()
+    GLOBAL  = auto()
+    REG     = auto()
 
 
 class HLILVariable:
