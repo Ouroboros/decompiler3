@@ -126,10 +126,10 @@ class TypeScriptGenerator:
         if isinstance(expr, HLILVar):
             var = expr.var
             if var.kind == VariableKind.GLOBAL:
-                return f'globals[{var.index}]'
+                return f'GLOBALS[{var.index}]'
 
             elif var.kind == VariableKind.REG:
-                return f'REG[{var.index}]'
+                return f'REGS[{var.index}]'
 
             else:
                 return var.name
@@ -349,8 +349,11 @@ class TypeScriptGenerator:
 
 
 def generate_typescript_header() -> str:
-    return '''// Intrinsic function: address-of operator (for output parameters)
-// Can be recognized and transformed during compilation
+    return '''// VM state
+const GLOBALS: any[] = [];
+const REGS: any[] = new Array(16);
+
+// Intrinsic function: address-of operator (for output parameters)
 function addr_of<T>(value: T): T { return value; }
 
 // Placeholder function: external script call
