@@ -113,54 +113,29 @@ def unify_types(t1: MLILType, t2: MLILType) -> MLILType:
     # Unknown type: use the other type
     if t1.is_unknown():
         return t2
+
     if t2.is_unknown():
         return t1
 
     # Bool can be promoted to int
     if t1.kind == MLILTypeKind.BOOL and t2.kind == MLILTypeKind.INT:
         return t2
+
     if t1.kind == MLILTypeKind.INT and t2.kind == MLILTypeKind.BOOL:
         return t1
 
     # Variant types: merge
     if isinstance(t1, MLILVariantType) and isinstance(t2, MLILVariantType):
         return MLILVariantType(t1.types | t2.types)
+
     if isinstance(t1, MLILVariantType):
         return MLILVariantType(t1.types | {t2})
+
     if isinstance(t2, MLILVariantType):
         return MLILVariantType({t1} | t2.types)
 
     # Incompatible types: create variant
     return MLILVariantType({t1, t2})
-
-
-def get_operation_result_type(op_name: str, lhs_type: MLILType, rhs_type: Optional[MLILType] = None) -> MLILType:
-    '''Get the result type of an operation'''
-    # Arithmetic operations: preserve numeric type
-    if op_name in ('add', 'sub', 'mul', 'div', 'mod', 'neg'):
-        if rhs_type is None:
-            # Unary
-            return lhs_type if lhs_type.is_numeric() else MLILType.int_type()
-        else:
-            # Binary: unify operand types
-            unified = unify_types(lhs_type, rhs_type)
-            return unified if unified.is_numeric() else MLILType.int_type()
-
-    # Bitwise operations: always int
-    elif op_name in ('and', 'or', 'xor', 'shl', 'shr'):
-        return MLILType.int_type()
-
-    # Comparison operations: always bool
-    elif op_name in ('eq', 'ne', 'lt', 'le', 'gt', 'ge'):
-        return MLILType.bool_type()
-
-    # Logical operations: bool
-    elif op_name in ('logical_and', 'logical_or', 'logical_not'):
-        return MLILType.bool_type()
-
-    # Unknown operation
-    else:
-        return MLILType.unknown()
 
 
 # ============================================================================

@@ -3,7 +3,7 @@
 from typing import Dict, Set, List, Optional
 from .mlil import *
 from .mlil_ssa import MLILVariableSSA, MLILVarSSA, MLILSetVarSSA, MLILPhi
-from .mlil_types import MLILType, unify_types, get_operation_result_type, FunctionSignatureDB
+from .mlil_types import MLILType, unify_types, FunctionSignatureDB
 
 
 class MLILTypeInference:
@@ -43,6 +43,7 @@ class MLILTypeInference:
             for inst in block.instructions:
                 if isinstance(inst, MLILSetVarSSA):
                     self.var_types[inst.var] = MLILType.unknown()
+
                 elif isinstance(inst, MLILPhi):
                     self.var_types[inst.dest] = MLILType.unknown()
 
@@ -89,17 +90,18 @@ class MLILTypeInference:
         elif isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod)):
             lhs_type = self._infer_expr_type(expr.lhs)
             rhs_type = self._infer_expr_type(expr.rhs)
-            return get_operation_result_type(self._get_op_name(expr), lhs_type, rhs_type)
+            unified = unify_types(lhs_type, rhs_type)
+            return unified if unified.is_numeric() else MLILType.int_type()
 
         elif isinstance(expr, (MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr)):
             return MLILType.int_type()
 
         elif isinstance(expr, (MLILLogicalAnd, MLILLogicalOr)):
-            return MLILType.bool_type()
+            return MLILType.int_type()
 
         # Comparison operations
         elif isinstance(expr, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
-            return MLILType.bool_type()
+            return MLILType.int_type()
 
         # Unary operations
         elif isinstance(expr, MLILNeg):
@@ -107,7 +109,7 @@ class MLILTypeInference:
             return operand_type if operand_type.is_numeric() else MLILType.int_type()
 
         elif isinstance(expr, (MLILLogicalNot, MLILTestZero)):
-            return MLILType.bool_type()
+            return MLILType.int_type()
 
         # Function calls
         elif isinstance(expr, MLILCall):
@@ -139,15 +141,11 @@ class MLILTypeInference:
 
         # Numeric constant
         if isinstance(const.value, int):
-            # Small values might be bool
-            if const.value in (0, 1):
-                return MLILType.bool_type()
             return MLILType.int_type()
 
         elif isinstance(const.value, float):
             return MLILType.float_type()
 
-        # Unknown
         return MLILType.unknown()
 
     def _infer_phi_type(self, phi: MLILPhi) -> MLILType:
@@ -274,51 +272,6 @@ class MLILTypeInference:
                 changed |= self._update_var_type(cond.var, MLILType.int_type())
 
         return changed
-
-    def _get_op_name(self, expr: MediumLevelILInstruction) -> str:
-        '''Get operation name for type inference'''
-        if isinstance(expr, MLILAdd):
-            return 'add'
-        elif isinstance(expr, MLILSub):
-            return 'sub'
-        elif isinstance(expr, MLILMul):
-            return 'mul'
-        elif isinstance(expr, MLILDiv):
-            return 'div'
-        elif isinstance(expr, MLILMod):
-            return 'mod'
-        elif isinstance(expr, MLILAnd):
-            return 'and'
-        elif isinstance(expr, MLILOr):
-            return 'or'
-        elif isinstance(expr, MLILXor):
-            return 'xor'
-        elif isinstance(expr, MLILShl):
-            return 'shl'
-        elif isinstance(expr, MLILShr):
-            return 'shr'
-        elif isinstance(expr, MLILEq):
-            return 'eq'
-        elif isinstance(expr, MLILNe):
-            return 'ne'
-        elif isinstance(expr, MLILLt):
-            return 'lt'
-        elif isinstance(expr, MLILLe):
-            return 'le'
-        elif isinstance(expr, MLILGt):
-            return 'gt'
-        elif isinstance(expr, MLILGe):
-            return 'ge'
-        elif isinstance(expr, MLILNeg):
-            return 'neg'
-        elif isinstance(expr, MLILLogicalNot):
-            return 'logical_not'
-        elif isinstance(expr, MLILLogicalAnd):
-            return 'logical_and'
-        elif isinstance(expr, MLILLogicalOr):
-            return 'logical_or'
-        else:
-            return 'unknown'
 
 
 def infer_types(function: MediumLevelILFunction, signature_db: Optional[FunctionSignatureDB] = None) -> Dict[MLILVariableSSA, MLILType]:

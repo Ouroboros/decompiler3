@@ -124,7 +124,15 @@ class TypeScriptGenerator:
     @classmethod
     def _format_expr(cls, expr: HLILExpression) -> str:
         if isinstance(expr, HLILVar):
-            return expr.var.name
+            var = expr.var
+            if var.kind == VariableKind.GLOBAL:
+                return f'globals[{var.index}]'
+
+            elif var.kind == VariableKind.REG:
+                return f'REG[{var.index}]'
+
+            else:
+                return var.name
 
         elif isinstance(expr, HLILConst):
             # Handle different constant types

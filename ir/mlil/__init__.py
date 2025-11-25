@@ -40,7 +40,6 @@ __all__ = [
     'MLILTypeKind',
     'MLILVariantType',
     'unify_types',
-    'get_operation_result_type',
     'MLILTypeInference',
     'infer_types',
 
