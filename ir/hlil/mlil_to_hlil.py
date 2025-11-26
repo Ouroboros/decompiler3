@@ -58,6 +58,7 @@ class MLILToHLILConverter:
 
         self.block_successors: Dict[int, List[int]] = {}
         self.visited_blocks: Set[int] = set()
+        self.globally_processed: Set[int] = set()  # Prevent duplicate processing across branches
         self.last_call: Optional[HLILExpression] = None
 
     def _uses_reg0(self, instr: MediumLevelILInstruction) -> bool:
@@ -292,12 +293,17 @@ class MLILToHLILConverter:
         if block_idx in self.visited_blocks:
             return None
 
+        # Prevent duplicate processing across different branch paths
+        if block_idx in self.globally_processed:
+            return None
+
         # Stop if we reached the merge block
         if stop_at is not None and block_idx == stop_at:
             self.visited_blocks.add(block_idx)  # Mark as visited before returning
             return block_idx
 
         self.visited_blocks.add(block_idx)
+        self.globally_processed.add(block_idx)
         mlil_block = self.mlil_func.basic_blocks[block_idx]
 
         # Convert all instructions except the last (terminator)
