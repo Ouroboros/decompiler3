@@ -257,19 +257,71 @@ class TypeScriptGenerator:
         return lines
 
     @classmethod
+    def _get_if_depth(cls, block: HLILBlock) -> int:
+        '''Get the maximum if nesting depth in a block (iterative)'''
+        if not block or not block.statements:
+            return 0
+
+        max_depth = 0
+        stack = [(block, 0)]  # (block, current_depth)
+
+        while stack:
+            blk, depth = stack.pop()
+            if not blk or not blk.statements:
+                continue
+
+            for stmt in blk.statements:
+                if isinstance(stmt, HLILIf):
+                    new_depth = depth + 1
+                    max_depth = max(max_depth, new_depth)
+                    stack.append((stmt.true_block, new_depth))
+                    stack.append((stmt.false_block, new_depth))
+
+        return max_depth
+
+    @classmethod
+    def _negate_condition_str(cls, cond: HLILExpression) -> str:
+        '''Format negated condition as string'''
+        if isinstance(cond, HLILBinaryOp):
+            negation_map = {
+                '==': '!=', '!=': '==',
+                '<': '>=', '>=': '<',
+                '>': '<=', '<=': '>',
+            }
+            if cond.op in negation_map:
+                lhs = cls._format_expr(cond.lhs)
+                rhs = cls._format_expr(cond.rhs)
+                return f'{lhs} {negation_map[cond.op]} {rhs}'
+
+        # Fallback: wrap original in !()
+        return f'!({cls._format_expr(cond)})'
+
+    @classmethod
     def _generate_statement(cls, stmt: HLILStatement, indent: int = 0) -> List[str]:
         indent_str = default_indent() * indent
         lines = []
 
         if isinstance(stmt, HLILIf):
-            # if (condition) { ... }
-            cond_str = cls._format_expr(stmt.condition)
-            lines.append(f'{indent_str}if ({cond_str}) {{')
-            lines.extend(cls._generate_block(stmt.true_block, indent + 1))
+            condition = stmt.condition
+            true_block = stmt.true_block
+            false_block = stmt.false_block
 
-            if stmt.false_block and stmt.false_block.statements:
+            # Swap if true has deeper if nesting than false (reduce nesting)
+            true_depth = cls._get_if_depth(true_block)
+            false_depth = cls._get_if_depth(false_block)
+            if false_block and true_depth > false_depth:
+                cond_str = cls._negate_condition_str(condition)
+                true_block, false_block = false_block, true_block
+
+            else:
+                cond_str = cls._format_expr(condition)
+
+            lines.append(f'{indent_str}if ({cond_str}) {{')
+            lines.extend(cls._generate_block(true_block, indent + 1))
+
+            if false_block and false_block.statements:
                 lines.append(f'{indent_str}}} else {{')
-                lines.extend(cls._generate_block(stmt.false_block, indent + 1))
+                lines.extend(cls._generate_block(false_block, indent + 1))
 
             lines.append(f'{indent_str}}}')
 
