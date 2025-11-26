@@ -373,7 +373,8 @@ class MLILToHLILConverter:
                     true_visited = true_visited - {stop_at}
 
                 if false_target_idx is not None:
-                    self.visited_blocks = branch_visited_base.copy()
+                    # Include true_visited to prevent re-visiting blocks already processed
+                    self.visited_blocks = branch_visited_base | true_visited
                     self.last_call = saved_last_call
                     self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
 

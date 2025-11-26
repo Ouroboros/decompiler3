@@ -235,8 +235,15 @@ class LowLevelILBuilder:
         self.add_instruction(LowLevelILStackStore(expr, offset = 0, slot_index = slot_index))
         # 2. SpAdd(+1)
         self.emit_sp_add(1, hidden_for_formatter = hidden_for_formatter)
-        # Track on vstack for expression tracking
-        self.__vstack_push(expr)
+        # Track on vstack: use StackLoad for mutable values
+        # - Registers: their values change between operations
+        # - Binary/Unary ops: may contain variable references that become stale
+        if isinstance(expr, (LowLevelILRegLoad, LowLevelILBinaryOp, LowLevelILUnaryOp)):
+            self.__vstack_push(LowLevelILStackLoad(offset = 0, slot_index = slot_index))
+
+        else:
+            self.__vstack_push(expr)
+
         return expr
 
     def pop(self, *, hidden_for_formatter: bool = False) -> LowLevelILExpr:

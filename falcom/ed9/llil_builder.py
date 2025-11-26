@@ -71,9 +71,9 @@ class FalcomVMBuilder(LowLevelILBuilder):
         expr = super().pop(hidden_for_formatter = hidden_for_formatter)
 
         if isinstance(expr, LowLevelILConstScript):
-            # 8 bytes script pointer
+            # 8 bytes script pointer - pop the second slot
             expr_clone = super().pop()
-            if not expr_clone is expr:
+            if expr_clone is not expr:
                 raise RuntimeError(f'Script pointer mismatch: {expr_clone} != {expr}')
 
         return expr
@@ -216,10 +216,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
         script_name     = self.vstack_peek(offset - arg_count - 0)
 
         if not all([
-            func_id         is self.caller_frame_inst.func_id,
-            ret_addr        is self.caller_frame_inst.ret_addr,
-            script          is self.caller_frame_inst.script_ptr,
-            script_name     is self.caller_frame_inst.script_name,
+            func_id     is self.caller_frame_inst.func_id,
+            ret_addr    is self.caller_frame_inst.ret_addr,
+            script      is self.caller_frame_inst.script_ptr,
+            script_name is self.caller_frame_inst.script_name,
         ]):
             raise RuntimeError(f'Caller frame mismatch')
 
