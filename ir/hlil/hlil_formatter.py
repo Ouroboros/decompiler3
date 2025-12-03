@@ -44,7 +44,7 @@ class HLILFormatter:
     def _format_expr(cls, expr: HLILExpression) -> str:
         '''Format an HLIL expression'''
         if isinstance(expr, HLILVar):
-            return expr.var.name
+            return str(expr.var)  # Use __str__ to handle GLOBAL/REG properly
 
         elif isinstance(expr, HLILConst):
             # Handle different constant types
