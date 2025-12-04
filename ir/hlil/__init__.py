@@ -3,7 +3,7 @@
 from .hlil import *
 from .hlil_formatter import *
 from .mlil_to_hlil import *
-from .hlil_optimizer import *
+from .hlil_passes import *
 
 __all__ = [
     # Types
@@ -56,6 +56,10 @@ __all__ = [
     # Converter
     'convert_mlil_to_hlil',
 
-    # Optimizer
-    'optimize_hlil',
+    # Passes
+    'MLILToHLILPass',
+    'ExpressionSimplificationPass',
+    'ControlFlowOptimizationPass',
+    'CommonReturnExtractionPass',
+    'DeadCodeEliminationPass',
 ]
