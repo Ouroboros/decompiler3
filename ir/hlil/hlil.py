@@ -15,6 +15,42 @@ class HLILTypeKind(IntEnum2):
     VOID    = auto()
 
 
+class BinaryOp(IntEnum2):
+    '''Binary operators'''
+    # Arithmetic
+    ADD     = auto()
+    SUB     = auto()
+    MUL     = auto()
+    DIV     = auto()
+    MOD     = auto()
+
+    # Comparison
+    EQ      = auto()
+    NE      = auto()
+    LT      = auto()
+    LE      = auto()
+    GT      = auto()
+    GE      = auto()
+
+    # Logical
+    AND     = auto()
+    OR      = auto()
+
+    # Bitwise
+    BIT_AND = auto()
+    BIT_OR  = auto()
+    BIT_XOR = auto()
+    SHL     = auto()
+    SHR     = auto()
+
+
+class UnaryOp(IntEnum2):
+    '''Unary operators'''
+    NEG     = auto()
+    NOT     = auto()
+    BIT_NOT = auto()
+
+
 class HLILOperation(IntEnum2):
     '''HLIL operation types'''
     # Control flow statements
@@ -147,35 +183,63 @@ class HLILConst(HLILExpression):
         return f'HLILConst({self.value})'
 
 
+BINARY_OP_STR = {
+    BinaryOp.ADD        : '+',
+    BinaryOp.SUB        : '-',
+    BinaryOp.MUL        : '*',
+    BinaryOp.DIV        : '/',
+    BinaryOp.MOD        : '%',
+    BinaryOp.EQ         : '==',
+    BinaryOp.NE         : '!=',
+    BinaryOp.LT         : '<',
+    BinaryOp.LE         : '<=',
+    BinaryOp.GT         : '>',
+    BinaryOp.GE         : '>=',
+    BinaryOp.AND        : '&&',
+    BinaryOp.OR         : '||',
+    BinaryOp.BIT_AND    : '&',
+    BinaryOp.BIT_OR     : '|',
+    BinaryOp.BIT_XOR    : '^',
+    BinaryOp.SHL        : '<<',
+    BinaryOp.SHR        : '>>',
+}
+
+UNARY_OP_STR = {
+    UnaryOp.NEG         : '-',
+    UnaryOp.NOT         : '!',
+    UnaryOp.BIT_NOT     : '~',
+}
+
+
 class HLILBinaryOp(HLILExpression):
     '''Binary operation: lhs op rhs'''
 
-    def __init__(self, op: str, lhs: HLILExpression, rhs: HLILExpression):
+    def __init__(self, op: BinaryOp, lhs: HLILExpression, rhs: HLILExpression):
         super().__init__(HLILOperation.HLIL_BINARY_OP)
-        self.op = op  # '+', '-', '*', '/', '==', '!=', '<', '>', '<=', '>=', '&&', '||', etc.
+        self.op = op
         self.lhs = lhs
         self.rhs = rhs
 
     def __str__(self) -> str:
-        return f'{self.lhs} {self.op} {self.rhs}'
+        return f'{self.lhs} {BINARY_OP_STR[self.op]} {self.rhs}'
 
     def __repr__(self) -> str:
-        return f'HLILBinaryOp({self.op})'
+        return f'HLILBinaryOp({self.op.name})'
 
 
 class HLILUnaryOp(HLILExpression):
     '''Unary operation: op operand'''
 
-    def __init__(self, op: str, operand: HLILExpression):
+    def __init__(self, op: UnaryOp, operand: HLILExpression):
         super().__init__(HLILOperation.HLIL_UNARY_OP)
-        self.op = op  # '-', '!', '~', etc.
+        self.op = op
         self.operand = operand
 
     def __str__(self) -> str:
-        return f'{self.op}{self.operand}'
+        return f'{UNARY_OP_STR[self.op]}{self.operand}'
 
     def __repr__(self) -> str:
-        return f'HLILUnaryOp({self.op})'
+        return f'HLILUnaryOp({self.op.name})'
 
 
 class HLILCall(HLILExpression):

@@ -11,28 +11,28 @@ from .hlil import *
 
 # Operator mapping tables
 _BINARY_OP_MAP = {
-    MediumLevelILOperation.MLIL_ADD         : '+',
-    MediumLevelILOperation.MLIL_SUB         : '-',
-    MediumLevelILOperation.MLIL_MUL         : '*',
-    MediumLevelILOperation.MLIL_DIV         : '/',
-    MediumLevelILOperation.MLIL_MOD         : '%',
-    MediumLevelILOperation.MLIL_AND         : '&',
-    MediumLevelILOperation.MLIL_OR          : '|',
-    MediumLevelILOperation.MLIL_XOR         : '^',
-    MediumLevelILOperation.MLIL_SHL         : '<<',
-    MediumLevelILOperation.MLIL_SHR         : '>>',
-    MediumLevelILOperation.MLIL_LOGICAL_AND : '&&',
-    MediumLevelILOperation.MLIL_LOGICAL_OR  : '||',
-    MediumLevelILOperation.MLIL_EQ          : '==',
-    MediumLevelILOperation.MLIL_NE          : '!=',
-    MediumLevelILOperation.MLIL_LT          : '<',
-    MediumLevelILOperation.MLIL_LE          : '<=',
-    MediumLevelILOperation.MLIL_GT          : '>',
-    MediumLevelILOperation.MLIL_GE          : '>=',
+    MediumLevelILOperation.MLIL_ADD         : BinaryOp.ADD,
+    MediumLevelILOperation.MLIL_SUB         : BinaryOp.SUB,
+    MediumLevelILOperation.MLIL_MUL         : BinaryOp.MUL,
+    MediumLevelILOperation.MLIL_DIV         : BinaryOp.DIV,
+    MediumLevelILOperation.MLIL_MOD         : BinaryOp.MOD,
+    MediumLevelILOperation.MLIL_AND         : BinaryOp.BIT_AND,
+    MediumLevelILOperation.MLIL_OR          : BinaryOp.BIT_OR,
+    MediumLevelILOperation.MLIL_XOR         : BinaryOp.BIT_XOR,
+    MediumLevelILOperation.MLIL_SHL         : BinaryOp.SHL,
+    MediumLevelILOperation.MLIL_SHR         : BinaryOp.SHR,
+    MediumLevelILOperation.MLIL_LOGICAL_AND : BinaryOp.AND,
+    MediumLevelILOperation.MLIL_LOGICAL_OR  : BinaryOp.OR,
+    MediumLevelILOperation.MLIL_EQ          : BinaryOp.EQ,
+    MediumLevelILOperation.MLIL_NE          : BinaryOp.NE,
+    MediumLevelILOperation.MLIL_LT          : BinaryOp.LT,
+    MediumLevelILOperation.MLIL_LE          : BinaryOp.LE,
+    MediumLevelILOperation.MLIL_GT          : BinaryOp.GT,
+    MediumLevelILOperation.MLIL_GE          : BinaryOp.GE,
 }
 
 _UNARY_OP_MAP = {
-    MediumLevelILOperation.MLIL_NEG : '-',
+    MediumLevelILOperation.MLIL_NEG : UnaryOp.NEG,
 }
 
 _MLIL_TYPE_MAP = {
@@ -849,7 +849,9 @@ class MLILToHLILConverter:
             return HLILConst(expr.value)
 
         elif isinstance(expr, MLILBinaryOp):
-            op = _BINARY_OP_MAP.get(expr.operation, '?')
+            op = _BINARY_OP_MAP.get(expr.operation)
+            if op is None:
+                raise ValueError(f'Unknown binary op: {expr.operation}')
             return HLILBinaryOp(op, self._convert_expr(expr.lhs), self._convert_expr(expr.rhs))
 
         elif isinstance(expr, MLILAddressOf):
@@ -859,8 +861,10 @@ class MLILToHLILConverter:
         elif isinstance(expr, MLILUnaryOp):
             if expr.operation in (MediumLevelILOperation.MLIL_LOGICAL_NOT, MediumLevelILOperation.MLIL_TEST_ZERO):
                 operand = self._convert_expr(expr.operand)
-                return HLILBinaryOp('==', operand, HLILConst(0))
-            op = _UNARY_OP_MAP.get(expr.operation, '?')
+                return HLILBinaryOp(BinaryOp.EQ, operand, HLILConst(0))
+            op = _UNARY_OP_MAP.get(expr.operation)
+            if op is None:
+                raise ValueError(f'Unknown unary op: {expr.operation}')
             return HLILUnaryOp(op, self._convert_expr(expr.operand))
 
         elif isinstance(expr, MLILLoadReg):

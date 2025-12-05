@@ -116,8 +116,9 @@ class ControlFlowOptimizationPass(Pass):
                     stmt.true_block = stmt.false_block
                     stmt.false_block = None
 
-                # Flatten else-if
-                self._try_flatten_else_if(stmt)
+                # Flatten else-if pattern in both branches
+                self._try_flatten_if_block(stmt, is_true_block = True)
+                self._try_flatten_if_block(stmt, is_true_block = False)
 
             elif isinstance(stmt, HLILWhile):
                 self._optimize_block(stmt.body)
@@ -130,28 +131,187 @@ class ControlFlowOptimizationPass(Pass):
 
         block.statements = optimized
 
+    # Operators that produce boolean results
+    BOOLEAN_BINARY_OPS = {
+        BinaryOp.EQ, BinaryOp.NE,
+        BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE,
+        BinaryOp.AND, BinaryOp.OR,
+    }
+
     def _is_boolean_expr(self, expr: HLILExpression) -> bool:
         if isinstance(expr, HLILBinaryOp):
-            return expr.op in ('==', '!=', '<', '<=', '>', '>=', '&&', '||')
+            return expr.op in self.BOOLEAN_BINARY_OPS
 
         elif isinstance(expr, HLILUnaryOp):
-            return expr.op == '!'
+            return expr.op == UnaryOp.NOT
 
         return False
 
-    def _try_flatten_else_if(self, if_stmt: HLILIf):
-        '''Flatten pattern: else { comment?; var = bool_expr; if (var == 0) {...} }'''
-        false_block = if_stmt.false_block
-        if not false_block or not false_block.statements:
+    def _is_nop_stmt(self, stmt: HLILStatement) -> bool:
+        '''Check if statement has no side effects (can be skipped)'''
+        return isinstance(stmt, HLILComment)
+
+    def _can_read_original_value(self, var: HLILVariable, node, killed: bool = False) -> tuple:
+        '''
+        Check if original value of var can be read anywhere in node.
+        Uses data flow analysis to track write-before-read.
+
+        Returns: (reads_original, killed_after, always_exits)
+            - reads_original: True if original value can be read on some path
+            - killed_after: True if var is killed on all continuing paths
+            - always_exits: True if all paths exit (return/break/continue)
+        '''
+        if node is None:
+            return (False, killed, False)
+
+        # Expressions - don't kill, may read
+        if isinstance(node, HLILVar):
+            reads = (node.var == var and not killed)
+            return (reads, killed, False)
+
+        if isinstance(node, HLILConst):
+            return (False, killed, False)
+
+        if isinstance(node, HLILBinaryOp):
+            left_reads, _, _ = self._can_read_original_value(var, node.lhs, killed)
+            right_reads, _, _ = self._can_read_original_value(var, node.rhs, killed)
+            return (left_reads or right_reads, killed, False)
+
+        if isinstance(node, HLILUnaryOp):
+            reads, _, _ = self._can_read_original_value(var, node.operand, killed)
+            return (reads, killed, False)
+
+        if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
+            for arg in node.args:
+                reads, _, _ = self._can_read_original_value(var, arg, killed)
+                if reads:
+                    return (True, killed, False)
+            return (False, killed, False)
+
+        # Statements
+        if isinstance(node, HLILExprStmt):
+            reads, _, _ = self._can_read_original_value(var, node.expr, killed)
+            return (reads, killed, False)
+
+        if isinstance(node, HLILAssign):
+            # RHS is evaluated first
+            rhs_reads, _, _ = self._can_read_original_value(var, node.src, killed)
+            # Check if this kills var
+            dest_kills = isinstance(node.dest, HLILVar) and node.dest.var == var
+            return (rhs_reads, dest_kills or killed, False)
+
+        if isinstance(node, HLILBlock):
+            any_reads = False
+            current_killed = killed
+
+            for stmt in node.statements:
+                reads, current_killed, exits = self._can_read_original_value(var, stmt, current_killed)
+                if reads:
+                    any_reads = True
+                if exits:
+                    # Path exits, subsequent code unreachable
+                    return (any_reads, current_killed, True)
+
+            return (any_reads, current_killed, False)
+
+        if isinstance(node, HLILIf):
+            # Check condition first
+            cond_reads, _, _ = self._can_read_original_value(var, node.condition, killed)
+
+            # Check both branches
+            true_reads, true_killed, true_exits = self._can_read_original_value(var, node.true_block, killed)
+
+            if node.false_block:
+                false_reads, false_killed, false_exits = self._can_read_original_value(var, node.false_block, killed)
+
+            else:
+                false_reads, false_killed, false_exits = False, killed, False
+
+            any_reads = cond_reads or true_reads or false_reads
+
+            # Determine killed state after if
+            if true_exits and false_exits:
+                # Both exit - whole if exits
+                return (any_reads, killed, True)
+
+            elif true_exits:
+                # Only false branch continues
+                killed_after = false_killed
+
+            elif false_exits:
+                # Only true branch continues
+                killed_after = true_killed
+
+            else:
+                # Both continue - killed only if both kill
+                killed_after = true_killed and false_killed
+
+            return (any_reads, killed_after, False)
+
+        if isinstance(node, HLILWhile):
+            # While may not execute at all, so can't guarantee kill
+            cond_reads, _, _ = self._can_read_original_value(var, node.condition, killed)
+            body_reads, _, _ = self._can_read_original_value(var, node.body, killed)
+            return (cond_reads or body_reads, killed, False)
+
+        if isinstance(node, HLILDoWhile):
+            # Do-while executes body at least once
+            body_reads, body_killed, body_exits = self._can_read_original_value(var, node.body, killed)
+
+            if body_exits:
+                return (body_reads, body_killed, True)
+
+            cond_reads, _, _ = self._can_read_original_value(var, node.condition, body_killed)
+            return (body_reads or cond_reads, body_killed, False)
+
+        if isinstance(node, HLILSwitch):
+            scrutinee_reads, _, _ = self._can_read_original_value(var, node.scrutinee, killed)
+
+            any_reads = scrutinee_reads
+            all_exit = True
+            all_kill = True
+
+            for case in node.cases:
+                case_reads, case_killed, case_exits = self._can_read_original_value(var, case.body, killed)
+                if case_reads:
+                    any_reads = True
+                if not case_exits:
+                    all_exit = False
+                    if not case_killed:
+                        all_kill = False
+
+            if all_exit:
+                return (any_reads, killed, True)
+
+            return (any_reads, all_kill, False)
+
+        if isinstance(node, HLILReturn):
+            if node.value:
+                reads, _, _ = self._can_read_original_value(var, node.value, killed)
+                return (reads, killed, True)
+            return (False, killed, True)
+
+        if isinstance(node, (HLILBreak, HLILContinue)):
+            return (False, killed, True)
+
+        if isinstance(node, HLILComment):
+            return (False, killed, False)
+
+        return (False, killed, False)
+
+    def _try_flatten_if_block(self, if_stmt: HLILIf, is_true_block: bool):
+        '''Flatten pattern: { nop*; var = bool_expr; if (var == 0) {...} }'''
+        block = if_stmt.true_block if is_true_block else if_stmt.false_block
+        if not block or not block.statements:
             return
 
-        stmts = false_block.statements
+        stmts = block.statements
         idx = 0
 
-        # Optional leading comment
-        comment = None
-        if isinstance(stmts[idx], HLILComment):
-            comment = stmts[idx]
+        # Skip leading nop statements
+        leading_nops = []
+        while idx < len(stmts) and self._is_nop_stmt(stmts[idx]):
+            leading_nops.append(stmts[idx])
             idx += 1
 
         if len(stmts) - idx != 2:
@@ -179,7 +339,7 @@ class ControlFlowOptimizationPass(Pass):
         if not isinstance(cond, HLILBinaryOp):
             return
 
-        if cond.op not in ('==', '!='):
+        if cond.op not in (BinaryOp.EQ, BinaryOp.NE):
             return
 
         if not isinstance(cond.rhs, HLILConst) or cond.rhs.value != 0:
@@ -191,8 +351,14 @@ class ControlFlowOptimizationPass(Pass):
         if cond.lhs.var != assigned_var:
             return
 
+        # Ensure original value of assigned_var is not read in inner_if body
+        true_reads, _, _ = self._can_read_original_value(assigned_var, inner_if.true_block)
+        false_reads, _, _ = self._can_read_original_value(assigned_var, inner_if.false_block)
+        if true_reads or false_reads:
+            return
+
         has_inner_else = inner_if.false_block and inner_if.false_block.statements
-        negate = (cond.op == '==')
+        negate = (cond.op == BinaryOp.EQ)
 
         if negate and has_inner_else:
             new_condition = condition_expr
@@ -209,12 +375,16 @@ class ControlFlowOptimizationPass(Pass):
             new_true_block = inner_if.true_block
             new_false_block = inner_if.false_block
 
-        if comment and new_true_block:
-            new_true_block.statements.insert(0, comment)
+        # Insert leading nops at the beginning of new_true_block
+        if leading_nops and new_true_block:
+            for nop in reversed(leading_nops):
+                new_true_block.statements.insert(0, nop)
 
-        if_stmt.false_block = HLILBlock([
-            HLILIf(new_condition, new_true_block, new_false_block)
-        ])
+        new_block = HLILBlock([HLILIf(new_condition, new_true_block, new_false_block)])
+        if is_true_block:
+            if_stmt.true_block = new_block
+        else:
+            if_stmt.false_block = new_block
 
     def _try_convert_to_switch(self, if_stmt: HLILIf) -> Optional[HLILSwitch]:
         MIN_CASES = 3
@@ -227,7 +397,7 @@ class ControlFlowOptimizationPass(Pass):
             if not isinstance(current_if.condition, HLILBinaryOp):
                 break
 
-            if current_if.condition.op != '!=':
+            if current_if.condition.op != BinaryOp.NE:
                 break
 
             var_expr = current_if.condition.lhs
@@ -314,21 +484,24 @@ class ControlFlowOptimizationPass(Pass):
             elif isinstance(stmt, HLILWhile):
                 self._merge_nested_switches(stmt.body)
 
+    NEGATION_MAP = {
+        BinaryOp.EQ: BinaryOp.NE,
+        BinaryOp.NE: BinaryOp.EQ,
+        BinaryOp.LT: BinaryOp.GE,
+        BinaryOp.GE: BinaryOp.LT,
+        BinaryOp.GT: BinaryOp.LE,
+        BinaryOp.LE: BinaryOp.GT,
+    }
+
     def _negate_condition(self, condition: HLILExpression) -> HLILExpression:
         if isinstance(condition, HLILBinaryOp):
-            negation_map = {
-                '==': '!=', '!=': '==',
-                '<': '>=', '>=': '<',
-                '>': '<=', '<=': '>',
-            }
+            if condition.op in self.NEGATION_MAP:
+                return HLILBinaryOp(self.NEGATION_MAP[condition.op], condition.lhs, condition.rhs)
 
-            if condition.op in negation_map:
-                return HLILBinaryOp(negation_map[condition.op], condition.lhs, condition.rhs)
+            elif condition.op in (BinaryOp.AND, BinaryOp.OR):
+                return HLILBinaryOp(BinaryOp.EQ, condition, HLILConst(0))
 
-            elif condition.op in ('&&', '||'):
-                return HLILBinaryOp('==', condition, HLILConst(0))
-
-        return HLILBinaryOp('==', condition, HLILConst(0))
+        return HLILBinaryOp(BinaryOp.EQ, condition, HLILConst(0))
 
 
 class CommonReturnExtractionPass(Pass):

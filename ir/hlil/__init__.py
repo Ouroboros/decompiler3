@@ -9,6 +9,12 @@ __all__ = [
     # Types
     'HLILTypeKind',
 
+    # Operators
+    'BinaryOp',
+    'UnaryOp',
+    'BINARY_OP_STR',
+    'UNARY_OP_STR',
+
     # Operations
     'HLILOperation',
 

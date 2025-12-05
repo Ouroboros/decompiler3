@@ -118,15 +118,19 @@ class TypeScriptGenerator:
 
         return False
 
+    BOOLEAN_BINARY_OPS = {
+        BinaryOp.EQ, BinaryOp.NE,
+        BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE,
+        BinaryOp.AND, BinaryOp.OR,
+    }
+
     @classmethod
     def _is_boolean_expr(cls, expr: HLILExpression) -> bool:
         if isinstance(expr, HLILBinaryOp):
-            # Comparison and logical operators return boolean
-            return expr.op in ('==', '!=', '<', '<=', '>', '>=', '&&', '||')
+            return expr.op in cls.BOOLEAN_BINARY_OPS
 
         elif isinstance(expr, HLILUnaryOp):
-            # Logical NOT returns boolean
-            return expr.op == '!'
+            return expr.op == UnaryOp.NOT
 
         return False
 
@@ -163,35 +167,36 @@ class TypeScriptGenerator:
             # (bool_expr) == 0 -> !bool_expr
             if isinstance(expr.rhs, HLILConst) and expr.rhs.value == 0:
                 if cls._is_boolean_expr(expr.lhs):
-                    if expr.op == '!=':
+                    if expr.op == BinaryOp.NE:
                         # (bool) != 0 -> bool
                         return cls._format_expr(expr.lhs)
 
-                    elif expr.op == '==':
+                    elif expr.op == BinaryOp.EQ:
                         # (bool) == 0 -> !bool
                         inner = cls._format_expr(expr.lhs)
                         # Add parentheses if the inner expression has lower precedence than !
-                        if isinstance(expr.lhs, HLILBinaryOp) and expr.lhs.op in ('||', '&&'):
+                        if isinstance(expr.lhs, HLILBinaryOp) and expr.lhs.op in (BinaryOp.OR, BinaryOp.AND):
                             inner = f'({inner})'
                         return f'!{inner}'
 
             lhs_str = cls._format_expr(expr.lhs)
             rhs_str = cls._format_expr(expr.rhs)
+            op_str = BINARY_OP_STR[expr.op]
 
             # Add parentheses if needed based on precedence
             if isinstance(expr.lhs, HLILBinaryOp):
-                if cls._needs_parentheses(expr.lhs.op, expr.op, True):
+                if cls._needs_parentheses(BINARY_OP_STR[expr.lhs.op], op_str, True):
                     lhs_str = f'({lhs_str})'
 
             if isinstance(expr.rhs, HLILBinaryOp):
-                if cls._needs_parentheses(expr.rhs.op, expr.op, False):
+                if cls._needs_parentheses(BINARY_OP_STR[expr.rhs.op], op_str, False):
                     rhs_str = f'({rhs_str})'
 
-            return f'{lhs_str} {expr.op} {rhs_str}'
+            return f'{lhs_str} {op_str} {rhs_str}'
 
         elif isinstance(expr, HLILUnaryOp):
             operand = cls._format_expr(expr.operand)
-            return f'{expr.op}{operand}'
+            return f'{UNARY_OP_STR[expr.op]}{operand}'
 
         elif isinstance(expr, HLILCall):
             args = ', '.join(cls._format_expr(arg) for arg in expr.args)
@@ -279,19 +284,24 @@ class TypeScriptGenerator:
 
         return max_depth
 
+    NEGATION_MAP = {
+        BinaryOp.EQ: BinaryOp.NE,
+        BinaryOp.NE: BinaryOp.EQ,
+        BinaryOp.LT: BinaryOp.GE,
+        BinaryOp.GE: BinaryOp.LT,
+        BinaryOp.GT: BinaryOp.LE,
+        BinaryOp.LE: BinaryOp.GT,
+    }
+
     @classmethod
     def _negate_condition_str(cls, cond: HLILExpression) -> str:
         '''Format negated condition as string'''
         if isinstance(cond, HLILBinaryOp):
-            negation_map = {
-                '==': '!=', '!=': '==',
-                '<': '>=', '>=': '<',
-                '>': '<=', '<=': '>',
-            }
-            if cond.op in negation_map:
+            if cond.op in cls.NEGATION_MAP:
                 lhs = cls._format_expr(cond.lhs)
                 rhs = cls._format_expr(cond.rhs)
-                return f'{lhs} {negation_map[cond.op]} {rhs}'
+                negated_op = BINARY_OP_STR[cls.NEGATION_MAP[cond.op]]
+                return f'{lhs} {negated_op} {rhs}'
 
         # Fallback: wrap original in !()
         return f'!({cls._format_expr(cond)})'
@@ -319,9 +329,19 @@ class TypeScriptGenerator:
             lines.append(f'{indent_str}if ({cond_str}) {{')
             lines.extend(cls._generate_block(true_block, indent + 1))
 
-            if false_block and false_block.statements:
-                lines.append(f'{indent_str}}} else {{')
-                lines.extend(cls._generate_block(false_block, indent + 1))
+            while false_block and false_block.statements:
+                # else { single if } -> else if
+                if len(false_block.statements) == 1 and isinstance(false_block.statements[0], HLILIf):
+                    inner_if = false_block.statements[0]
+                    inner_cond = cls._format_expr(inner_if.condition)
+                    lines.append(f'{indent_str}}} else if ({inner_cond}) {{')
+                    lines.extend(cls._generate_block(inner_if.true_block, indent + 1))
+                    false_block = inner_if.false_block
+
+                else:
+                    lines.append(f'{indent_str}}} else {{')
+                    lines.extend(cls._generate_block(false_block, indent + 1))
+                    break
 
             lines.append(f'{indent_str}}}')
 
