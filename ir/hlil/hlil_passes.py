@@ -181,6 +181,9 @@ class ControlFlowOptimizationPass(Pass):
                             # Recursively optimize the inlined if's sub-blocks
                             self._optimize_block(inlined.true_block)
                             self._optimize_block(inlined.false_block)
+                            # Flatten else-if pattern in both branches
+                            self._try_flatten_if_block(inlined, is_true_block=True)
+                            self._try_flatten_if_block(inlined, is_true_block=False)
                             optimized.append(inlined)
                             i += 2
                             continue
@@ -197,10 +200,14 @@ class ControlFlowOptimizationPass(Pass):
                     continue
 
                 # Invert empty if: if (c) {} else {...} -> if (!c) {...}
+                # But skip if else block is [nop*, if] to preserve else-if chain
                 if not stmt.true_block.statements and stmt.false_block and stmt.false_block.statements:
-                    stmt.condition = self._negate_condition(stmt.condition)
-                    stmt.true_block = stmt.false_block
-                    stmt.false_block = None
+                    non_nop_stmts = [s for s in stmt.false_block.statements if not self._is_nop_stmt(s)]
+                    is_else_if_pattern = len(non_nop_stmts) == 1 and isinstance(non_nop_stmts[0], HLILIf)
+                    if not is_else_if_pattern:
+                        stmt.condition = self._negate_condition(stmt.condition)
+                        stmt.true_block = stmt.false_block
+                        stmt.false_block = None
 
                 # Flatten else-if pattern in both branches
                 self._try_flatten_if_block(stmt, is_true_block = True)
@@ -443,7 +450,7 @@ class ControlFlowOptimizationPass(Pass):
         return (False, killed, False)
 
     def _try_flatten_if_block(self, if_stmt: HLILIf, is_true_block: bool):
-        '''Flatten pattern: { nop*; var = bool_expr; if (var == 0) {...} }'''
+        '''Flatten else-if patterns'''
         block = if_stmt.true_block if is_true_block else if_stmt.false_block
         if not block or not block.statements:
             return
@@ -457,7 +464,24 @@ class ControlFlowOptimizationPass(Pass):
             leading_nops.append(stmts[idx])
             idx += 1
 
-        if len(stmts) - idx != 2:
+        remaining = len(stmts) - idx
+
+        # Pattern 1: { nop*; if (bool_expr) {...} } -> flatten for else-if
+        if remaining == 1 and isinstance(stmts[idx], HLILIf):
+            inner_if = stmts[idx]
+            if leading_nops:
+                if not inner_if.true_block:
+                    inner_if.true_block = HLILBlock([])
+                for nop in reversed(leading_nops):
+                    inner_if.true_block.statements.insert(0, nop)
+            if is_true_block:
+                if_stmt.true_block = HLILBlock([inner_if])
+            else:
+                if_stmt.false_block = HLILBlock([inner_if])
+            return
+
+        # Pattern 2: { nop*; var = bool_expr; if (var == 0) {...} }
+        if remaining != 2:
             return
 
         assign_stmt = stmts[idx]
