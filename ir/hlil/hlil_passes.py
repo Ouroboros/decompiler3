@@ -41,6 +41,19 @@ class ExpressionSimplificationPass(Pass):
                         i += 2
                         continue
 
+            # REGS[0] = call(); var = REGS[0] -> var = call()
+            # Only for function calls - other assignments may be read in branches
+            if isinstance(stmt, HLILAssign) and self._is_reg0_var(stmt.dest):
+                if isinstance(stmt.src, HLILCall):
+                    if i + 1 < len(block.statements):
+                        next_stmt = block.statements[i + 1]
+                        if self._is_reg0_assignment(next_stmt):
+                            # Check no REGS[0] read after this until next call/write
+                            if not self._has_reg0_read_before_next_call(block.statements, i + 2):
+                                optimized.append(HLILAssign(next_stmt.dest, stmt.src))
+                                i += 2
+                                continue
+
             # REG[0] = val; return; -> return val;
             if isinstance(stmt, HLILAssign) and self._is_reg0_var(stmt.dest):
                 if i + 1 < len(block.statements):
@@ -84,6 +97,61 @@ class ExpressionSimplificationPass(Pass):
 
         return False
 
+    def _has_reg0_read_before_next_call(self, statements: list, start_idx: int) -> bool:
+        '''Check if REGS[0] is read before the next function call or REGS[0] write'''
+        for j in range(start_idx, len(statements)):
+            stmt = statements[j]
+
+            # call(); - overwrites REGS[0]
+            if isinstance(stmt, HLILExprStmt) and isinstance(stmt.expr, HLILCall):
+                return False
+
+            # var = call(); - also overwrites REGS[0]
+            if isinstance(stmt, HLILAssign) and isinstance(stmt.src, HLILCall):
+                return False
+
+            # REGS[0] = expr; - overwrites REGS[0]
+            if isinstance(stmt, HLILAssign) and self._is_reg0_var(stmt.dest):
+                return False
+
+            # Check if this statement reads REGS[0]
+            if self._expr_reads_reg0(stmt):
+                return True
+
+        return False
+
+    def _expr_reads_reg0(self, node) -> bool:
+        '''Check if expression reads REGS[0]'''
+        if node is None:
+            return False
+
+        if isinstance(node, HLILVar):
+            return node.var.kind == VariableKind.REG and node.var.index == 0
+
+        if isinstance(node, HLILAssign):
+            # Only check src, not dest (dest is a write)
+            return self._expr_reads_reg0(node.src)
+
+        if isinstance(node, HLILBinaryOp):
+            return self._expr_reads_reg0(node.lhs) or self._expr_reads_reg0(node.rhs)
+
+        if isinstance(node, HLILUnaryOp):
+            return self._expr_reads_reg0(node.operand)
+
+        if isinstance(node, HLILCall):
+            return any(self._expr_reads_reg0(arg) for arg in node.args)
+
+        if isinstance(node, HLILExprStmt):
+            return self._expr_reads_reg0(node.expr)
+
+        if isinstance(node, HLILReturn):
+            return self._expr_reads_reg0(node.value)
+
+        if isinstance(node, HLILIf):
+            return self._expr_reads_reg0(node.condition)
+
+        return False
+
 
 class ControlFlowOptimizationPass(Pass):
     '''Control flow optimizations: if-to-switch, empty-if inversion, else-if flattening, switch merging'''
@@ -98,8 +166,25 @@ class ControlFlowOptimizationPass(Pass):
             return
 
         optimized = []
+        i = 0
 
-        for stmt in block.statements:
+        while i < len(block.statements):
+            stmt = block.statements[i]
+
+            # Try inline: var = bool_expr; if (var != 0) -> if (bool_expr)
+            if isinstance(stmt, HLILAssign) and isinstance(stmt.dest, HLILVar):
+                if self._is_boolean_expr(stmt.src):
+                    if i + 1 < len(block.statements):
+                        next_stmt = block.statements[i + 1]
+                        inlined = self._try_inline_condition(stmt, next_stmt)
+                        if inlined:
+                            # Recursively optimize the inlined if's sub-blocks
+                            self._optimize_block(inlined.true_block)
+                            self._optimize_block(inlined.false_block)
+                            optimized.append(inlined)
+                            i += 2
+                            continue
+
             if isinstance(stmt, HLILIf):
                 self._optimize_block(stmt.true_block)
                 self._optimize_block(stmt.false_block)
@@ -108,6 +193,7 @@ class ControlFlowOptimizationPass(Pass):
                 switch_stmt = self._try_convert_to_switch(stmt)
                 if switch_stmt:
                     optimized.append(switch_stmt)
+                    i += 1
                     continue
 
                 # Invert empty if: if (c) {} else {...} -> if (!c) {...}
@@ -128,6 +214,7 @@ class ControlFlowOptimizationPass(Pass):
                     self._optimize_block(case.body)
 
             optimized.append(stmt)
+            i += 1
 
         block.statements = optimized
 
@@ -146,6 +233,62 @@ class ControlFlowOptimizationPass(Pass):
             return expr.op == UnaryOp.NOT
 
         return False
+
+    def _try_inline_condition(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
+        '''
+        Try to inline: var = bool_expr; if (var != 0) {...} -> if (bool_expr) {...}
+        Returns new HLILIf if successful, None otherwise.
+        '''
+        if not isinstance(next_stmt, HLILIf):
+            return None
+
+        cond = next_stmt.condition
+        if not isinstance(cond, HLILBinaryOp):
+            return None
+
+        if cond.op not in (BinaryOp.EQ, BinaryOp.NE):
+            return None
+
+        if not isinstance(cond.rhs, HLILConst) or cond.rhs.value != 0:
+            return None
+
+        if not isinstance(cond.lhs, HLILVar):
+            return None
+
+        assigned_var = assign_stmt.dest.var
+        if cond.lhs.var != assigned_var:
+            return None
+
+        # Check var is not read in if body
+        true_reads, _, _ = self._can_read_original_value(assigned_var, next_stmt.true_block)
+        false_reads, _, _ = self._can_read_original_value(assigned_var, next_stmt.false_block)
+        if true_reads or false_reads:
+            return None
+
+        # Build new condition
+        condition_expr = assign_stmt.src
+        negate = (cond.op == BinaryOp.EQ)
+        has_else = next_stmt.false_block and next_stmt.false_block.statements
+
+        if negate and has_else:
+            # if (var == 0) {A} else {B} -> if (expr) {B} else {A}
+            new_condition = condition_expr
+            new_true_block = next_stmt.false_block
+            new_false_block = next_stmt.true_block
+
+        elif negate:
+            # if (var == 0) {A} -> if (!expr) {A}
+            new_condition = self._negate_condition(condition_expr)
+            new_true_block = next_stmt.true_block
+            new_false_block = None
+
+        else:
+            # if (var != 0) {A} else {B} -> if (expr) {A} else {B}
+            new_condition = condition_expr
+            new_true_block = next_stmt.true_block
+            new_false_block = next_stmt.false_block
+
+        return HLILIf(new_condition, new_true_block, new_false_block)
 
     def _is_nop_stmt(self, stmt: HLILStatement) -> bool:
         '''Check if statement has no side effects (can be skipped)'''
