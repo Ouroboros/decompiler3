@@ -46,6 +46,30 @@ _MLIL_TYPE_MAP = {
     MLILTypeKind.VOID     : HLILTypeKind.VOID,
 }
 
+# Negation map for comparison operators
+_NEGATE_CMP_OP = {
+    BinaryOp.EQ : BinaryOp.NE,
+    BinaryOp.NE : BinaryOp.EQ,
+    BinaryOp.LT : BinaryOp.GE,
+    BinaryOp.LE : BinaryOp.GT,
+    BinaryOp.GT : BinaryOp.LE,
+    BinaryOp.GE : BinaryOp.LT,
+}
+
+
+def _negate_condition(cond: HLILExpression) -> HLILExpression:
+    '''Negate a condition, simplifying where possible'''
+    # Double negation: !!a -> a
+    if isinstance(cond, HLILUnaryOp) and cond.op == UnaryOp.NOT:
+        return cond.operand
+
+    # Comparison negation: !(a == b) -> a != b
+    if isinstance(cond, HLILBinaryOp) and cond.op in _NEGATE_CMP_OP:
+        return HLILBinaryOp(_NEGATE_CMP_OP[cond.op], cond.lhs, cond.rhs)
+
+    # Default: wrap with NOT
+    return HLILUnaryOp(UnaryOp.NOT, cond)
+
 
 def _mlil_type_to_hlil(mlil_type: MLILType) -> HLILTypeKind:
     return _MLIL_TYPE_MAP[mlil_type.kind]
@@ -626,7 +650,7 @@ class MLILToHLILConverter:
                         successors.append(i + 1)
             self.block_successors[i] = successors
 
-    def _get_reachable(self, start_idx: int, max_depth: int = 10) -> Dict[int, int]:
+    def _get_reachable(self, start_idx: int, max_depth: int = 100) -> Dict[int, int]:
         reachable = {}
         queue = deque([(start_idx, 0)])
         visited = set()
@@ -685,11 +709,13 @@ class MLILToHLILConverter:
 
         if block_idx >= len(self.mlil_func.basic_blocks):
             return None
-        if block_idx in self.visited_blocks:
-            return None
-        if block_idx in self.globally_processed:
+
+        # Skip already processed blocks
+        if block_idx in self.visited_blocks or block_idx in self.globally_processed:
             return None
         if stop_at is not None and block_idx == stop_at:
+            # Reached the merge point - stop here, don't process this block
+            # The merge block will be processed after the if-else by the outer scope
             self.visited_blocks.add(block_idx)
             return block_idx
 
@@ -744,9 +770,52 @@ class MLILToHLILConverter:
                     false_visited = false_visited - {stop_at}
                 self.visited_blocks = saved_visited | true_visited | false_visited
 
-                if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
-                target_block.add_statement(if_stmt)
+                # Check if branches end with return (early return pattern)
+                true_ends_with_return = (true_block.statements and
+                    isinstance(true_block.statements[-1], HLILReturn))
+                false_ends_with_return = (false_block.statements and
+                    isinstance(false_block.statements[-1], HLILReturn))
 
+                # MLIL if semantics: if (C) goto false_target else true_target
+                # So: C true -> false_block, C false -> true_block
+                # To execute true_block, need !C; to execute false_block, need C
+
+                # If both branches return, put shorter one in if { return }, longer one after
+                if true_ends_with_return and false_ends_with_return:
+                    if len(true_block.statements) <= len(false_block.statements):
+                        # True branch is shorter - negate condition (true_block executes when C is false)
+                        if_stmt = HLILIf(_negate_condition(condition), true_block, None)
+                        target_block.add_statement(if_stmt)
+                        for stmt in false_block.statements:
+                            target_block.add_statement(stmt)
+
+                    else:
+                        # False branch is shorter - use original condition (false_block executes when C is true)
+                        if_stmt = HLILIf(condition, false_block, None)
+                        target_block.add_statement(if_stmt)
+                        for stmt in true_block.statements:
+                            target_block.add_statement(stmt)
+
+                # If only true branch has early return, negate condition
+                elif true_ends_with_return:
+                    if_stmt = HLILIf(_negate_condition(condition), true_block, None)
+                    target_block.add_statement(if_stmt)
+                    for stmt in false_block.statements:
+                        target_block.add_statement(stmt)
+
+                # If only false branch has early return, use original condition
+                elif false_ends_with_return:
+                    if_stmt = HLILIf(condition, false_block, None)
+                    target_block.add_statement(if_stmt)
+                    for stmt in true_block.statements:
+                        target_block.add_statement(stmt)
+
+                # Neither returns - use normal if-else
+                else:
+                    if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
+                    target_block.add_statement(if_stmt)
+
+                # Process merge block after if-else (return will be emitted there if needed)
                 if merge_block_idx is not None:
                     if stop_at is not None and merge_block_idx == stop_at:
                         return merge_block_idx

@@ -563,118 +563,292 @@ class SSAConstructor:
 # ============================================================================
 
 class SSADeconstructor:
-    '''Convert SSA back to non-SSA form'''
+    '''Convert SSA back to non-SSA form with interference-based variable allocation'''
 
     def __init__(self, function: MediumLevelILFunction):
         self.function = function
+        self.all_ssa_vars: Set[MLILVariableSSA] = set()
+        self.var_defs: Dict[MLILVariableSSA, Tuple[MediumLevelILBasicBlock, int]] = {}
+        self.var_uses: Dict[MLILVariableSSA, List[Tuple[MediumLevelILBasicBlock, int]]] = defaultdict(list)
+        self.live_in: Dict[MediumLevelILBasicBlock, Set[MLILVariableSSA]] = {}
+        self.live_out: Dict[MediumLevelILBasicBlock, Set[MLILVariableSSA]] = {}
+        self.interference: Dict[MLILVariableSSA, Set[MLILVariableSSA]] = defaultdict(set)
+        self.var_mapping: Dict[MLILVariableSSA, MLILVariable] = {}
 
     def deconstruct(self) -> MediumLevelILFunction:
         '''Convert from SSA to non-SSA (modifies in-place)'''
         # Step 1: Eliminate Phi nodes (insert copies in predecessors)
         self._eliminate_phi_nodes()
 
-        # Step 2: Replace SSA variables with base variables
-        self._remove_ssa_versions()
+        # Step 2: Collect all SSA variables and their def/use sites
+        self._collect_ssa_vars()
+
+        # Step 3: Compute liveness (which variables are live at each point)
+        self._compute_liveness()
+
+        # Step 4: Build interference graph (variables that can't share a name)
+        self._build_interference_graph()
+
+        # Step 5: Allocate final variable names (coalescing)
+        self._allocate_variables()
+
+        # Step 6: Replace SSA variables with allocated variables
+        self._apply_mapping()
 
         return self.function
 
-    def _eliminate_phi_nodes(self):
-        '''Replace Phi nodes with copies in predecessor blocks'''
+    def _collect_ssa_vars(self):
+        '''Collect all SSA variables and their definition/use sites'''
         for block in self.function.basic_blocks:
-            phi_nodes = [inst for inst in block.instructions if isinstance(inst, MLILPhi)]
+            for inst_idx, inst in enumerate(block.instructions):
+                if isinstance(inst, MLILSetVarSSA):
+                    self.all_ssa_vars.add(inst.var)
+                    self.var_defs[inst.var] = (block, inst_idx)
+                    self._collect_uses_in_expr(inst.value, block, inst_idx)
 
-            if not phi_nodes:
-                continue
+                else:
+                    self._collect_uses_in_stmt(inst, block, inst_idx)
 
-            # Remove Phi nodes from this block
-            block.instructions = [inst for inst in block.instructions if not isinstance(inst, MLILPhi)]
+    def _collect_uses_in_expr(self, expr, block: MediumLevelILBasicBlock, inst_idx: int):
+        '''Recursively collect variable uses in an expression'''
+        if isinstance(expr, MLILVarSSA):
+            self.all_ssa_vars.add(expr.var)
+            self.var_uses[expr.var].append((block, inst_idx))
 
-            # Insert copies in predecessors
-            for phi in phi_nodes:
-                for ssa_var, pred_block in phi.sources:
-                    # Skip self-assignment (var_s3 = var_s3)
-                    if phi.dest.base_var == ssa_var.base_var:
-                        continue
+        elif isinstance(expr, MLILBinaryOp):
+            self._collect_uses_in_expr(expr.lhs, block, inst_idx)
+            self._collect_uses_in_expr(expr.rhs, block, inst_idx)
 
-                    # Insert: phi.dest.base_var = ssa_var.base_var at end of pred_block
-                    copy = MLILSetVar(phi.dest.base_var, MLILVar(ssa_var.base_var))
-                    # Insert before terminal instruction
-                    if pred_block.instructions and pred_block.has_terminal:
-                        pred_block.instructions.insert(-1, copy)
+        elif isinstance(expr, MLILUnaryOp):
+            self._collect_uses_in_expr(expr.operand, block, inst_idx)
+
+    def _collect_uses_in_stmt(self, stmt, block: MediumLevelILBasicBlock, inst_idx: int):
+        '''Collect variable uses in a statement'''
+        if isinstance(stmt, MLILIf):
+            self._collect_uses_in_expr(stmt.condition, block, inst_idx)
+
+        elif isinstance(stmt, MLILRet):
+            if stmt.value:
+                self._collect_uses_in_expr(stmt.value, block, inst_idx)
+
+        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+            for arg in stmt.args:
+                self._collect_uses_in_expr(arg, block, inst_idx)
+
+        elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
+            self._collect_uses_in_expr(stmt.value, block, inst_idx)
+
+    def _compute_liveness(self):
+        '''Compute live-in and live-out sets for each block using dataflow analysis'''
+        # Initialize
+        for block in self.function.basic_blocks:
+            self.live_in[block] = set()
+            self.live_out[block] = set()
+
+        # Iterate until fixed point
+        changed = True
+        while changed:
+            changed = False
+            # Process blocks in reverse order
+            for block in reversed(self.function.basic_blocks):
+                # live_out = union of live_in of all successors
+                new_live_out = set()
+                for succ in block.outgoing_edges:
+                    new_live_out |= self.live_in[succ]
+
+                # live_in = use + (live_out - def)
+                use_set = set()
+                def_set = set()
+                for inst in block.instructions:
+                    if isinstance(inst, MLILSetVarSSA):
+                        def_set.add(inst.var)
+                        for var in self._get_vars_in_expr(inst.value):
+                            if var not in def_set:
+                                use_set.add(var)
 
                     else:
-                        pred_block.instructions.append(copy)
+                        for var in self._get_vars_in_stmt(inst):
+                            if var not in def_set:
+                                use_set.add(var)
 
-    def _remove_ssa_versions(self):
-        '''Replace MLILVarSSA/MLILSetVarSSA with MLILVar/MLILSetVar'''
+                new_live_in = use_set | (new_live_out - def_set)
+
+                if new_live_in != self.live_in[block] or new_live_out != self.live_out[block]:
+                    changed = True
+                    self.live_in[block] = new_live_in
+                    self.live_out[block] = new_live_out
+
+    def _get_vars_in_expr(self, expr) -> Set[MLILVariableSSA]:
+        '''Get all SSA variables used in an expression'''
+        result = set()
+        if isinstance(expr, MLILVarSSA):
+            result.add(expr.var)
+
+        elif isinstance(expr, MLILBinaryOp):
+            result |= self._get_vars_in_expr(expr.lhs)
+            result |= self._get_vars_in_expr(expr.rhs)
+
+        elif isinstance(expr, MLILUnaryOp):
+            result |= self._get_vars_in_expr(expr.operand)
+
+        return result
+
+    def _get_vars_in_stmt(self, stmt) -> Set[MLILVariableSSA]:
+        '''Get all SSA variables used in a statement'''
+        result = set()
+        if isinstance(stmt, MLILIf):
+            result |= self._get_vars_in_expr(stmt.condition)
+
+        elif isinstance(stmt, MLILRet):
+            if stmt.value:
+                result |= self._get_vars_in_expr(stmt.value)
+
+        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+            for arg in stmt.args:
+                result |= self._get_vars_in_expr(arg)
+
+        elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
+            result |= self._get_vars_in_expr(stmt.value)
+
+        return result
+
+    def _build_interference_graph(self):
+        '''Build interference graph: two variables interfere if live at same point'''
+        for block in self.function.basic_blocks:
+            live = set(self.live_out[block])
+
+            # Walk instructions backwards
+            for inst in reversed(block.instructions):
+                if isinstance(inst, MLILSetVarSSA):
+                    defined_var = inst.var
+                    # All currently live variables interfere with defined_var
+                    for live_var in live:
+                        if live_var != defined_var:
+                            self.interference[defined_var].add(live_var)
+                            self.interference[live_var].add(defined_var)
+                    live.discard(defined_var)
+                    live |= self._get_vars_in_expr(inst.value)
+
+                else:
+                    live |= self._get_vars_in_stmt(inst)
+
+    def _allocate_variables(self):
+        '''Allocate final variable names using graph coloring / coalescing'''
+        # Filter out dead variables (defined but never used)
+        live_vars = {v for v in self.all_ssa_vars if self.var_uses[v]}
+
+        # Group SSA vars by base variable
+        base_groups: Dict[str, List[MLILVariableSSA]] = defaultdict(list)
+        for ssa_var in live_vars:
+            base_groups[ssa_var.base_var.name].append(ssa_var)
+
+        # For each base variable group, try to coalesce
+        for base_name, ssa_vars in base_groups.items():
+            if not ssa_vars:
+                continue
+
+            # Sort by version for deterministic output (version 0 gets base name priority)
+            ssa_vars.sort(key=lambda v: v.version)
+            base_var = ssa_vars[0].base_var
+
+            # Find connected components of non-interfering variables
+            # Variables in the same component can share the base name
+            assigned: Dict[MLILVariableSSA, MLILVariable] = {}
+            suffix_counter = 0
+
+            for ssa_var in ssa_vars:
+                if ssa_var in assigned:
+                    continue
+
+                # Check if this var interferes with any already assigned to base_var
+                can_use_base = True
+                for other_var, other_assigned in assigned.items():
+                    if other_assigned.name == base_name and other_var in self.interference.get(ssa_var, set()):
+                        can_use_base = False
+                        break
+
+                if can_use_base:
+                    assigned[ssa_var] = base_var
+
+                else:
+                    # Need a new name
+                    new_name = f'{base_name}_v{suffix_counter}'
+                    suffix_counter += 1
+                    new_var = MLILVariable(new_name, base_var.slot_index)
+                    assigned[ssa_var] = new_var
+                    # Add to function's locals
+                    if new_name not in self.function.locals:
+                        self.function.locals[new_name] = new_var
+
+            self.var_mapping.update(assigned)
+
+    def _apply_mapping(self):
+        '''Replace SSA variables with allocated variables'''
         for block in self.function.basic_blocks:
             new_insts = []
-
             for inst in block.instructions:
-                new_inst = self._deversion_inst(inst)
-                new_insts.append(new_inst)
-
+                new_inst = self._apply_mapping_to_inst(inst)
+                if new_inst is not None:
+                    new_insts.append(new_inst)
             block.instructions = new_insts
 
-    def _deversion_inst(self, inst: MediumLevelILInstruction) -> MediumLevelILInstruction:
-        '''Remove SSA versions from instruction'''
+    def _apply_mapping_to_inst(self, inst: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Apply variable mapping to instruction'''
         if isinstance(inst, MLILSetVarSSA):
-            new_value = self._deversion_expr(inst.value)
-            return MLILSetVar(inst.var.base_var, new_value)
+            new_var = self.var_mapping.get(inst.var, inst.var.base_var)
+            new_value = self._apply_mapping_to_expr(inst.value)
+
+            # Skip self-assignment (var = var) from coalesced phi copies
+            if isinstance(new_value, MLILVar) and new_value.var == new_var:
+                return None
+
+            return MLILSetVar(new_var, new_value)
 
         elif isinstance(inst, MLILPhi):
-            # Should have been eliminated already
             raise RuntimeError('Phi node not eliminated')
 
         else:
-            return self._deversion_stmt(inst)
+            return self._apply_mapping_to_stmt(inst)
 
-    def _deversion_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
-        '''Remove SSA versions from expression'''
+    def _apply_mapping_to_expr(self, expr: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Apply variable mapping to expression'''
         if isinstance(expr, MLILVarSSA):
-            return MLILVar(expr.var.base_var)
+            new_var = self.var_mapping.get(expr.var, expr.var.base_var)
+            return MLILVar(new_var)
 
         elif isinstance(expr, MLILBinaryOp):
-            new_lhs = self._deversion_expr(expr.lhs)
-            new_rhs = self._deversion_expr(expr.rhs)
-
+            new_lhs = self._apply_mapping_to_expr(expr.lhs)
+            new_rhs = self._apply_mapping_to_expr(expr.rhs)
             if new_lhs is expr.lhs and new_rhs is expr.rhs:
                 return expr
-
-            # Use same rebuild as constructor
             constructor = SSAConstructor(self.function)
             return constructor._rebuild_binary_op(expr, new_lhs, new_rhs)
 
         elif isinstance(expr, MLILUnaryOp):
-            new_operand = self._deversion_expr(expr.operand)
-
+            new_operand = self._apply_mapping_to_expr(expr.operand)
             if new_operand is expr.operand:
                 return expr
-
             constructor = SSAConstructor(self.function)
             return constructor._rebuild_unary_op(expr, new_operand)
 
         else:
             return expr
 
-    def _deversion_stmt(self, stmt: MediumLevelILInstruction) -> MediumLevelILInstruction:
-        '''Remove SSA versions from statement'''
+    def _apply_mapping_to_stmt(self, stmt: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Apply variable mapping to statement'''
         if isinstance(stmt, MLILIf):
-            new_cond = self._deversion_expr(stmt.condition)
-
+            new_cond = self._apply_mapping_to_expr(stmt.condition)
             if new_cond is not stmt.condition:
                 return MLILIf(new_cond, stmt.true_target, stmt.false_target)
 
         elif isinstance(stmt, MLILRet):
             if stmt.value:
-                new_value = self._deversion_expr(stmt.value)
-
+                new_value = self._apply_mapping_to_expr(stmt.value)
                 if new_value is not stmt.value:
                     return MLILRet(new_value)
 
         elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
-            new_args = [self._deversion_expr(arg) for arg in stmt.args]
-
+            new_args = [self._apply_mapping_to_expr(arg) for arg in stmt.args]
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
                     return MLILCall(stmt.target, new_args)
@@ -686,8 +860,7 @@ class SSADeconstructor:
                     return MLILCallScript(stmt.module, stmt.func, new_args)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
-            new_value = self._deversion_expr(stmt.value)
-
+            new_value = self._apply_mapping_to_expr(stmt.value)
             if new_value is not stmt.value:
                 if isinstance(stmt, MLILStoreGlobal):
                     return MLILStoreGlobal(stmt.index, new_value)
@@ -697,6 +870,34 @@ class SSADeconstructor:
 
         return stmt
 
+    def _eliminate_phi_nodes(self):
+        '''Replace Phi nodes with SSA copies in predecessor blocks'''
+        for block in self.function.basic_blocks:
+            phi_nodes = [inst for inst in block.instructions if isinstance(inst, MLILPhi)]
+
+            if not phi_nodes:
+                continue
+
+            # Remove Phi nodes from this block
+            block.instructions = [inst for inst in block.instructions if not isinstance(inst, MLILPhi)]
+
+            # Insert SSA copies in predecessors
+            for phi in phi_nodes:
+                for ssa_var, pred_block in phi.sources:
+                    # Skip if source and dest are the exact same SSA variable
+                    if phi.dest == ssa_var:
+                        continue
+
+                    # Insert SSA copy: phi.dest = ssa_var
+                    # This preserves SSA info for liveness analysis
+                    copy = MLILSetVarSSA(phi.dest, MLILVarSSA(ssa_var))
+
+                    # Insert before terminal instruction
+                    if pred_block.instructions and pred_block.has_terminal:
+                        pred_block.instructions.insert(-1, copy)
+
+                    else:
+                        pred_block.instructions.append(copy)
 
 # ============================================================================
 # Public API

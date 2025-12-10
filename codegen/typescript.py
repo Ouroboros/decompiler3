@@ -6,6 +6,8 @@ from ir.hlil import *
 
 
 class TypeScriptGenerator:
+    _current_func: 'HighLevelILFunction' = None
+
     @classmethod
     def _format_type(cls, type_hint) -> str:
         '''Map HLIL type to TypeScript'''
@@ -135,6 +137,28 @@ class TypeScriptGenerator:
         return False
 
     @classmethod
+    def _is_number_var(cls, expr: HLILExpression) -> bool:
+        if not isinstance(expr, HLILVar):
+            return False
+
+        hint = expr.var.type_hint
+
+        # Fallback: look up from function's variable list
+        if hint is None and cls._current_func:
+            for var in cls._current_func.variables:
+                if var.name == expr.var.name:
+                    hint = var.type_hint
+                    break
+
+        if isinstance(hint, HLILTypeKind):
+            return hint in (HLILTypeKind.INT, HLILTypeKind.FLOAT)
+
+        elif isinstance(hint, str):
+            return hint.lower() in ('int', 'float', 'number')
+
+        return False
+
+    @classmethod
     def _format_expr(cls, expr: HLILExpression) -> str:
         if isinstance(expr, HLILVar):
             var = expr.var
@@ -223,6 +247,7 @@ class TypeScriptGenerator:
 
     @classmethod
     def generate_function(cls, func: HighLevelILFunction) -> List[str]:
+        cls._current_func = func
         lines = []
 
         # Function signature with types
@@ -317,14 +342,23 @@ class TypeScriptGenerator:
             false_block = stmt.false_block
 
             # Swap if true has deeper if nesting than false (reduce nesting)
+            # But only if it won't create an empty true block
             true_depth = cls._get_if_depth(true_block)
             false_depth = cls._get_if_depth(false_block)
-            if false_block and true_depth > false_depth:
+            false_has_content = false_block and false_block.statements
+            if false_has_content and true_depth > false_depth:
                 cond_str = cls._negate_condition_str(condition)
                 true_block, false_block = false_block, true_block
 
             else:
-                cond_str = cls._format_expr(condition)
+                # Swap if true block is empty but false has content
+                true_empty = not true_block or not true_block.statements
+                if true_empty and false_has_content:
+                    cond_str = cls._negate_condition_str(condition)
+                    true_block, false_block = false_block, None
+
+                else:
+                    cond_str = cls._format_expr(condition)
 
             lines.append(f'{indent_str}if ({cond_str}) {{')
             lines.extend(cls._generate_block(true_block, indent + 1))
@@ -408,6 +442,11 @@ class TypeScriptGenerator:
         elif isinstance(stmt, HLILAssign):
             dest_str = cls._format_expr(stmt.dest)
             src_str = cls._format_expr(stmt.src)
+
+            # Wrap boolean expr with int() when assigning to number variable
+            if cls._is_boolean_expr(stmt.src) and cls._is_number_var(stmt.dest):
+                src_str = f'int({src_str})'
+
             lines.append(f'{indent_str}{dest_str} = {src_str};')
 
         elif isinstance(stmt, HLILExprStmt):
@@ -436,6 +475,9 @@ const REGS: any[] = new Array(16);
 
 // Intrinsic function: address-of operator (for output parameters)
 function addr_of<T>(value: T): T { return value; }
+
+// Intrinsic function: boolean to int conversion
+function int(b: boolean): number { return +b; }
 
 // Placeholder function: external script call
 function extern_call(target: string, ...args: any[]): any { return undefined; }

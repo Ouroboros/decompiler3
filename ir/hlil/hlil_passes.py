@@ -171,7 +171,7 @@ class ControlFlowOptimizationPass(Pass):
         while i < len(block.statements):
             stmt = block.statements[i]
 
-            # Try inline: var = bool_expr; if (var != 0) -> if (bool_expr)
+            # Try inline: [nop*, assign, if] -> [nop*, if(bool_expr)]
             if isinstance(stmt, HLILAssign) and isinstance(stmt.dest, HLILVar):
                 if self._is_boolean_expr(stmt.src):
                     if i + 1 < len(block.statements):
@@ -187,6 +187,32 @@ class ControlFlowOptimizationPass(Pass):
                             optimized.append(inlined)
                             i += 2
                             continue
+
+            # Skip nop to find [assign, if] pattern for inlining
+            if self._is_nop_stmt(stmt):
+                # Look ahead for [assign, if] pattern
+                j = i + 1
+                while j < len(block.statements) and self._is_nop_stmt(block.statements[j]):
+                    j += 1
+
+                if j < len(block.statements) - 1:
+                    assign_stmt = block.statements[j]
+                    if_stmt = block.statements[j + 1]
+                    if isinstance(assign_stmt, HLILAssign) and isinstance(assign_stmt.dest, HLILVar):
+                        if self._is_boolean_expr(assign_stmt.src):
+                            inlined = self._try_inline_condition(assign_stmt, if_stmt)
+                            if inlined:
+                                # Collect leading nops
+                                for k in range(i, j):
+                                    optimized.append(block.statements[k])
+
+                                self._optimize_block(inlined.true_block)
+                                self._optimize_block(inlined.false_block)
+                                self._try_flatten_if_block(inlined, is_true_block=True)
+                                self._try_flatten_if_block(inlined, is_true_block=False)
+                                optimized.append(inlined)
+                                i = j + 2
+                                continue
 
             if isinstance(stmt, HLILIf):
                 self._optimize_block(stmt.true_block)
