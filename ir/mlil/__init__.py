@@ -120,4 +120,5 @@ __all__ = [
     # Debug
     'MLILNop',
     'MLILDebug',
+    'is_nop_instr',
 ]

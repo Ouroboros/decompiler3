@@ -382,6 +382,79 @@ class SSAOptimizer:
 
         return expr
 
+    def eliminate_redundant_reg_loads(self) -> bool:
+        '''Replace redundant LoadReg with previously loaded value.
+
+        Pattern: var1 = LoadReg(n); ...; var2 = LoadReg(n)
+        If no StoreReg(n) between them, replace var2 uses with var1.
+        '''
+        self._build_def_use_chains()
+
+        # Map: SSA var -> the SSA var it should be replaced with
+        reg_copies: Dict[MLILVariableSSA, MLILVariableSSA] = {}
+
+        # DFS traversal following control flow
+        visited = set()
+
+        def visit(block_idx: int, reg_state: Dict[int, MLILVariableSSA]):
+            if block_idx in visited:
+                return
+            visited.add(block_idx)
+
+            block = self.function.basic_blocks[block_idx]
+            state = reg_state.copy()
+
+            for inst in block.instructions:
+                if isinstance(inst, MLILStoreReg):
+                    # Register modified, invalidate
+                    state.pop(inst.index, None)
+
+                elif isinstance(inst, MLILSetVarSSA):
+                    if isinstance(inst.value, MLILLoadReg):
+                        reg_idx = inst.value.index
+                        if reg_idx in state:
+                            reg_copies[inst.var] = state[reg_idx]
+                        else:
+                            state[reg_idx] = inst.var
+
+            # Visit successors
+            last_inst = block.instructions[-1] if block.instructions else None
+            if isinstance(last_inst, MLILIf):
+                if last_inst.true_target:
+                    visit(last_inst.true_target.index, state)
+                if last_inst.false_target:
+                    visit(last_inst.false_target.index, state)
+
+            elif isinstance(last_inst, MLILGoto):
+                if last_inst.target:
+                    visit(last_inst.target.index, state)
+
+            elif not isinstance(last_inst, MLILRet):
+                if block_idx + 1 < len(self.function.basic_blocks):
+                    visit(block_idx + 1, state)
+
+        if self.function.basic_blocks:
+            visit(0, {})
+
+        if not reg_copies:
+            return False
+
+        # Replace uses of redundant loads
+        changed = False
+        for block in self.function.basic_blocks:
+            new_instructions = []
+
+            for inst in block.instructions:
+                new_inst = self._replace_copies_in_inst(inst, reg_copies)
+                new_instructions.append(new_inst)
+
+                if new_inst is not inst:
+                    changed = True
+
+            block.instructions = new_instructions
+
+        return changed
+
     def eliminate_dead_code(self) -> bool:
         '''Remove SSA variable assignments that are never used'''
         self._build_def_use_chains()

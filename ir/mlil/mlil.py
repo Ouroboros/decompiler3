@@ -548,6 +548,11 @@ class MLILDebug(MediumLevelILStatement):
         return f'debug.{self.debug_type}({self.value})'
 
 
+def is_nop_instr(instr: MediumLevelILInstruction) -> bool:
+    '''Check if instruction has no effect (debug/nop)'''
+    return isinstance(instr, (MLILDebug, MLILNop))
+
+
 # === Basic Block ===
 
 class MediumLevelILBasicBlock:

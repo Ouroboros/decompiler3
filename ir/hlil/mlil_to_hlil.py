@@ -531,6 +531,10 @@ class MLILToHLILConverter:
         self.visited_blocks: Set[int] = set()
         self.globally_processed: Set[int] = set()
 
+        # Loop detection
+        self.loop_headers: Set[int] = set()  # Blocks that are loop headers
+        self.loop_ends: Dict[int, int] = {}  # back_edge_source -> loop_header
+
         # SSA-based register resolution
         self.resolver = RegisterResolver(mlil_func)
 
@@ -555,8 +559,9 @@ class MLILToHLILConverter:
         # Phase 2: Convert variables
         self._convert_variables()
 
-        # Phase 3: Build CFG
+        # Phase 3: Build CFG and detect loops
         self._build_cfg()
+        self._detect_loops()
 
         # Phase 4: Reconstruct control flow
         if self.mlil_func.basic_blocks:
@@ -650,6 +655,45 @@ class MLILToHLILConverter:
                         successors.append(i + 1)
             self.block_successors[i] = successors
 
+    def _detect_loops(self):
+        '''Detect loops using iterative DFS to find back edges'''
+        if not self.mlil_func.basic_blocks:
+            return
+
+        visited = set()
+        in_stack = set()
+        # Stack: (block_idx, iterator over successors, is_entering)
+        stack = [(0, None, True)]
+
+        while stack:
+            block_idx, succ_iter, is_entering = stack.pop()
+
+            if is_entering:
+                if block_idx in visited:
+                    continue
+                visited.add(block_idx)
+                in_stack.add(block_idx)
+                # Push exit marker, then process successors
+                successors = self.block_successors.get(block_idx, [])
+                stack.append((block_idx, iter(successors), False))
+
+            else:
+                # Processing successors
+                for succ in succ_iter:
+                    if succ in in_stack:
+                        # Back edge
+                        self.loop_headers.add(succ)
+                        self.loop_ends[block_idx] = succ
+
+                    elif succ not in visited:
+                        # Push remaining successors back, then visit succ
+                        stack.append((block_idx, succ_iter, False))
+                        stack.append((succ, None, True))
+                        break
+                else:
+                    # All successors processed, exit this node
+                    in_stack.discard(block_idx)
+
     def _get_reachable(self, start_idx: int, max_depth: int = 100) -> Dict[int, int]:
         reachable = {}
         queue = deque([(start_idx, 0)])
@@ -675,11 +719,10 @@ class MLILToHLILConverter:
             return min(common)
         reachable1 = self._get_reachable(block1_idx)
         reachable2 = self._get_reachable(block2_idx)
-        if block1_idx in reachable2:
-            return block1_idx
-        if block2_idx in reachable1:
-            return block2_idx
+        # Find common blocks reachable from both, excluding the branch blocks themselves
         common_blocks = set(reachable1.keys()) & set(reachable2.keys())
+        common_blocks.discard(block1_idx)
+        common_blocks.discard(block2_idx)
         if not common_blocks:
             return None
         return min(common_blocks, key=lambda idx: reachable1[idx] + reachable2[idx])
@@ -691,9 +734,227 @@ class MLILToHLILConverter:
         if not block.instructions:
             return False
         return (
-            all(isinstance(instr, (MLILDebug, MLILNop)) for instr in block.instructions[:-1]) and
+            all(is_nop_instr(instr) for instr in block.instructions[:-1]) and
             isinstance(block.instructions[-1], MLILGoto)
         )
+
+    def _is_else_if_block(self, block_idx: int) -> bool:
+        '''Check if block is an else-if condition check (ends with if, no side effects before)'''
+        if block_idx >= len(self.mlil_func.basic_blocks):
+            return False
+        block = self.mlil_func.basic_blocks[block_idx]
+        if not block.instructions:
+            return False
+        # Must end with MLILIf
+        if not isinstance(block.instructions[-1], MLILIf):
+            return False
+        # All preceding instructions must be side-effect-free (condition setup)
+        for instr in block.instructions[:-1]:
+            if is_nop_instr(instr):
+                continue
+            # Allow SetVar for condition evaluation (e.g., var_s11 = REG[0] == 0)
+            if isinstance(instr, MLILSetVar):
+                continue
+            # Other instructions may have side effects
+            return False
+        return True
+
+    def _process_loop(self, header_idx: int, target_block: HLILBlock,
+                      stop_at: Optional[int]) -> Optional[int]:
+        '''Process a loop starting at header_idx'''
+        self.visited_blocks.add(header_idx)
+        self.globally_processed.add(header_idx)
+
+        mlil_block = self.mlil_func.basic_blocks[header_idx]
+        last_instr = mlil_block.instructions[-1] if mlil_block.instructions else None
+
+        # Find the exit block (where loop exits to)
+        exit_block_idx = None
+        loop_body_start = None
+
+        if isinstance(last_instr, MLILIf):
+            # while (cond) pattern: if (cond) goto exit else body
+            # or: if (!cond) goto body else exit
+            true_target = last_instr.true_target.index if last_instr.true_target else None
+            false_target = last_instr.false_target.index if last_instr.false_target else None
+
+            # Determine which branch is the loop body and which is exit
+            # The exit branch leads outside the loop (not back to header)
+            true_reaches_header = self._can_reach(true_target, header_idx, set())
+            false_reaches_header = self._can_reach(false_target, header_idx, set())
+
+            if true_reaches_header and not false_reaches_header:
+                # true branch is loop body, false is exit
+                loop_body_start = true_target
+                exit_block_idx = false_target
+                condition = self._convert_expr(last_instr.condition)
+
+            elif false_reaches_header and not true_reaches_header:
+                # false branch is loop body, true is exit
+                loop_body_start = false_target
+                exit_block_idx = true_target
+                condition = _negate_condition(self._convert_expr(last_instr.condition))
+
+            else:
+                # Both or neither reach header - complex loop, use while(true)
+                condition = HLILConst(1)
+                loop_body_start = true_target
+                exit_block_idx = None
+
+        else:
+            # Infinite loop: while (true)
+            condition = HLILConst(1)
+            if isinstance(last_instr, MLILGoto) and last_instr.target:
+                loop_body_start = last_instr.target.index
+
+        # Process instructions before the terminator in header block
+        self.current_block_idx = header_idx
+        for instr_idx, instr in enumerate(mlil_block.instructions[:-1]):
+            self.current_instr_idx = instr_idx
+            stmts = self._convert_instruction(instr, header_idx, instr_idx)
+            for stmt in stmts:
+                target_block.add_statement(stmt)
+
+        # Create loop body
+        loop_body = HLILBlock()
+        if loop_body_start is not None:
+            self._reconstruct_control_flow(loop_body_start, loop_body, stop_at=header_idx)
+
+        # Create while statement
+        while_stmt = HLILWhile(condition, loop_body)
+        target_block.add_statement(while_stmt)
+
+        # Process code after loop (exit block)
+        if exit_block_idx is not None:
+            self.visited_blocks.discard(exit_block_idx)
+            return self._reconstruct_control_flow(exit_block_idx, target_block, stop_at=stop_at)
+
+        return None
+
+    def _can_reach(self, from_idx: Optional[int], to_idx: int, visited: Set[int]) -> bool:
+        '''Check if from_idx can reach to_idx through CFG without crossing other loop headers'''
+        if from_idx is None:
+            return False
+
+        stack = [from_idx]
+        while stack:
+            idx = stack.pop()
+            if idx == to_idx:
+                return True
+            if idx in visited:
+                continue
+            # Don't cross other loop headers (except the target)
+            if idx in self.loop_headers and idx != to_idx:
+                continue
+            visited.add(idx)
+            stack.extend(self.block_successors.get(idx, []))
+
+        return False
+
+    def _process_if_statement(self, if_instr: MLILIf, block_idx: int,
+                               target_block: HLILBlock, stop_at: Optional[int]) -> Optional[int]:
+        '''Process an if statement, detecting and handling else-if chains'''
+        condition = self._convert_expr(if_instr.condition)
+        true_target_idx = if_instr.true_target.index if if_instr.true_target else None
+        false_target_idx = if_instr.false_target.index if if_instr.false_target else None
+
+        # Find merge block for the entire if/else-if chain
+        merge_block_idx = None
+        if true_target_idx is not None and false_target_idx is not None:
+            merge_block_idx = self._find_merge_block(true_target_idx, false_target_idx)
+
+        branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
+        saved_visited = self.visited_blocks.copy()
+
+        # Ensure branch_stop is not one of the branch targets
+        # (otherwise that branch would be empty)
+        if branch_stop == true_target_idx or branch_stop == false_target_idx:
+            branch_stop = None
+
+        # Process true branch
+        # MLIL: if (C) goto true_target else false_target
+        # C true -> true_target, C false -> false_target
+        true_block = HLILBlock()
+        if true_target_idx is not None:
+            self.visited_blocks = saved_visited.copy()
+            # Add outer stop_at to visited, but not if it's our true_target
+            if stop_at is not None and stop_at != merge_block_idx and stop_at != true_target_idx:
+                self.visited_blocks.add(stop_at)
+            self._reconstruct_control_flow(true_target_idx, true_block, stop_at=branch_stop)
+
+        all_visited = self.visited_blocks.copy()
+
+        # Check if false_target is an else-if block
+        false_block = HLILBlock()
+        if false_target_idx is not None and self._is_else_if_block(false_target_idx):
+            # Else-if chain: recursively build nested if structure
+            self.visited_blocks = saved_visited.copy()
+            if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
+                self.visited_blocks.add(stop_at)
+            self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
+            all_visited |= self.visited_blocks
+
+        elif false_target_idx is not None:
+            # Normal else branch
+            self.visited_blocks = saved_visited.copy()
+            if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
+                self.visited_blocks.add(stop_at)
+            self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
+            all_visited |= self.visited_blocks
+
+        self.visited_blocks = all_visited
+        if stop_at is not None:
+            self.visited_blocks.discard(stop_at)
+
+        # Check if branches end with return
+        true_ends_with_return = (true_block.statements and
+            isinstance(true_block.statements[-1], HLILReturn))
+        false_ends_with_return = (false_block.statements and
+            isinstance(false_block.statements[-1], HLILReturn))
+
+        # MLIL: if (C) goto true_target else false_target
+        # HLIL: if (C) { true_block } else { false_block }
+
+        # Early return patterns
+        if true_ends_with_return and false_ends_with_return:
+            if len(true_block.statements) <= len(false_block.statements):
+                if_stmt = HLILIf(condition, true_block, None)
+                target_block.add_statement(if_stmt)
+                for stmt in false_block.statements:
+                    target_block.add_statement(stmt)
+
+            else:
+                if_stmt = HLILIf(_negate_condition(condition), false_block, None)
+                target_block.add_statement(if_stmt)
+                for stmt in true_block.statements:
+                    target_block.add_statement(stmt)
+
+        elif true_ends_with_return:
+            if_stmt = HLILIf(condition, true_block, None)
+            target_block.add_statement(if_stmt)
+            for stmt in false_block.statements:
+                target_block.add_statement(stmt)
+
+        elif false_ends_with_return:
+            if_stmt = HLILIf(_negate_condition(condition), false_block, None)
+            target_block.add_statement(if_stmt)
+            for stmt in true_block.statements:
+                target_block.add_statement(stmt)
+
+        else:
+            # MLIL: if (C) goto true_target else false_target
+            # HLIL: if (C) { true_block } else { false_block }
+            if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
+            target_block.add_statement(if_stmt)
+
+        # Process merge block
+        if merge_block_idx is not None:
+            if stop_at is not None and merge_block_idx == stop_at:
+                return merge_block_idx
+            self.visited_blocks.discard(merge_block_idx)
+            return self._reconstruct_control_flow(merge_block_idx, target_block, stop_at=stop_at)
+
+        return None
 
     def _reconstruct_control_flow(self, block_idx: int, target_block: HLILBlock,
                                    stop_at: Optional[int] = None) -> Optional[int]:
@@ -719,6 +980,10 @@ class MLILToHLILConverter:
             self.visited_blocks.add(block_idx)
             return block_idx
 
+        # Check if this is a loop header
+        if block_idx in self.loop_headers:
+            return self._process_loop(block_idx, target_block, stop_at)
+
         self.visited_blocks.add(block_idx)
         self.globally_processed.add(block_idx)
         self.current_block_idx = block_idx
@@ -736,96 +1001,18 @@ class MLILToHLILConverter:
             self.current_instr_idx = last_instr_idx
 
             if isinstance(last_instr, MLILIf):
-                condition = self._convert_expr(last_instr.condition)
-                true_target_idx = last_instr.true_target.index if last_instr.true_target else None
-                false_target_idx = last_instr.false_target.index if last_instr.false_target else None
-
-                merge_block_idx = None
-                if true_target_idx is not None and false_target_idx is not None:
-                    merge_block_idx = self._find_merge_block(true_target_idx, false_target_idx)
-
-                true_block = HLILBlock()
-                false_block = HLILBlock()
-                branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
-
-                saved_visited = self.visited_blocks.copy()
-                branch_visited_base = saved_visited.copy()
-                if stop_at is not None and stop_at != merge_block_idx:
-                    branch_visited_base.add(stop_at)
-
-                if true_target_idx is not None:
-                    self.visited_blocks = branch_visited_base.copy()
-                    self._reconstruct_control_flow(true_target_idx, true_block, stop_at=branch_stop)
-
-                true_visited = self.visited_blocks
-                if stop_at is not None:
-                    true_visited = true_visited - {stop_at}
-
-                if false_target_idx is not None:
-                    self.visited_blocks = branch_visited_base | true_visited
-                    self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
-
-                false_visited = self.visited_blocks
-                if stop_at is not None:
-                    false_visited = false_visited - {stop_at}
-                self.visited_blocks = saved_visited | true_visited | false_visited
-
-                # Check if branches end with return (early return pattern)
-                true_ends_with_return = (true_block.statements and
-                    isinstance(true_block.statements[-1], HLILReturn))
-                false_ends_with_return = (false_block.statements and
-                    isinstance(false_block.statements[-1], HLILReturn))
-
-                # MLIL if semantics: if (C) goto false_target else true_target
-                # So: C true -> false_block, C false -> true_block
-                # To execute true_block, need !C; to execute false_block, need C
-
-                # If both branches return, put shorter one in if { return }, longer one after
-                if true_ends_with_return and false_ends_with_return:
-                    if len(true_block.statements) <= len(false_block.statements):
-                        # True branch is shorter - negate condition (true_block executes when C is false)
-                        if_stmt = HLILIf(_negate_condition(condition), true_block, None)
-                        target_block.add_statement(if_stmt)
-                        for stmt in false_block.statements:
-                            target_block.add_statement(stmt)
-
-                    else:
-                        # False branch is shorter - use original condition (false_block executes when C is true)
-                        if_stmt = HLILIf(condition, false_block, None)
-                        target_block.add_statement(if_stmt)
-                        for stmt in true_block.statements:
-                            target_block.add_statement(stmt)
-
-                # If only true branch has early return, negate condition
-                elif true_ends_with_return:
-                    if_stmt = HLILIf(_negate_condition(condition), true_block, None)
-                    target_block.add_statement(if_stmt)
-                    for stmt in false_block.statements:
-                        target_block.add_statement(stmt)
-
-                # If only false branch has early return, use original condition
-                elif false_ends_with_return:
-                    if_stmt = HLILIf(condition, false_block, None)
-                    target_block.add_statement(if_stmt)
-                    for stmt in true_block.statements:
-                        target_block.add_statement(stmt)
-
-                # Neither returns - use normal if-else
-                else:
-                    if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
-                    target_block.add_statement(if_stmt)
-
-                # Process merge block after if-else (return will be emitted there if needed)
-                if merge_block_idx is not None:
-                    if stop_at is not None and merge_block_idx == stop_at:
-                        return merge_block_idx
-                    self.visited_blocks.discard(merge_block_idx)
-                    return self._reconstruct_control_flow(merge_block_idx, target_block, stop_at=stop_at)
-                return None
+                return self._process_if_statement(
+                    last_instr, block_idx, target_block, stop_at
+                )
 
             elif isinstance(last_instr, MLILGoto):
                 if last_instr.target is not None:
-                    return self._reconstruct_control_flow(last_instr.target.index, target_block, stop_at=stop_at)
+                    target_idx = last_instr.target.index
+                    # Check if this is a back edge (loop continue)
+                    if target_idx in self.loop_headers and target_idx in self.globally_processed:
+                        # Back edge - loop continues naturally
+                        return None
+                    return self._reconstruct_control_flow(target_idx, target_block, stop_at=stop_at)
                 return None
 
             elif isinstance(last_instr, MLILRet):

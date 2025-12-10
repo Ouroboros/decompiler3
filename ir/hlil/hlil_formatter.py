@@ -134,22 +134,46 @@ class HLILFormatter:
         return lines
 
     @classmethod
+    def _format_if_chain(cls, if_stmt: HLILIf, indent: int) -> List[str]:
+        '''Format if / else-if / else chain'''
+        indent_str = default_indent() * indent
+        lines = []
+
+        # First if
+        cond_str = cls._format_expr(if_stmt.condition)
+        lines.append(f'{indent_str}if ({cond_str}) {{')
+        lines.extend(cls._format_block(if_stmt.true_block, indent + 1))
+
+        # Walk through else-if chain
+        current_else = if_stmt.false_block
+        while current_else and current_else.statements:
+            # Check for else-if: single HLILIf statement in false_block
+            if (len(current_else.statements) == 1 and
+                isinstance(current_else.statements[0], HLILIf)):
+                nested_if = current_else.statements[0]
+                cond_str = cls._format_expr(nested_if.condition)
+                lines.append(f'{indent_str}}} else if ({cond_str}) {{')
+                lines.extend(cls._format_block(nested_if.true_block, indent + 1))
+                current_else = nested_if.false_block
+
+            else:
+                # Final else block
+                lines.append(f'{indent_str}}} else {{')
+                lines.extend(cls._format_block(current_else, indent + 1))
+                break
+
+        lines.append(f'{indent_str}}}')
+        return lines
+
+    @classmethod
     def _format_statement(cls, stmt: HLILStatement, indent: int = 0) -> List[str]:
         '''Format a statement'''
         indent_str = default_indent() * indent
         lines = []
 
         if isinstance(stmt, HLILIf):
-            # if (condition) { ... }
-            cond_str = cls._format_expr(stmt.condition)
-            lines.append(f'{indent_str}if ({cond_str}) {{')
-            lines.extend(cls._format_block(stmt.true_block, indent + 1))
-
-            if stmt.false_block and stmt.false_block.statements:
-                lines.append(f'{indent_str}}} else {{')
-                lines.extend(cls._format_block(stmt.false_block, indent + 1))
-
-            lines.append(f'{indent_str}}}')
+            # if (condition) { ... } [else if (...) { ... }]* [else { ... }]
+            lines.extend(cls._format_if_chain(stmt, indent))
 
         elif isinstance(stmt, HLILWhile):
             # while (condition) { ... }
