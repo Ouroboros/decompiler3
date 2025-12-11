@@ -1,8 +1,11 @@
 '''MLIL Builder - Helper for constructing MLIL functions'''
 
-from typing import Optional, Union
+from typing import Optional, Union, List, TYPE_CHECKING
 
 from .mlil import *
+
+if TYPE_CHECKING:
+    from ir.core import IRParameter
 
 
 class MLILBuilder:
@@ -15,16 +18,26 @@ class MLILBuilder:
 
     # === Function Management ===
 
-    def create_function(self, name: str, start_addr: int = 0):
+    def create_function(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None):
         '''Create MLIL function'''
         if self.function is not None:
             raise RuntimeError('Function already created')
-        self.function = MediumLevelILFunction(name, start_addr)
+        self.function = MediumLevelILFunction(name, start_addr, params)
 
     def finalize(self) -> MediumLevelILFunction:
         '''Finalize and return the constructed function'''
         if self.function is None:
             raise RuntimeError('No function created')
+
+        # Fill in missing parameters (unused params not created during translation)
+        source_params = self.function.source_params
+        # First extend to full length
+        while len(self.function.parameters) < len(source_params):
+            self.function.parameters.append(None)
+        # Then fill any None slots using source param info
+        for i, src_param in enumerate(source_params):
+            if self.function.parameters[i] is None:
+                self.function.parameters[i] = MLILVariable(src_param.name)
 
         # Verify all blocks have terminal instructions
         for block in self.function.basic_blocks:

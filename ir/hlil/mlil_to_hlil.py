@@ -615,7 +615,7 @@ class MLILToHLILConverter:
         used_vars = defined_vars & read_vars
 
         for mlil_var in self.mlil_func.parameters:
-            if mlil_var is None or mlil_var.name not in read_vars:
+            if mlil_var is None:
                 continue
             type_hint = self._get_type_hint(mlil_var.name)
             hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint, kind=VariableKind.PARAM)

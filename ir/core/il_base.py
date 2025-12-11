@@ -31,3 +31,20 @@ class BinaryOperation(ILInstruction):
 class UnaryOperation(ILInstruction):
     '''Unary operation trait'''
     pass
+
+
+class IRParameter:
+    '''Function parameter with type and default value'''
+
+    def __init__(self, name: str, type_name: str = None, default_value=None):
+        self.name = name
+        self.type_name = type_name  # Type as string (e.g. 'int', 'str', 'float')
+        self.default_value = default_value
+
+    def __repr__(self):
+        if self.default_value is not None:
+            return f'IRParameter({self.name!r}, {self.type_name!r}, {self.default_value!r})'
+        elif self.type_name:
+            return f'IRParameter({self.name!r}, {self.type_name!r})'
+        else:
+            return f'IRParameter({self.name!r})'

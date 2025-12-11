@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import *
 
 from ir.llil.llil import *
+from ir.core import IRParameter
 
 from ..disasm import *
 from ..llil_builder import *
@@ -39,7 +40,8 @@ class ED9VMLifter:
             raise ValueError(f'Function {func.name} has no entry block')
 
         builder = FalcomVMBuilder()
-        builder.create_function(func.name, func.offset, len(func.params))
+        ir_params = self._convert_params(func.params)
+        builder.create_function(func.name, func.offset, ir_params)
 
         blocks = self._collect_blocks(func.entry_block)
         blocks.sort(key = lambda b: b.offset)
@@ -66,6 +68,16 @@ class ED9VMLifter:
         return results
 
     # --------------------------------------------------------------- helpers --
+    def _convert_params(self, params: list[FunctionParam]) -> list[IRParameter]:
+        '''Convert Falcom FunctionParam to generic IRParameter'''
+        result = []
+        for i, param in enumerate(params):
+            name = f'arg{i + 1}'
+            type_name = param.type.get_python_type()
+            default_value = param.default_value.value if param.default_value else None
+            result.append(IRParameter(name, type_name, default_value))
+        return result
+
     def _collect_blocks(self, entry: BasicBlock) -> list[BasicBlock]:
         blocks: list[BasicBlock] = []
         visited: set[int] = set()

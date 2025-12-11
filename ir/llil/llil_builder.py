@@ -1,9 +1,12 @@
 '''LLIL Builder'''
 
 from dataclasses import dataclass
-from typing import Union, Optional, List
+from typing import Union, Optional, List, TYPE_CHECKING
 
 from .llil import *
+
+if TYPE_CHECKING:
+    from ir.core import IRParameter
 
 
 class _VirtualStack:
@@ -62,12 +65,26 @@ class LowLevelILBuilder:
 
     # === Function and Block Creation ===
 
-    def create_function(self, name: str, start_addr: int, num_params: int = 0):
-        '''Create function inside builder'''
+    def create_function(self, name: str, start_addr: int, params: Union[List['IRParameter'], int] = None, *, num_params: int = None):
+        '''Create function inside builder
+
+        Args:
+            params: List of IRParameter, or int for backward compatibility (num_params)
+            num_params: Deprecated, use params instead
+        '''
         if self.function is not None:
             raise RuntimeError('Function already created')
 
-        self.function = LowLevelILFunction(name, start_addr, num_params)
+        # Handle backward compatibility: num_params keyword or int positional
+        if num_params is not None:
+            from ir.core import IRParameter
+            params = [IRParameter(f'arg{i + 1}') for i in range(num_params)]
+
+        elif isinstance(params, int):
+            from ir.core import IRParameter
+            params = [IRParameter(f'arg{i + 1}') for i in range(params)]
+
+        self.function = LowLevelILFunction(name, start_addr, params)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
         '''Create basic block and automatically add to function'''

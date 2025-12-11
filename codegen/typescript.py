@@ -476,8 +476,8 @@ const REGS: any[] = new Array(16);
 // Intrinsic function: address-of operator (for output parameters)
 function addr_of<T>(value: T): T { return value; }
 
-// Intrinsic function: boolean to int conversion
-function int(b: boolean): number { return +b; }
+// Intrinsic function: boolean/number to int conversion
+function int(b: number | boolean): number { return +b; }
 
 // Placeholder function: external script call
 function extern_call(target: string, ...args: any[]): any { return undefined; }

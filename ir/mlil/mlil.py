@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 def mlil_stack_var_name(slot_index: int) -> str:
     '''Generate stack variable name (var_s0, var_s1, ...)'''
+    if slot_index < 0:
+        raise ValueError(f'Negative slot_index: {slot_index}')
     return f'var_s{slot_index}'
 
 
@@ -598,15 +600,21 @@ class MediumLevelILBasicBlock:
 class MediumLevelILFunction:
     '''MLIL function container'''
 
-    def __init__(self, name: str, start_addr: int = 0):
+    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None):
         self.name = name
         self.start_addr = start_addr
+        self.source_params: List['IRParameter'] = params or []  # Original params from source
         self.basic_blocks: List[MediumLevelILBasicBlock] = []
-        self.parameters: List[MLILVariable] = []  # Ordered parameter list
+        self.parameters: List[MLILVariable] = []  # Ordered parameter list (populated during translation)
         self.locals: Dict[str, MLILVariable] = {}  # Local variables
         self.llil_function: Optional[LowLevelILFunction] = None
         self._inst_block_map: Dict[int, MediumLevelILBasicBlock] = {}
         self.var_types: Dict[str, 'MLILType'] = {}  # Variable name -> inferred type
+
+    @property
+    def num_params(self) -> int:
+        '''Number of parameters (for backward compatibility)'''
+        return len(self.source_params)
 
     def add_basic_block(self, block: MediumLevelILBasicBlock):
         self.basic_blocks.append(block)

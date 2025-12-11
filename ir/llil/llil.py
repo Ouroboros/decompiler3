@@ -618,10 +618,10 @@ class LowLevelILBasicBlock:
 class LowLevelILFunction:
     '''Function containing LLIL basic blocks (following BN design)'''
 
-    def __init__(self, name: str, start_addr: int = 0, num_params: int = 0):
+    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None):
         self.name = name
         self.start_addr = start_addr
-        self.num_params = num_params  # Number of parameters
+        self.params: List['IRParameter'] = params or []
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
         self._label_map: dict[str, LowLevelILBasicBlock] = {}  # label -> block
@@ -629,6 +629,11 @@ class LowLevelILFunction:
         self._next_inst_index: int = 0
         self._inst_block_map: dict[int, LowLevelILBasicBlock] = {}
         self._instructions: List[LowLevelILInstruction] = []
+
+    @property
+    def num_params(self) -> int:
+        '''Number of parameters (for backward compatibility)'''
+        return len(self.params)
 
     def add_basic_block(self, block: LowLevelILBasicBlock):
         '''Add basic block to function'''
