@@ -187,6 +187,7 @@ class ED9VMLifter:
             case ED9Opcode.JMP:
                 target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
                 builder.jmp(target)
+                builder.save_stack_for_offset(target.start)
 
             case ED9Opcode.POP_JMP_ZERO:
                 true_block = self._branch_target(block.true_succs, llil_blocks)
@@ -290,7 +291,4 @@ class ED9VMLifter:
         return str(value.value)
 
     def _pop_words(self, builder: FalcomVMBuilder, words: int) -> None:
-        available = builder.sp_get()
-        consume = min(words, available)
-        builder.pop_bytes(consume * WORD_SIZE)
-        # Remaining words correspond to frame cleanup below current sp; skip emitting IL
+        builder.pop_bytes(words * WORD_SIZE)
