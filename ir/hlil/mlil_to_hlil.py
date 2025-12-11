@@ -714,13 +714,28 @@ class MLILToHLILConverter:
             return block1_idx
         succ1 = set(self.block_successors.get(block1_idx, []))
         succ2 = set(self.block_successors.get(block2_idx, []))
+        # Check if one branch directly targets the other (one is the merge point)
+        if block1_idx in succ2:
+            return block1_idx
+
+        if block2_idx in succ1:
+            return block2_idx
+
         common = succ1 & succ2
         if common:
             return min(common)
         reachable1 = self._get_reachable(block1_idx)
         reachable2 = self._get_reachable(block2_idx)
-        # Find common blocks reachable from both, excluding the branch blocks themselves
+        # Find common blocks reachable from both
         common_blocks = set(reachable1.keys()) & set(reachable2.keys())
+        # Check if one target is reachable from the other (indirect merge)
+        if block1_idx in reachable2:
+            return block1_idx
+
+        if block2_idx in reachable1:
+            return block2_idx
+
+        # Exclude the branch blocks themselves for the distance calculation
         common_blocks.discard(block1_idx)
         common_blocks.discard(block2_idx)
         if not common_blocks:
@@ -866,16 +881,15 @@ class MLILToHLILConverter:
         branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
         saved_visited = self.visited_blocks.copy()
 
-        # Ensure branch_stop is not one of the branch targets
-        # (otherwise that branch would be empty)
-        if branch_stop == true_target_idx or branch_stop == false_target_idx:
-            branch_stop = None
+        # Check if one branch is empty (goes directly to merge)
+        true_is_empty = merge_block_idx == true_target_idx
+        false_is_empty = merge_block_idx == false_target_idx
 
-        # Process true branch
+        # Process true branch (skip if empty - it's just the merge point)
         # MLIL: if (C) goto true_target else false_target
         # C true -> true_target, C false -> false_target
         true_block = HLILBlock()
-        if true_target_idx is not None:
+        if true_target_idx is not None and not true_is_empty:
             self.visited_blocks = saved_visited.copy()
             # Add outer stop_at to visited, but not if it's our true_target
             if stop_at is not None and stop_at != merge_block_idx and stop_at != true_target_idx:
@@ -884,9 +898,9 @@ class MLILToHLILConverter:
 
         all_visited = self.visited_blocks.copy()
 
-        # Check if false_target is an else-if block
+        # Check if false_target is an else-if block (skip if empty)
         false_block = HLILBlock()
-        if false_target_idx is not None and self._is_else_if_block(false_target_idx):
+        if false_target_idx is not None and not false_is_empty and self._is_else_if_block(false_target_idx):
             # Else-if chain: recursively build nested if structure
             self.visited_blocks = saved_visited.copy()
             if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
@@ -894,7 +908,7 @@ class MLILToHLILConverter:
             self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
             all_visited |= self.visited_blocks
 
-        elif false_target_idx is not None:
+        elif false_target_idx is not None and not false_is_empty:
             # Normal else branch
             self.visited_blocks = saved_visited.copy()
             if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
@@ -944,7 +958,18 @@ class MLILToHLILConverter:
         else:
             # MLIL: if (C) goto true_target else false_target
             # HLIL: if (C) { true_block } else { false_block }
-            if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
+            # Handle empty branches: negate condition if true branch is empty
+            if not true_block.statements and false_block.statements:
+                # true branch is empty, negate and use false as body
+                if_stmt = HLILIf(_negate_condition(condition), false_block, None)
+
+            elif true_block.statements and not false_block.statements:
+                # false branch is empty, use true as body
+                if_stmt = HLILIf(condition, true_block, None)
+
+            else:
+                if_stmt = HLILIf(condition, true_block, false_block if false_block.statements else None)
+
             target_block.add_statement(if_stmt)
 
         # Process merge block
