@@ -873,6 +873,17 @@ class MLILToHLILConverter:
         true_target_idx = if_instr.true_target.index if if_instr.true_target else None
         false_target_idx = if_instr.false_target.index if if_instr.false_target else None
 
+        # Handle degenerate case: if (C) goto A else A
+        # Both branches go to same block. Condition C may have side effects,
+        # so we generate: if (C || true) { A } to preserve C's evaluation
+        if true_target_idx == false_target_idx and true_target_idx is not None:
+            always_true = HLILBinaryOp(BinaryOp.LOG_OR, condition, HLILConst(1))
+            body = HLILBlock()
+            self._reconstruct_control_flow(true_target_idx, body, stop_at=stop_at)
+            if_stmt = HLILIf(always_true, body, None)
+            target_block.add_statement(if_stmt)
+            return None
+
         # Find merge block for the entire if/else-if chain
         merge_block_idx = None
         if true_target_idx is not None and false_target_idx is not None:
