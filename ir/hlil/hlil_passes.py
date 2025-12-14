@@ -181,6 +181,8 @@ class ControlFlowOptimizationPass(Pass):
                             # Recursively optimize the inlined if's sub-blocks
                             self._optimize_block(inlined.true_block)
                             self._optimize_block(inlined.false_block)
+                            # Remove redundant assignments
+                            self._remove_redundant_else_assign(inlined)
                             # Flatten else-if pattern in both branches
                             self._try_flatten_if_block(inlined, is_true_block=True)
                             self._try_flatten_if_block(inlined, is_true_block=False)
@@ -208,6 +210,8 @@ class ControlFlowOptimizationPass(Pass):
 
                                 self._optimize_block(inlined.true_block)
                                 self._optimize_block(inlined.false_block)
+                                # Remove redundant assignments
+                                self._remove_redundant_else_assign(inlined)
                                 self._try_flatten_if_block(inlined, is_true_block=True)
                                 self._try_flatten_if_block(inlined, is_true_block=False)
                                 optimized.append(inlined)
@@ -217,6 +221,9 @@ class ControlFlowOptimizationPass(Pass):
             if isinstance(stmt, HLILIf):
                 self._optimize_block(stmt.true_block)
                 self._optimize_block(stmt.false_block)
+
+                # Remove redundant var = source in else block for switch-case patterns
+                self._remove_redundant_else_assign(stmt)
 
                 # Convert nested if-chain to switch
                 switch_stmt = self._try_convert_to_switch(stmt)
@@ -475,6 +482,132 @@ class ControlFlowOptimizationPass(Pass):
 
         return (False, killed, False)
 
+    def _remove_redundant_else_assign(self, if_stmt: HLILIf):
+        '''Remove redundant var = source in else block for switch-case patterns.
+
+        Pattern: if (var EQ A) { case_body } else { var = source; if (var EQ B) {...} }
+        The switch-case uses EQ conditions where:
+        - true_block = case body (when var == const)
+        - false_block = next check (when var != const)
+        If source wasn't modified in true_block (case body), the assignment is redundant.
+        '''
+        if not if_stmt.false_block or not if_stmt.false_block.statements:
+            return
+
+        # Check outer condition is var EQ const (switch-case pattern)
+        cond = if_stmt.condition
+        if not isinstance(cond, HLILBinaryOp) or cond.op != BinaryOp.EQ:
+            return
+
+        if not isinstance(cond.lhs, HLILVar):
+            return
+
+        outer_var = cond.lhs.var
+
+        # Find first non-nop statement in else block
+        false_stmts = if_stmt.false_block.statements
+        assign_idx = 0
+        while assign_idx < len(false_stmts) and self._is_nop_stmt(false_stmts[assign_idx]):
+            assign_idx += 1
+
+        if assign_idx >= len(false_stmts):
+            return
+
+        # Check it's var = source assignment
+        assign_stmt = false_stmts[assign_idx]
+        if not isinstance(assign_stmt, HLILAssign):
+            return
+
+        if not isinstance(assign_stmt.dest, HLILVar):
+            return
+
+        if assign_stmt.dest.var.name != outer_var.name:
+            return
+
+        source_expr = assign_stmt.src
+
+        # Check next statement is if (var EQ const)
+        if assign_idx + 1 >= len(false_stmts):
+            return
+
+        inner_if = false_stmts[assign_idx + 1]
+        if not isinstance(inner_if, HLILIf):
+            return
+
+        inner_cond = inner_if.condition
+        if not isinstance(inner_cond, HLILBinaryOp) or inner_cond.op != BinaryOp.EQ:
+            return
+
+        if not isinstance(inner_cond.lhs, HLILVar) or inner_cond.lhs.var.name != outer_var.name:
+            return
+
+        # Check source wasn't modified in true_block (case body)
+        if self._expr_modified_in_block(source_expr, if_stmt.true_block):
+            return
+
+        # Remove redundant assignment
+        if_stmt.false_block.statements.pop(assign_idx)
+
+    def _expr_modified_in_block(self, expr: HLILExpression, block: HLILBlock) -> bool:
+        '''Check if any variable in expr is modified in block'''
+        if not block or not block.statements:
+            return False
+
+        # Collect variables referenced in expr
+        vars_in_expr = set()
+        self._collect_vars(expr, vars_in_expr)
+
+        # Check if any are modified
+        for stmt in block.statements:
+            if self._stmt_modifies_any(stmt, vars_in_expr):
+                return True
+
+        return False
+
+    def _collect_vars(self, expr: HLILExpression, vars_set: set):
+        '''Collect all variable names referenced in expression'''
+        if isinstance(expr, HLILVar):
+            vars_set.add(expr.var)
+
+        elif isinstance(expr, HLILBinaryOp):
+            self._collect_vars(expr.lhs, vars_set)
+            self._collect_vars(expr.rhs, vars_set)
+
+        elif isinstance(expr, HLILUnaryOp):
+            self._collect_vars(expr.operand, vars_set)
+
+        elif isinstance(expr, HLILCall):
+            for arg in expr.args:
+                self._collect_vars(arg, vars_set)
+
+    def _stmt_modifies_any(self, stmt: HLILStatement, vars_set: set) -> bool:
+        '''Check if statement modifies any variable in vars_set'''
+        if isinstance(stmt, HLILAssign):
+            if isinstance(stmt.dest, HLILVar) and stmt.dest.var in vars_set:
+                return True
+
+        elif isinstance(stmt, HLILIf):
+            if stmt.true_block:
+                for s in stmt.true_block.statements:
+                    if self._stmt_modifies_any(s, vars_set):
+                        return True
+
+            if stmt.false_block:
+                for s in stmt.false_block.statements:
+                    if self._stmt_modifies_any(s, vars_set):
+                        return True
+
+        elif isinstance(stmt, HLILWhile):
+            if stmt.body:
+                for s in stmt.body.statements:
+                    if self._stmt_modifies_any(s, vars_set):
+                        return True
+
+        # Note: HLILExprStmt (function calls) are NOT considered to modify REGS
+        # REGS are only modified via direct assignment in this VM
+
+        return False
+
     def _try_flatten_if_block(self, if_stmt: HLILIf, is_true_block: bool):
         '''Flatten else-if patterns'''
         block = if_stmt.true_block if is_true_block else if_stmt.false_block
@@ -506,11 +639,16 @@ class ControlFlowOptimizationPass(Pass):
                 if_stmt.false_block = HLILBlock([inner_if])
             return
 
-        # Pattern 2: { nop*; var = bool_expr; if (var == 0) {...} }
-        if remaining != 2:
+        # Pattern 2: { nop*; [other_assigns*;] var = bool_expr; if (var == 0) {...} }
+        # Last statement must be if, second-to-last must be bool assignment
+        if remaining < 2:
             return
 
-        assign_stmt = stmts[idx]
+        inner_if = stmts[-1]
+        if not isinstance(inner_if, HLILIf):
+            return
+
+        assign_stmt = stmts[-2]
         if not isinstance(assign_stmt, HLILAssign):
             return
 
@@ -522,11 +660,10 @@ class ControlFlowOptimizationPass(Pass):
 
         assigned_var = assign_stmt.dest.var
         condition_expr = assign_stmt.src
-        idx += 1
 
-        inner_if = stmts[idx]
-        if not isinstance(inner_if, HLILIf):
-            return
+        # Keep non-bool assigns before the bool assign as leading statements
+        extra_leading = stmts[idx:-2]
+        leading_nops = leading_nops + extra_leading
 
         cond = inner_if.condition
         if not isinstance(cond, HLILBinaryOp):

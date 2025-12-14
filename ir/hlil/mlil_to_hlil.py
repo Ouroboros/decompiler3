@@ -877,10 +877,11 @@ class MLILToHLILConverter:
         # Both branches go to same block. Condition C may have side effects,
         # so we generate: if (C || true) { A } to preserve C's evaluation
         if true_target_idx == false_target_idx and true_target_idx is not None:
-            always_true = HLILBinaryOp(BinaryOp.LOG_OR, condition, HLILConst(1))
+            always_true = HLILBinaryOp(BinaryOp.OR, condition, HLILConst(1))
             body = HLILBlock()
             self._reconstruct_control_flow(true_target_idx, body, stop_at=stop_at)
             if_stmt = HLILIf(always_true, body, None)
+            target_block.add_statement(HLILComment(f'if (C || true) {{ A }}'))
             target_block.add_statement(if_stmt)
             return None
 
@@ -895,6 +896,17 @@ class MLILToHLILConverter:
         # Check if one branch is empty (goes directly to merge)
         true_is_empty = merge_block_idx == true_target_idx
         false_is_empty = merge_block_idx == false_target_idx
+
+        # Check if else-if chain is through true_target (inverted condition pattern)
+        # e.g., switch-case: if (!match) goto next_check else case_body
+        # Note: Don't check true_is_empty - else-if block is never empty by definition
+        if true_target_idx is not None and self._is_else_if_block(true_target_idx):
+            # Swap branches and negate condition
+            condition = _negate_condition(condition)
+            true_target_idx, false_target_idx = false_target_idx, true_target_idx
+            true_is_empty, false_is_empty = false_is_empty, False  # else-if block is never empty
+            # Reset branch_stop - the wrong merge shouldn't stop the else-if chain
+            branch_stop = stop_at
 
         # Process true branch (skip if empty - it's just the merge point)
         # MLIL: if (C) goto true_target else false_target
