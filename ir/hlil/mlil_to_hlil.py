@@ -905,8 +905,13 @@ class MLILToHLILConverter:
             condition = _negate_condition(condition)
             true_target_idx, false_target_idx = false_target_idx, true_target_idx
             true_is_empty, false_is_empty = false_is_empty, False  # else-if block is never empty
-            # Reset branch_stop - the wrong merge shouldn't stop the else-if chain
-            branch_stop = stop_at
+            # Recalculate merge block with swapped branches
+            if true_target_idx is not None and false_target_idx is not None:
+                merge_block_idx = self._find_merge_block(true_target_idx, false_target_idx)
+                branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
+
+            else:
+                branch_stop = stop_at
 
         # Process true branch (skip if empty - it's just the merge point)
         # MLIL: if (C) goto true_target else false_target
