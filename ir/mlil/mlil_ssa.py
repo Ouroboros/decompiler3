@@ -872,6 +872,9 @@ class SSADeconstructor:
 
     def _eliminate_phi_nodes(self):
         '''Replace Phi nodes with SSA copies in predecessor blocks'''
+        # Build set of parameter variables for quick lookup
+        param_vars = set(self.function.parameters)
+
         for block in self.function.basic_blocks:
             phi_nodes = [inst for inst in block.instructions if isinstance(inst, MLILPhi)]
 
@@ -886,6 +889,11 @@ class SSADeconstructor:
                 for ssa_var, pred_block in phi.sources:
                     # Skip if source and dest are the exact same SSA variable
                     if phi.dest == ssa_var:
+                        continue
+
+                    # Skip version 0 for local variables (undefined initial value)
+                    # Version 0 is only valid for parameters (input values)
+                    if ssa_var.version == 0 and ssa_var.base_var not in param_vars:
                         continue
 
                     # Insert SSA copy: phi.dest = ssa_var
