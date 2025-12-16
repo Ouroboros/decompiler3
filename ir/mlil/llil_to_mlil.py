@@ -14,10 +14,14 @@ class LLILToMLILTranslator:
         self.builder = MLILBuilder()
         self.llil_func: Optional[LowLevelILFunction] = None
         self.block_map: Dict[LowLevelILBasicBlock, MediumLevelILBasicBlock] = {}
+        self._read_slots: set = set()  # Slots read via StackLoad (need SetVar)
 
     def translate(self, llil_func: LowLevelILFunction) -> MediumLevelILFunction:
         '''Translate LLIL function to MLIL'''
         self.llil_func = llil_func
+
+        # Scan for slots read via StackLoad in Call args
+        self._read_slots = self._find_read_slots(llil_func)
 
         # Create MLIL function
         self.builder.create_function(llil_func.name, llil_func.start_addr, llil_func.params)
@@ -35,6 +39,18 @@ class LLILToMLILTranslator:
             self._translate_block(llil_block, mlil_block)
 
         return self.builder.finalize()
+
+    def _find_read_slots(self, llil_func: LowLevelILFunction) -> set:
+        '''Find slots read via StackLoad in Call args'''
+        read_slots = set()
+        for block in llil_func.basic_blocks:
+            for inst in block.instructions:
+                if isinstance(inst, LowLevelILCall):
+                    for arg in inst.args:
+                        if isinstance(arg, LowLevelILStackLoad):
+                            read_slots.add(arg.slot_index)
+
+        return read_slots
 
     def _translate_block(self, llil_block: LowLevelILBasicBlock, mlil_block: MediumLevelILBasicBlock):
         '''Translate a single LLIL block to MLIL'''
@@ -87,6 +103,12 @@ class LLILToMLILTranslator:
 
     def _translate_stack_store(self, llil_inst: LowLevelILStackStore):
         '''Translate StackStore to SetVar (local variable)'''
+        # Skip if value is a constant and slot is never read via StackLoad
+        # (constants flow through vstack directly, never become StackLoad)
+        if isinstance(llil_inst.value, LowLevelILConst):
+            if llil_inst.slot_index not in self._read_slots:
+                return
+
         var_name = mlil_stack_var_name(llil_inst.slot_index)
         var = self.builder.get_or_create_local(var_name, llil_inst.slot_index)
         value = self._translate_expr(llil_inst.value)
