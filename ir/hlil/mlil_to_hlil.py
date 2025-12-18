@@ -7,6 +7,7 @@ from typing import Dict, List, Set, Optional, Tuple, Union
 from ir.mlil.mlil import *
 from ir.mlil.mlil_types import MLILType, MLILTypeKind
 from .hlil import *
+from .structural_analysis import StructuralAnalyzer
 
 
 # Operator mapping tables
@@ -541,6 +542,9 @@ class MLILToHLILConverter:
         self.loop_headers: Set[int] = set()  # Blocks that are loop headers
         self.loop_ends: Dict[int, int] = {}  # back_edge_source -> loop_header
 
+        # Structural analyzer for accurate merge point detection
+        self.structural_analyzer: Optional[StructuralAnalyzer] = None
+
         # SSA-based register resolution
         self.resolver = RegisterResolver(mlil_func)
 
@@ -653,52 +657,33 @@ class MLILToHLILConverter:
                         successors.append(last_instr.true_target.index)
                     if last_instr.false_target is not None:
                         successors.append(last_instr.false_target.index)
+
                 elif isinstance(last_instr, MLILGoto):
                     if last_instr.target is not None:
                         successors.append(last_instr.target.index)
+
                 elif not isinstance(last_instr, MLILRet):
                     if i + 1 < len(self.mlil_func.basic_blocks):
                         successors.append(i + 1)
+
             self.block_successors[i] = successors
 
+        # Initialize structural analyzer with the built CFG
+        num_blocks = len(self.mlil_func.basic_blocks)
+        if num_blocks > 0:
+            self.structural_analyzer = StructuralAnalyzer(num_blocks, self.block_successors)
+
     def _detect_loops(self):
-        '''Detect loops using iterative DFS to find back edges'''
-        if not self.mlil_func.basic_blocks:
+        '''Detect loops using structural analyzer'''
+        if not self.mlil_func.basic_blocks or self.structural_analyzer is None:
             return
 
-        visited = set()
-        in_stack = set()
-        # Stack: (block_idx, iterator over successors, is_entering)
-        stack = [(0, None, True)]
-
-        while stack:
-            block_idx, succ_iter, is_entering = stack.pop()
-
-            if is_entering:
-                if block_idx in visited:
-                    continue
-                visited.add(block_idx)
-                in_stack.add(block_idx)
-                # Push exit marker, then process successors
-                successors = self.block_successors.get(block_idx, [])
-                stack.append((block_idx, iter(successors), False))
-
-            else:
-                # Processing successors
-                for succ in succ_iter:
-                    if succ in in_stack:
-                        # Back edge
-                        self.loop_headers.add(succ)
-                        self.loop_ends[block_idx] = succ
-
-                    elif succ not in visited:
-                        # Push remaining successors back, then visit succ
-                        stack.append((block_idx, succ_iter, False))
-                        stack.append((succ, None, True))
-                        break
-                else:
-                    # All successors processed, exit this node
-                    in_stack.discard(block_idx)
+        # Use structural analyzer's loop detection
+        for header, loop_info in self.structural_analyzer.loops.items():
+            self.loop_headers.add(header)
+            # Record back edges
+            for tail, _ in loop_info.back_edges:
+                self.loop_ends[tail] = header
 
     def _get_reachable(self, start_idx: int, max_depth: int = 100) -> Dict[int, int]:
         reachable = {}
@@ -715,37 +700,63 @@ class MLILToHLILConverter:
                     queue.append((succ, depth + 1))
         return reachable
 
-    def _find_merge_block(self, block1_idx: int, block2_idx: int) -> Optional[int]:
-        if block1_idx == block2_idx:
-            return block1_idx
-        succ1 = set(self.block_successors.get(block1_idx, []))
-        succ2 = set(self.block_successors.get(block2_idx, []))
-        # Check if one branch directly targets the other (one is the merge point)
-        if block1_idx in succ2:
-            return block1_idx
+    # Set to True to use legacy reachability-based merge point detection
+    USE_LEGACY_MERGE_DETECTION = False
 
-        if block2_idx in succ1:
-            return block2_idx
+    def _find_merge_block(self, cond_block_idx: int, true_target_idx: int, false_target_idx: int) -> Optional[int]:
+        '''Find merge point for if-else using structural analyzer.'''
+        if true_target_idx == false_target_idx:
+            return true_target_idx
 
+        if self.USE_LEGACY_MERGE_DETECTION:
+            return self._find_merge_block_legacy(true_target_idx, false_target_idx)
+
+        # Use structural analyzer
+        if self.structural_analyzer is not None:
+            return self.structural_analyzer.find_merge_point(
+                cond_block_idx, true_target_idx, false_target_idx
+            )
+
+        return None
+
+    def _find_merge_block_legacy(self, true_target_idx: int, false_target_idx: int) -> Optional[int]:
+        '''
+        Legacy: reachability-based heuristic for merge point detection.
+        Kept for debugging/comparison. Enable via USE_LEGACY_MERGE_DETECTION.
+        '''
+        succ1 = set(self.block_successors.get(true_target_idx, []))
+        succ2 = set(self.block_successors.get(false_target_idx, []))
+
+        # Check if one branch directly targets the other
+        if true_target_idx in succ2:
+            return true_target_idx
+
+        if false_target_idx in succ1:
+            return false_target_idx
+
+        # Check common immediate successors
         common = succ1 & succ2
         if common:
             return min(common)
-        reachable1 = self._get_reachable(block1_idx)
-        reachable2 = self._get_reachable(block2_idx)
-        # Find common blocks reachable from both
+
+        # Use reachability analysis
+        reachable1 = self._get_reachable(true_target_idx)
+        reachable2 = self._get_reachable(false_target_idx)
         common_blocks = set(reachable1.keys()) & set(reachable2.keys())
-        # Check if one target is reachable from the other (indirect merge)
-        if block1_idx in reachable2:
-            return block1_idx
 
-        if block2_idx in reachable1:
-            return block2_idx
+        # Check indirect merge
+        if true_target_idx in reachable2:
+            return true_target_idx
 
-        # Exclude the branch blocks themselves for the distance calculation
-        common_blocks.discard(block1_idx)
-        common_blocks.discard(block2_idx)
+        if false_target_idx in reachable1:
+            return false_target_idx
+
+        # Find closest common reachable block
+        common_blocks.discard(true_target_idx)
+        common_blocks.discard(false_target_idx)
         if not common_blocks:
             return None
+
         return min(common_blocks, key=lambda idx: reachable1[idx] + reachable2[idx])
 
     def _is_passthrough_block(self, block_idx: int) -> bool:
@@ -894,7 +905,7 @@ class MLILToHLILConverter:
         # Find merge block for the entire if/else-if chain
         merge_block_idx = None
         if true_target_idx is not None and false_target_idx is not None:
-            merge_block_idx = self._find_merge_block(true_target_idx, false_target_idx)
+            merge_block_idx = self._find_merge_block(block_idx, true_target_idx, false_target_idx)
 
         branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
         saved_visited = self.visited_blocks.copy()
@@ -913,7 +924,7 @@ class MLILToHLILConverter:
             true_is_empty, false_is_empty = false_is_empty, False  # else-if block is never empty
             # Recalculate merge block with swapped branches
             if true_target_idx is not None and false_target_idx is not None:
-                merge_block_idx = self._find_merge_block(true_target_idx, false_target_idx)
+                merge_block_idx = self._find_merge_block(block_idx, true_target_idx, false_target_idx)
                 branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
 
             else:
