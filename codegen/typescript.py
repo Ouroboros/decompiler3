@@ -191,6 +191,34 @@ class TypeScriptGenerator:
                 return str(expr.value)
 
         elif isinstance(expr, HLILBinaryOp):
+            # Constant folding for comparison operators
+            if isinstance(expr.lhs, HLILConst) and isinstance(expr.rhs, HLILConst):
+                lhs_val, rhs_val = expr.lhs.value, expr.rhs.value
+
+                match expr.op:
+                    case BinaryOp.EQ:
+                        result = lhs_val == rhs_val
+
+                    case BinaryOp.NE:
+                        result = lhs_val != rhs_val
+
+                    case BinaryOp.LT:
+                        result = lhs_val < rhs_val
+
+                    case BinaryOp.LE:
+                        result = lhs_val <= rhs_val
+
+                    case BinaryOp.GT:
+                        result = lhs_val > rhs_val
+
+                    case BinaryOp.GE:
+                        result = lhs_val >= rhs_val
+
+                    case _:
+                        raise NotImplementedError(f'Constant folding not implemented for {expr.op}')
+
+                return 'true' if result else 'false'
+
             # Simplify boolean comparisons with 0
             # (bool_expr) != 0 -> bool_expr
             # (bool_expr) == 0 -> !bool_expr
