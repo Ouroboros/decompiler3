@@ -208,6 +208,10 @@ class MLILBuilder:
         '''Create TEST_ZERO operation'''
         return MLILTestZero(operand)
 
+    def bitwise_not(self, operand: MediumLevelILInstruction) -> MLILBitwiseNot:
+        '''Create bitwise NOT operation (~x)'''
+        return MLILBitwiseNot(operand)
+
     def address_of(self, operand: MediumLevelILInstruction) -> MLILAddressOf:
         '''Create ADDRESS_OF operation (&var)'''
         return MLILAddressOf(operand)

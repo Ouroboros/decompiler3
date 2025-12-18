@@ -71,6 +71,7 @@ class MediumLevelILOperation(IntEnum2):
     MLIL_NEG                = 60
     MLIL_TEST_ZERO          = 61
     MLIL_ADDRESS_OF         = 62    # Address of variable (&var)
+    MLIL_BITWISE_NOT        = 63    # Bitwise NOT (~x)
 
     # Control flow
     MLIL_GOTO               = 70    # Unconditional jump
@@ -174,10 +175,9 @@ class MLILConst(MediumLevelILExpr, Constant):
     def __str__(self) -> str:
         if isinstance(self.value, int):
             if self.is_hex:
-                if self.value < 0:
-                    return f'-0x{-self.value:X}'
-                else:
-                    return f'0x{self.value:X}'
+                # Display as unsigned 32-bit hex
+                unsigned = self.value & 0xFFFFFFFF
+                return f'0x{unsigned:08X}'
 
             return str(self.value)
 
@@ -355,6 +355,7 @@ class MLILUnaryOp(MediumLevelILExpr, UnaryOperation):
         op_map = {
             MediumLevelILOperation.MLIL_NEG: '-',
             MediumLevelILOperation.MLIL_LOGICAL_NOT: '!',
+            MediumLevelILOperation.MLIL_BITWISE_NOT: '~',
         }
         op_str = op_map.get(self.operation, self.operation_name)
         return f'{op_str}{self.operand}'
@@ -376,6 +377,12 @@ class MLILTestZero(MLILUnaryOp):
 
     def __str__(self) -> str:
         return f'({self.operand} == 0)'
+
+
+class MLILBitwiseNot(MLILUnaryOp):
+    '''Bitwise NOT (~x)'''
+    def __init__(self, operand: MediumLevelILInstruction):
+        super().__init__(MediumLevelILOperation.MLIL_BITWISE_NOT, operand)
 
 
 class MLILAddressOf(MLILUnaryOp):

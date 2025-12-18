@@ -9,18 +9,6 @@ from .constants import *
 class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
     '''Falcom-specific LLIL to MLIL translator'''
 
-    def _find_read_slots(self, llil_func: LowLevelILFunction) -> set:
-        '''Find slots read via StackLoad in Call/CallScript/Syscall args'''
-        read_slots = super()._find_read_slots(llil_func)
-        for block in llil_func.basic_blocks:
-            for inst in block.instructions:
-                if isinstance(inst, (LowLevelILCallScript, LowLevelILSyscall)):
-                    for arg in inst.args:
-                        if isinstance(arg, LowLevelILStackLoad):
-                            read_slots.add(arg.slot_index)
-
-        return read_slots
-
     def _translate_instruction(self, llil_inst: LowLevelILInstruction):
         '''Translate LLIL instruction, handling Falcom-specific operations'''
 

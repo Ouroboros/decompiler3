@@ -182,6 +182,11 @@ class TypeScriptGenerator:
             elif isinstance(expr.value, float):
                 return format_float(expr.value)
 
+            elif isinstance(expr.value, int) and expr.is_hex:
+                # Display as unsigned 32-bit hex
+                unsigned = expr.value & 0xFFFFFFFF
+                return f'0x{unsigned:08X}'
+
             else:
                 return str(expr.value)
 

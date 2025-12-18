@@ -166,18 +166,24 @@ class RegisterResolver:
             if isinstance(last_instr, MLILIf):
                 if last_instr.true_target is not None:
                     succ = last_instr.true_target.index
-                    self.successors[i].append(succ)
-                    self.predecessors[succ].append(i)
+                    # Skip removed blocks
+                    if succ in self.predecessors:
+                        self.successors[i].append(succ)
+                        self.predecessors[succ].append(i)
                 if last_instr.false_target is not None:
                     succ = last_instr.false_target.index
-                    self.successors[i].append(succ)
-                    self.predecessors[succ].append(i)
+                    # Skip removed blocks
+                    if succ in self.predecessors:
+                        self.successors[i].append(succ)
+                        self.predecessors[succ].append(i)
 
             elif isinstance(last_instr, MLILGoto):
                 if last_instr.target is not None:
                     succ = last_instr.target.index
-                    self.successors[i].append(succ)
-                    self.predecessors[succ].append(i)
+                    # Skip removed blocks
+                    if succ in self.predecessors:
+                        self.successors[i].append(succ)
+                        self.predecessors[succ].append(i)
 
             elif not isinstance(last_instr, MLILRet):
                 if i + 1 < len(self.mlil_func.basic_blocks):
@@ -1155,7 +1161,7 @@ class MLILToHLILConverter:
             return HLILVar(HLILVariable(expr.var.name, None))
 
         elif isinstance(expr, MLILConst):
-            return HLILConst(expr.value)
+            return HLILConst(expr.value, expr.is_hex)
 
         elif isinstance(expr, MLILBinaryOp):
             op = _BINARY_OP_MAP.get(expr.operation)

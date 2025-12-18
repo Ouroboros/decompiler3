@@ -179,7 +179,7 @@ class ED9VMLifter:
                 builder.neg()
 
             case ED9Opcode.NOT:
-                builder.logical_not()
+                builder.bitwise_not()
 
             case ED9Opcode.EZ:
                 builder.test_zero()

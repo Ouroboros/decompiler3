@@ -108,7 +108,7 @@ class MLILTypeInference:
             operand_type = self._infer_expr_type(expr.operand)
             return operand_type if operand_type.is_numeric() else MLILType.int_type()
 
-        elif isinstance(expr, (MLILLogicalNot, MLILTestZero)):
+        elif isinstance(expr, (MLILLogicalNot, MLILBitwiseNot, MLILTestZero)):
             return MLILType.int_type()
 
         # Function calls

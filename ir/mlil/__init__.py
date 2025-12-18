@@ -97,6 +97,7 @@ __all__ = [
     'MLILUnaryOp',
     'MLILNeg',
     'MLILLogicalNot',
+    'MLILBitwiseNot',
     'MLILTestZero',
 
     # Control flow

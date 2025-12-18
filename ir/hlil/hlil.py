@@ -168,15 +168,23 @@ class HLILVar(HLILExpression):
 class HLILConst(HLILExpression):
     '''Constant value'''
 
-    def __init__(self, value: Union[int, float, str, bool]):
+    def __init__(self, value: Union[int, float, str, bool], is_hex: bool = False):
         super().__init__(HLILOperation.HLIL_CONST)
         self.value = value
+        self.is_hex = is_hex
 
     def __str__(self) -> str:
         if isinstance(self.value, str):
             return f'"{self.value}"'
+
         elif isinstance(self.value, bool):
             return 'true' if self.value else 'false'
+
+        elif isinstance(self.value, int) and self.is_hex:
+            # Display as unsigned 32-bit hex
+            unsigned = self.value & 0xFFFFFFFF
+            return f'0x{unsigned:08X}'
+
         return str(self.value)
 
     def __repr__(self) -> str:

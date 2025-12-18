@@ -125,7 +125,7 @@ class MLILFormatter:
             return str(inst)
 
         # Unary operations
-        elif isinstance(inst, (MLILNeg, MLILLogicalNot)):
+        elif isinstance(inst, (MLILNeg, MLILLogicalNot, MLILBitwiseNot)):
             return str(inst)
 
         elif isinstance(inst, MLILTestZero):

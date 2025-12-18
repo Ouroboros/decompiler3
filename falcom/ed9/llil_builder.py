@@ -271,6 +271,7 @@ class FalcomVMBuilder(LowLevelILBuilder):
     def pop_to(self, offset: int):
         '''POP_TO operation - pop and store to STACK[sp + offset]'''
         val = self.pop(hidden_for_formatter = True)
+        # offset is relative to sp AFTER pop (new_sp + offset)
         slot_index = self.sp_get() + offset // WORD_SIZE
         self.add_instruction(LowLevelILStackStore(val, offset = offset, slot_index = slot_index))
 

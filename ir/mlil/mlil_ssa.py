@@ -538,6 +538,9 @@ class SSAConstructor:
         elif isinstance(expr, MLILLogicalNot):
             return MLILLogicalNot(operand)
 
+        elif isinstance(expr, MLILBitwiseNot):
+            return MLILBitwiseNot(operand)
+
         elif isinstance(expr, MLILTestZero):
             return MLILTestZero(operand)
 
@@ -619,6 +622,10 @@ class SSADeconstructor:
             self._collect_uses_in_expr(expr.lhs, block, inst_idx)
             self._collect_uses_in_expr(expr.rhs, block, inst_idx)
 
+        elif isinstance(expr, MLILAddressOf):
+            # Skip address-of: output parameters don't need the variable's value
+            pass
+
         elif isinstance(expr, MLILUnaryOp):
             self._collect_uses_in_expr(expr.operand, block, inst_idx)
 
@@ -654,7 +661,9 @@ class SSADeconstructor:
                 # live_out = union of live_in of all successors
                 new_live_out = set()
                 for succ in block.outgoing_edges:
-                    new_live_out |= self.live_in[succ]
+                    # Skip successors that were removed by optimization
+                    if succ in self.live_in:
+                        new_live_out |= self.live_in[succ]
 
                 # live_in = use + (live_out - def)
                 use_set = set()
@@ -687,6 +696,11 @@ class SSADeconstructor:
         elif isinstance(expr, MLILBinaryOp):
             result |= self._get_vars_in_expr(expr.lhs)
             result |= self._get_vars_in_expr(expr.rhs)
+
+        elif isinstance(expr, MLILAddressOf):
+            # Skip address-of: we only need the address, not the variable's value
+            # This handles output parameters correctly (func(&var) where var is written by callee)
+            pass
 
         elif isinstance(expr, MLILUnaryOp):
             result |= self._get_vars_in_expr(expr.operand)

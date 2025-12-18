@@ -48,7 +48,7 @@ class LowLevelILOperation(IntEnum2):
 
     # Unary operations
     LLIL_NEG                = 35    # arithmetic negation (-x)
-    LLIL_NOT                = 36    # logical NOT (!x)
+    LLIL_BITWISE_NOT        = 36    # bitwise NOT (~x)
     LLIL_TEST_ZERO          = 37    # test if zero (x == 0)
 
     # Control flow
@@ -367,10 +367,10 @@ class LowLevelILNeg(LowLevelILUnaryOp):
         super().__init__(LowLevelILOperation.LLIL_NEG, operand)
 
 
-class LowLevelILNot(LowLevelILUnaryOp):
-    '''Logical NOT (!x)'''
+class LowLevelILBitwiseNot(LowLevelILUnaryOp):
+    '''Bitwise NOT (~x)'''
     def __init__(self, operand: 'LowLevelILExpr' = None):
-        super().__init__(LowLevelILOperation.LLIL_NOT, operand)
+        super().__init__(LowLevelILOperation.LLIL_BITWISE_NOT, operand)
 
 
 class LowLevelILTestZero(LowLevelILUnaryOp):

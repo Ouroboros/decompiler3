@@ -477,13 +477,13 @@ class LowLevelILBuilder:
             self.add_instruction(op)
         return op
 
-    def logical_not(self, operand = None, *, push: bool = True, hidden_for_formatter: bool = True):
-        '''NOT operation - logical NOT !x (pops operand if not provided)'''
+    def bitwise_not(self, operand = None, *, push: bool = True, hidden_for_formatter: bool = True):
+        '''NOT operation - bitwise NOT ~x (pops operand if not provided)'''
         if operand is None:
             operand = self.pop(hidden_for_formatter = hidden_for_formatter)
         else:
             operand = self._to_expr(operand)
-        op = LowLevelILNot(operand)
+        op = LowLevelILBitwiseNot(operand)
         if push:
             self.push(op, hidden_for_formatter = hidden_for_formatter)
         else:
@@ -592,7 +592,7 @@ class LLILFormatter:
         LowLevelILOperation.LLIL_LOGICAL_OR     : '({lhs} || {rhs}) ? 1 : 0',
 
         LowLevelILOperation.LLIL_NEG            : '-{operand}',
-        LowLevelILOperation.LLIL_NOT            : '!{operand} ? 1 : 0',
+        LowLevelILOperation.LLIL_BITWISE_NOT    : '~{operand}',
         LowLevelILOperation.LLIL_TEST_ZERO      : '({operand} == 0) ? 1 : 0',
     }
 
