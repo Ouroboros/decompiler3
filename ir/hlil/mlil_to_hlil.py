@@ -770,27 +770,6 @@ class MLILToHLILConverter:
             isinstance(block.instructions[-1], MLILGoto)
         )
 
-    def _is_else_if_block(self, block_idx: int) -> bool:
-        '''Check if block is an else-if condition check (ends with if, no side effects before)'''
-        if block_idx >= len(self.mlil_func.basic_blocks):
-            return False
-        block = self.mlil_func.basic_blocks[block_idx]
-        if not block.instructions:
-            return False
-        # Must end with MLILIf
-        if not isinstance(block.instructions[-1], MLILIf):
-            return False
-        # All preceding instructions must be side-effect-free (condition setup)
-        for instr in block.instructions[:-1]:
-            if is_nop_instr(instr):
-                continue
-            # Allow SetVar for condition evaluation (e.g., var_s11 = REG[0] == 0)
-            if isinstance(instr, MLILSetVar):
-                continue
-            # Other instructions may have side effects
-            return False
-        return True
-
     def _process_loop(self, header_idx: int, target_block: HLILBlock,
                       stop_at: Optional[int]) -> Optional[int]:
         '''Process a loop starting at header_idx'''
@@ -914,20 +893,26 @@ class MLILToHLILConverter:
         true_is_empty = merge_block_idx == true_target_idx
         false_is_empty = merge_block_idx == false_target_idx
 
+        # Track if we detected an else-if pattern (skip early return handling for these)
+        is_else_if_pattern = False
+
         # Check if else-if chain is through true_target (inverted condition pattern)
         # e.g., switch-case: if (!match) goto next_check else case_body
-        # Note: Don't check true_is_empty - else-if block is never empty by definition
-        if true_target_idx is not None and self._is_else_if_block(true_target_idx):
+        # Use structural analysis to detect: true_target has 2 successors (condition block)
+        # Don't invert if true_target is already the merge (empty true branch)
+        if (self.structural_analyzer is not None and
+            true_target_idx is not None and false_target_idx is not None and
+            not true_is_empty and
+            self.structural_analyzer.should_invert_condition(true_target_idx, false_target_idx)):
             # Swap branches and negate condition
             condition = _negate_condition(condition)
+            old_true_target = true_target_idx  # Save for checking merge block conflict
             true_target_idx, false_target_idx = false_target_idx, true_target_idx
             true_is_empty, false_is_empty = false_is_empty, False  # else-if block is never empty
-            # Recalculate merge block with swapped branches
-            if true_target_idx is not None and false_target_idx is not None:
-                merge_block_idx = self._find_merge_block(block_idx, true_target_idx, false_target_idx)
-                branch_stop = merge_block_idx if merge_block_idx is not None else stop_at
-
-            else:
+            is_else_if_pattern = True
+            # Merge block conflict: if merge_block equals the old true_target (now false),
+            # processing false branch would stop immediately. Use outer stop_at instead.
+            if merge_block_idx == old_true_target:
                 branch_stop = stop_at
 
         # Process true branch (skip if empty - it's just the merge point)
@@ -944,8 +929,15 @@ class MLILToHLILConverter:
         all_visited = self.visited_blocks.copy()
 
         # Check if false_target is an else-if block (skip if empty)
+        # Structural check: false_target is a condition block if it has 2 successors
+        # Exclude loop headers - they have 2 successors but are not else-if blocks
+        false_is_condition = (
+            self.structural_analyzer is not None and
+            len(self.structural_analyzer.original_successors.get(false_target_idx, [])) == 2 and
+            not self.structural_analyzer.is_loop_header(false_target_idx)
+        )
         false_block = HLILBlock()
-        if false_target_idx is not None and not false_is_empty and self._is_else_if_block(false_target_idx):
+        if false_target_idx is not None and not false_is_empty and false_is_condition:
             # Else-if chain: recursively build nested if structure
             self.visited_blocks = saved_visited.copy()
             if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
@@ -965,16 +957,16 @@ class MLILToHLILConverter:
         if stop_at is not None:
             self.visited_blocks.discard(stop_at)
 
-        # Check if branches end with return
-        true_ends_with_return = (true_block.statements and
+        # Check if branches end with return (skip for else-if patterns)
+        true_ends_with_return = (not is_else_if_pattern and true_block.statements and
             isinstance(true_block.statements[-1], HLILReturn))
-        false_ends_with_return = (false_block.statements and
+        false_ends_with_return = (not is_else_if_pattern and false_block.statements and
             isinstance(false_block.statements[-1], HLILReturn))
 
         # MLIL: if (C) goto true_target else false_target
         # HLIL: if (C) { true_block } else { false_block }
 
-        # Early return patterns
+        # Early return patterns (skip for else-if chains to preserve structure)
         if true_ends_with_return and false_ends_with_return:
             if len(true_block.statements) <= len(false_block.statements):
                 if_stmt = HLILIf(condition, true_block, None)

@@ -559,6 +559,36 @@ class StructuralAnalyzer:
 
         return reach
 
+    def should_invert_condition(self, true_target: int, false_target: int) -> bool:
+        '''
+        Check if condition should be inverted for canonical if-else-if structure.
+
+        In if-else-if chains, MLIL often has inverted conditions:
+            if (!cond) goto next_check else case_body
+
+        For canonical HLIL, we want:
+            if (cond) { case_body } else { next_check }
+
+        Structural detection: true_target has 2 successors (another condition),
+        while false_target does not look like a continuation.
+        '''
+        # Don't invert if true_target is a loop header
+        if true_target in self.loops:
+            return False
+
+        # Check if true_target is a condition block (has 2 successors)
+        true_succs = self.original_successors.get(true_target, [])
+        if len(true_succs) != 2:
+            return False
+
+        # Don't invert if false_target is also a condition block (diamond pattern)
+        # In this case, both branches are continuations, not if-else-if
+        false_succs = self.original_successors.get(false_target, [])
+        if len(false_succs) == 2 and false_target not in self.loops:
+            return False
+
+        return True
+
     def is_loop_header(self, block: int) -> bool:
         '''Check if block is a loop header'''
         return block in self.loops
