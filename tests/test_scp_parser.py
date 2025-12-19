@@ -182,7 +182,7 @@ class TestScpParser(unittest.TestCase):
                 # filter_func = lambda f: f.name == 'Dummy_m0000_talk0'
                 # filter_func = lambda f: f.name == 'FC_Event_PartySet'
                 # filter_func = lambda f: f.name in ['EVENT_END_BTL']
-                filter_func = lambda f: f.name == 'TestScenarioflagSet'
+                filter_func = lambda f: f.name == 'FC_SelectMapD0000'
                 # filter_func = lambda f: f.name == 'FC_JoinParty'
             )
 
