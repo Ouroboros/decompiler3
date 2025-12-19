@@ -180,8 +180,10 @@ class TestScpParser(unittest.TestCase):
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
                 # filter_func = lambda f: f.name == 'Dummy_m0000_talk0'
-                filter_func = lambda f: f.name != 'FC_Event_PartySet'
+                # filter_func = lambda f: f.name == 'FC_Event_PartySet'
                 # filter_func = lambda f: f.name in ['EVENT_END_BTL']
+                filter_func = lambda f: f.name == 'TestScenarioflagSet'
+                # filter_func = lambda f: f.name == 'FC_JoinParty'
             )
 
             formatted_lines = []
@@ -213,7 +215,6 @@ class TestScpParser(unittest.TestCase):
 
                 # Generate HLIL from MLIL with Falcom-specific type information
                 hlil_func = convert_falcom_mlil_to_hlil(mlil_func, func)
-                hlil_func = optimize_hlil(hlil_func)
 
                 # Debug output: HLIL text
                 hlil_lines.extend(HLILFormatter.format_function(hlil_func))
@@ -230,8 +231,16 @@ class TestScpParser(unittest.TestCase):
             llil_path = test_file.with_suffix('.llil.asm')
             llil_path.write_text('\n'.join(llil_lines) + '\n', encoding = 'utf-8')
 
+            # Generate LLIL CFG
+            llil_cfg_path = test_file.with_suffix('.llil.dot')
+            llil_cfg_path.write_text(FalcomLLILFormatter.to_dot(llil_func), encoding = 'utf-8')
+
             mlil_path = test_file.with_suffix('.mlil.asm')
             mlil_path.write_text('\n'.join(mlil_lines) + '\n', encoding = 'utf-8')
+
+            # Generate MLIL CFG
+            mlil_cfg_path = test_file.with_suffix('.mlil.dot')
+            mlil_cfg_path.write_text(MLILFormatter.to_dot(mlil_func), encoding = 'utf-8')
 
             # HLIL debug output (IR text)
             hlil_path = test_file.with_suffix('.hlil.ts')
@@ -241,6 +250,7 @@ class TestScpParser(unittest.TestCase):
             typescript_path = test_file.with_suffix('.ts')
             typescript_content = generate_typescript_header() + '\n'.join(typescript_lines) + '\n'
             typescript_path.write_text(typescript_content, encoding = 'utf-8')
+
 
 if __name__ == '__main__':
     unittest.main(buffer = False, defaultTest = 'TestScpParser')
