@@ -65,6 +65,7 @@ __all__ = [
     # Passes
     'MLILToHLILPass',
     'ExpressionSimplificationPass',
+    'CopyPropagationPass',
     'ControlFlowOptimizationPass',
     'CommonReturnExtractionPass',
     'DeadCodeEliminationPass',
