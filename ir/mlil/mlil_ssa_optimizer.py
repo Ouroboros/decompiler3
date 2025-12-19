@@ -488,6 +488,11 @@ class SSAOptimizer:
                     if len(uses) > 0:
                         new_instructions.append(inst)
                     else:
+                        # Preserve string constants as debug comments
+                        if isinstance(inst.value, MLILConst) and isinstance(inst.value.value, str):
+                            debug_comment = MLILDebug('string', inst.value.value)
+                            new_instructions.append(debug_comment)
+
                         changed = True
 
                 elif isinstance(inst, MLILPhi):
@@ -1493,6 +1498,11 @@ class DeadPhiSourceEliminator:
 
                 # Skip definitions that only feed dead Phis
                 if isinstance(inst, MLILSetVarSSA) and inst.var in dead_defs:
+                    # Preserve string constants as debug comments
+                    if isinstance(inst.value, MLILConst) and isinstance(inst.value.value, str):
+                        debug_comment = MLILDebug('string', inst.value.value)
+                        new_instructions.append(debug_comment)
+
                     changed = True
                     continue
 
