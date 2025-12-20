@@ -104,12 +104,16 @@ class CopyPropagationPass(Pass):
                     i += 1
                     continue
 
-            # Check source not modified before use
-            next_stmt = block.statements[i + 1]
-            if not self._is_use_at_entry(next_stmt, var):
-                if self._modifies_vars(next_stmt, source_vars):
-                    i += 1
-                    continue
+            # Check source not modified between assignment and use
+            source_modified = False
+            for stmt_between in remaining:
+                if self._modifies_vars(stmt_between, source_vars):
+                    source_modified = True
+                    break
+
+            if source_modified:
+                i += 1
+                continue
 
             # Safe to propagate: replace and delete
             self._replace_var(remaining, var, expr)
@@ -206,8 +210,8 @@ class CopyPropagationPass(Pass):
 
         if isinstance(node, HLILWhile):
             cond_uses, _ = self._find_reachable_uses(node.condition, var, True, node)
-            body_uses, _ = self._find_reachable_uses(node.body, var, True, node)
-            return (cond_uses + body_uses, False)
+            body_uses, body_kill = self._find_reachable_uses(node.body, var, True, node)
+            return (cond_uses + body_uses, body_kill)
 
         if isinstance(node, HLILDoWhile):
             body_uses, body_kill = self._find_reachable_uses(node.body, var, True, node)
