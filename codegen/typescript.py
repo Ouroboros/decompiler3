@@ -255,6 +255,10 @@ class TypeScriptGenerator:
             operand = cls._format_expr(expr.operand)
             return f'{UNARY_OP_STR[expr.op]}{operand}'
 
+        elif isinstance(expr, HLILAddressOf):
+            operand = cls._format_expr(expr.operand)
+            return f'addr_of({operand})'
+
         elif isinstance(expr, HLILCall):
             args = ', '.join(cls._format_expr(arg) for arg in expr.args)
             return f'{expr.func_name}({args})'
