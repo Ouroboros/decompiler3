@@ -231,8 +231,8 @@ class TypeScriptGenerator:
                     elif expr.op == BinaryOp.EQ:
                         # (bool) == 0 -> !bool
                         inner = cls._format_expr(expr.lhs)
-                        # Add parentheses if the inner expression has lower precedence than !
-                        if isinstance(expr.lhs, HLILBinaryOp) and expr.lhs.op in (BinaryOp.OR, BinaryOp.AND):
+                        # Add parentheses if inner is any binary expression (! has higher precedence)
+                        if isinstance(expr.lhs, HLILBinaryOp):
                             inner = f'({inner})'
                         return f'!{inner}'
 

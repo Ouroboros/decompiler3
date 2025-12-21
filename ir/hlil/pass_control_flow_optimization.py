@@ -444,8 +444,11 @@ class ControlFlowOptimizationPass(Pass):
 
         return False
 
-    def _collect_vars(self, expr: HLILExpression, vars_set: set):
+    def _collect_vars(self, expr: HLILExpression, vars_set: set = None) -> set:
         '''Collect all variable names referenced in expression'''
+        if vars_set is None:
+            vars_set = set()
+
         if isinstance(expr, HLILVar):
             vars_set.add(expr.var)
 
@@ -459,6 +462,8 @@ class ControlFlowOptimizationPass(Pass):
         elif isinstance(expr, HLILCall):
             for arg in expr.args:
                 self._collect_vars(arg, vars_set)
+
+        return vars_set
 
     def _stmt_modifies_any(self, stmt: HLILStatement, vars_set: set) -> bool:
         '''Check if statement modifies any variable in vars_set'''
@@ -520,6 +525,9 @@ class ControlFlowOptimizationPass(Pass):
             return
 
         # Pattern 2: { nop*; [other_assigns*;] var = bool_expr; if (var == 0) {...} }
+        # DISABLED: This should be handled by MLIL SSA Copy Propagation instead
+        return
+
         # Last statement must be if, second-to-last must be bool assignment
         if remaining < 2:
             return
@@ -543,6 +551,14 @@ class ControlFlowOptimizationPass(Pass):
 
         # Keep non-bool assigns before the bool assign as leading statements
         extra_leading = stmts[idx:-2]
+
+        # Check if any extra_leading statement modifies variables used in condition_expr
+        # If so, we can't flatten because the condition would use wrong values
+        condition_vars = self._collect_vars(condition_expr)
+        for stmt in extra_leading:
+            if self._stmt_modifies_any(stmt, condition_vars):
+                return
+
         leading_nops = leading_nops + extra_leading
 
         cond = inner_if.condition

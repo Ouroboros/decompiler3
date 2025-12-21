@@ -28,6 +28,7 @@ class SSAOptimizer:
             changed |= self.simplify_expressions()
             changed |= self.simplify_conditions()
             changed |= self.propagate_copies()
+            changed |= self.inline_single_use_expressions()
             changed |= self.eliminate_dead_code()
 
             # Eliminate dead phi sources (constants only used by Phi with unused result)
@@ -397,6 +398,202 @@ class SSAOptimizer:
 
         return expr
 
+    def inline_single_use_expressions(self) -> bool:
+        '''Inline expressions that are only used once.
+
+        Pattern: x#n = expr; ... use(x#n) → ... use(expr)
+        Only inlines when:
+        - Variable has exactly one use
+        - Expression has no side effects, OR the single use preserves execution order
+        '''
+        self._build_def_use_chains()
+        changed = False
+
+        # Find single-use variables with inlinable expressions
+        inlinable: Dict[MLILVariableSSA, MediumLevelILInstruction] = {}
+
+        for ssa_var, defn in self.ssa_defs.items():
+            if not isinstance(defn, MLILSetVarSSA):
+                continue
+
+            # Skip var-to-var copies (handled by propagate_copies)
+            if isinstance(defn.value, MLILVarSSA):
+                continue
+
+            # Skip constants (handled by propagate_constants)
+            if isinstance(defn.value, MLILConst):
+                continue
+
+            uses = self.ssa_uses.get(ssa_var, [])
+            if len(uses) != 1:
+                continue
+
+            use = uses[0]
+
+            # Skip if used in Phi (may require duplication across branches)
+            if isinstance(use, MLILPhi):
+                continue
+
+            # For expressions with side effects (calls) or impure reads (LoadReg/LoadGlobal),
+            # only inline if use is immediately after def in same block
+            if self._has_side_effects(defn.value) or self._is_impure_read(defn.value):
+                if not self._is_immediate_use(defn, use):
+                    continue
+
+            inlinable[ssa_var] = defn.value
+
+        if not inlinable:
+            return False
+
+        # Replace uses with inlined expressions
+        for block in self.function.basic_blocks:
+            new_instructions = []
+
+            for inst in block.instructions:
+                new_inst = self._inline_expr_in_inst(inst, inlinable)
+                new_instructions.append(new_inst)
+
+                if new_inst is not inst:
+                    changed = True
+
+            block.instructions = new_instructions
+
+        return changed
+
+    def _has_side_effects(self, expr: MediumLevelILInstruction) -> bool:
+        '''Check if expression has side effects'''
+        if isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+            return True
+
+        if isinstance(expr, MLILBinaryOp):
+            return self._has_side_effects(expr.lhs) or self._has_side_effects(expr.rhs)
+
+        if isinstance(expr, MLILUnaryOp):
+            return self._has_side_effects(expr.operand)
+
+        return False
+
+    def _is_impure_read(self, expr: MediumLevelILInstruction) -> bool:
+        '''Check if expression reads from mutable storage (REG/GLOBAL)'''
+        if isinstance(expr, (MLILLoadReg, MLILLoadGlobal)):
+            return True
+
+        if isinstance(expr, MLILBinaryOp):
+            return self._is_impure_read(expr.lhs) or self._is_impure_read(expr.rhs)
+
+        if isinstance(expr, MLILUnaryOp):
+            return self._is_impure_read(expr.operand)
+
+        return False
+
+    def _is_immediate_use(self, defn: MLILSetVarSSA, use: MediumLevelILInstruction) -> bool:
+        '''Check if use immediately follows definition in same block'''
+        for block in self.function.basic_blocks:
+            for i, inst in enumerate(block.instructions):
+                if inst is defn:
+                    # Check if next instruction contains the use
+                    if i + 1 < len(block.instructions):
+                        return self._inst_contains(block.instructions[i + 1], use)
+                    return False
+        return False
+
+    def _inst_contains(self, inst: MediumLevelILInstruction, target: MediumLevelILInstruction) -> bool:
+        '''Check if inst is or contains target'''
+        if inst is target:
+            return True
+
+        if isinstance(inst, MLILSetVarSSA):
+            return self._expr_contains(inst.value, target)
+
+        if isinstance(inst, MLILIf):
+            return self._expr_contains(inst.condition, target)
+
+        if isinstance(inst, MLILRet):
+            return inst.value is not None and self._expr_contains(inst.value, target)
+
+        if isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            return any(self._expr_contains(arg, target) for arg in inst.args)
+
+        return False
+
+    def _expr_contains(self, expr: MediumLevelILInstruction, target: MediumLevelILInstruction) -> bool:
+        '''Check if expr is or contains target'''
+        if expr is target:
+            return True
+
+        if isinstance(expr, MLILBinaryOp):
+            return self._expr_contains(expr.lhs, target) or self._expr_contains(expr.rhs, target)
+
+        if isinstance(expr, MLILUnaryOp):
+            return self._expr_contains(expr.operand, target)
+
+        return False
+
+    def _inline_expr_in_inst(self, inst: MediumLevelILInstruction,
+                              inlinable: Dict[MLILVariableSSA, MediumLevelILInstruction]) -> MediumLevelILInstruction:
+        '''Inline expressions in instruction'''
+        if isinstance(inst, MLILSetVarSSA):
+            new_value = self._inline_expr(inst.value, inlinable)
+            if new_value is not inst.value:
+                return MLILSetVarSSA(inst.var, new_value)
+
+        elif isinstance(inst, MLILIf):
+            new_condition = self._inline_expr(inst.condition, inlinable)
+            if new_condition is not inst.condition:
+                return MLILIf(new_condition, inst.true_target, inst.false_target)
+
+        elif isinstance(inst, MLILRet):
+            if inst.value is not None:
+                new_value = self._inline_expr(inst.value, inlinable)
+                if new_value is not inst.value:
+                    return MLILRet(new_value)
+
+        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            new_args = [self._inline_expr(arg, inlinable) for arg in inst.args]
+            if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
+                if isinstance(inst, MLILCall):
+                    return MLILCall(inst.target, new_args)
+
+                elif isinstance(inst, MLILSyscall):
+                    return MLILSyscall(inst.subsystem, inst.cmd, new_args)
+
+                elif isinstance(inst, MLILCallScript):
+                    return MLILCallScript(inst.module, inst.func, new_args)
+
+        elif isinstance(inst, (MLILStoreGlobal, MLILStoreReg)):
+            new_value = self._inline_expr(inst.value, inlinable)
+            if new_value is not inst.value:
+                if isinstance(inst, MLILStoreGlobal):
+                    return MLILStoreGlobal(inst.index, new_value)
+
+                else:
+                    return MLILStoreReg(inst.index, new_value)
+
+        return inst
+
+    def _inline_expr(self, expr: MediumLevelILInstruction,
+                      inlinable: Dict[MLILVariableSSA, MediumLevelILInstruction]) -> MediumLevelILInstruction:
+        '''Inline single-use expressions'''
+        if isinstance(expr, MLILVarSSA):
+            if expr.var in inlinable:
+                return inlinable[expr.var]
+
+        elif isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod,
+                               MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr,
+                               MLILLogicalAnd, MLILLogicalOr,
+                               MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
+            lhs = self._inline_expr(expr.lhs, inlinable)
+            rhs = self._inline_expr(expr.rhs, inlinable)
+            if lhs is not expr.lhs or rhs is not expr.rhs:
+                return self._reconstruct_binary_op(expr, lhs, rhs)
+
+        elif isinstance(expr, (MLILNeg, MLILLogicalNot, MLILBitwiseNot, MLILTestZero)):
+            operand = self._inline_expr(expr.operand, inlinable)
+            if operand is not expr.operand:
+                return self._reconstruct_unary_op(expr, operand)
+
+        return expr
+
     def eliminate_redundant_reg_loads(self) -> bool:
         '''Replace redundant LoadReg with previously loaded value.
 
@@ -559,6 +756,9 @@ class SSAOptimizer:
 
         elif isinstance(expr, MLILBitwiseNot):
             return MLILBitwiseNot(operand)
+
+        elif isinstance(expr, MLILTestZero):
+            return MLILTestZero(operand)
 
         else:
             raise NotImplementedError(f'Unhandled unary operation: {type(expr).__name__}')
