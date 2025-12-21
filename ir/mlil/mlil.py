@@ -101,6 +101,7 @@ class MediumLevelILOperation(IntEnum2):
     MLIL_PHI                = 2000
     MLIL_VAR_SSA            = 2001
     MLIL_SET_VAR_SSA        = 2002
+    MLIL_UNDEF              = 2003
 
 
 class MediumLevelILInstruction(ILInstruction):
@@ -188,6 +189,16 @@ class MLILConst(MediumLevelILExpr, Constant):
 
             return f'"{self.value}"'
         return str(self.value)
+
+
+class MLILUndef(MediumLevelILExpr):
+    '''Undefined value (result of call via AddressOf, etc.)'''
+
+    def __init__(self):
+        super().__init__(MediumLevelILOperation.MLIL_UNDEF)
+
+    def __str__(self) -> str:
+        return '<undef>'
 
 
 # === Variable Operations ===

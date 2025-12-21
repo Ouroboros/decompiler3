@@ -334,8 +334,11 @@ class SSAConstructor:
 
                 new_insts = []
                 for inst in block.instructions:
-                    new_inst = self._rename_inst(inst, pushed)
-                    new_insts.append(new_inst)
+                    result = self._rename_inst(inst, pushed)
+                    if isinstance(result, list):
+                        new_insts.extend(result)
+                    else:
+                        new_insts.append(result)
 
                 block.instructions = new_insts
 
@@ -385,6 +388,33 @@ class SSAConstructor:
             pushed.append(inst.var)
 
             return MLILSetVarSSA(MLILVariableSSA(inst.var, new_ver), new_value)
+
+        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            # Find variables passed via AddressOf (output parameters)
+            addr_vars = []
+            for arg in inst.args:
+                if isinstance(arg, MLILAddressOf) and isinstance(arg.operand, MLILVar):
+                    addr_vars.append(arg.operand.var)
+
+            # Rename the call (uses current SSA versions)
+            renamed = self._rename_stmt(inst)
+
+            if not addr_vars:
+                return renamed
+
+            # Create new SSA versions for address-taken variables (modified by call)
+            # Generate pseudo-definitions so interference analysis knows about them
+            result = [renamed]
+            for var in addr_vars:
+                new_ver = self._new_version(var)
+                pushed.append(var)
+
+                # Pseudo-definition: var#new = <undef> (call modified the variable)
+                new_ssa_var = MLILVariableSSA(var, new_ver)
+                pseudo_def = MLILSetVarSSA(new_ssa_var, MLILUndef())
+                result.append(pseudo_def)
+
+            return result
 
         else:
             # Other statements: rename expressions
@@ -623,8 +653,8 @@ class SSADeconstructor:
             self._collect_uses_in_expr(expr.rhs, block, inst_idx)
 
         elif isinstance(expr, MLILAddressOf):
-            # Skip address-of: output parameters don't need the variable's value
-            pass
+            # AddressOf uses the variable (its address is passed to function)
+            self._collect_uses_in_expr(expr.operand, block, inst_idx)
 
         elif isinstance(expr, MLILUnaryOp):
             self._collect_uses_in_expr(expr.operand, block, inst_idx)
@@ -697,12 +727,7 @@ class SSADeconstructor:
             result |= self._get_vars_in_expr(expr.lhs)
             result |= self._get_vars_in_expr(expr.rhs)
 
-        elif isinstance(expr, MLILAddressOf):
-            # Skip address-of: we only need the address, not the variable's value
-            # This handles output parameters correctly (func(&var) where var is written by callee)
-            pass
-
-        elif isinstance(expr, MLILUnaryOp):
+        elif isinstance(expr, (MLILAddressOf, MLILUnaryOp)):
             result |= self._get_vars_in_expr(expr.operand)
 
         return result
@@ -814,6 +839,10 @@ class SSADeconstructor:
 
             # Skip self-assignment (var = var) from coalesced phi copies
             if isinstance(new_value, MLILVar) and new_value.var == new_var:
+                return None
+
+            # Skip undef assignments (pseudo-definitions for call output parameters)
+            if isinstance(inst.value, MLILUndef):
                 return None
 
             return MLILSetVar(new_var, new_value)

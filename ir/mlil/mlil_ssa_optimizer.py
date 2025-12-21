@@ -80,7 +80,7 @@ class SSAOptimizer:
             self._collect_uses_in_expr(inst.lhs)
             self._collect_uses_in_expr(inst.rhs)
 
-        elif isinstance(inst, (MLILNeg, MLILLogicalNot, MLILBitwiseNot, MLILTestZero)):
+        elif isinstance(inst, (MLILNeg, MLILLogicalNot, MLILBitwiseNot, MLILTestZero, MLILAddressOf)):
             self._collect_uses_in_expr(inst.operand)
 
         elif isinstance(inst, MLILIf):
@@ -1042,6 +1042,10 @@ class SCCP:
         '''Evaluate expression to lattice value'''
         if isinstance(expr, MLILConst):
             return LatticeValue.constant(expr.value)
+
+        elif isinstance(expr, MLILUndef):
+            # Undefined value - could be anything
+            return LatticeValue.bottom()
 
         elif isinstance(expr, MLILVarSSA):
             # If variable has no definition, it's uninitialized - could be any value (BOTTOM)
