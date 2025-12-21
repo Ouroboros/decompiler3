@@ -1174,7 +1174,7 @@ class MLILToHLILConverter:
 
         elif isinstance(expr, MLILAddressOf):
             operand = self._convert_expr(expr.operand)
-            return HLILCall('addr_of', [operand])
+            return HLILAddressOf(operand)
 
         elif isinstance(expr, MLILUnaryOp):
             if expr.operation in (MediumLevelILOperation.MLIL_LOGICAL_NOT, MediumLevelILOperation.MLIL_TEST_ZERO):

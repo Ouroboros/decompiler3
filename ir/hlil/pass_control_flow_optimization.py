@@ -12,6 +12,7 @@ from .hlil import (
     HLILConst,
     HLILBinaryOp,
     HLILUnaryOp,
+    HLILAddressOf,
     HLILCall,
     HLILSyscall,
     HLILExternCall,
@@ -239,7 +240,7 @@ class ControlFlowOptimizationPass(Pass):
             right_reads, _, _ = self._can_read_original_value(var, node.rhs, killed)
             return (left_reads or right_reads, killed, False)
 
-        if isinstance(node, HLILUnaryOp):
+        if isinstance(node, (HLILUnaryOp, HLILAddressOf)):
             reads, _, _ = self._can_read_original_value(var, node.operand, killed)
             return (reads, killed, False)
 
@@ -452,7 +453,7 @@ class ControlFlowOptimizationPass(Pass):
             self._collect_vars(expr.lhs, vars_set)
             self._collect_vars(expr.rhs, vars_set)
 
-        elif isinstance(expr, HLILUnaryOp):
+        elif isinstance(expr, (HLILUnaryOp, HLILAddressOf)):
             self._collect_vars(expr.operand, vars_set)
 
         elif isinstance(expr, HLILCall):

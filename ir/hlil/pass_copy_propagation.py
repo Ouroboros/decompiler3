@@ -12,6 +12,7 @@ from .hlil import (
     HLILConst,
     HLILBinaryOp,
     HLILUnaryOp,
+    HLILAddressOf,
     HLILCall,
     HLILSyscall,
     HLILExternCall,
@@ -116,9 +117,11 @@ class CopyPropagationPass(Pass):
                 continue
 
             # Safe to propagate: replace and delete
-            self._replace_var(remaining, var, expr)
-            block.statements.pop(i)
-            # Don't increment i
+            if self._replace_var(remaining, var, expr):
+                block.statements.pop(i)
+                # Don't increment i
+            else:
+                i += 1
 
     BOOLEAN_BINARY_OPS = {
         BinaryOp.EQ, BinaryOp.NE,
@@ -167,7 +170,7 @@ class CopyPropagationPass(Pass):
             right_uses, _ = self._find_reachable_uses(node.rhs, var, in_entered_loop, containing_loop)
             return (left_uses + right_uses, False)
 
-        if isinstance(node, HLILUnaryOp):
+        if isinstance(node, (HLILUnaryOp, HLILAddressOf)):
             return self._find_reachable_uses(node.operand, var, in_entered_loop, containing_loop)
 
         if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
@@ -251,7 +254,7 @@ class CopyPropagationPass(Pass):
             result.update(self._collect_vars(expr.lhs))
             result.update(self._collect_vars(expr.rhs))
 
-        elif isinstance(expr, HLILUnaryOp):
+        elif isinstance(expr, (HLILUnaryOp, HLILAddressOf)):
             result.update(self._collect_vars(expr.operand))
 
         elif isinstance(expr, (HLILCall, HLILSyscall, HLILExternCall)):
@@ -268,7 +271,7 @@ class CopyPropagationPass(Pass):
         if isinstance(expr, HLILBinaryOp):
             return self._has_side_effects(expr.lhs) or self._has_side_effects(expr.rhs)
 
-        if isinstance(expr, HLILUnaryOp):
+        if isinstance(expr, (HLILUnaryOp, HLILAddressOf)):
             return self._has_side_effects(expr.operand)
 
         return False
@@ -343,7 +346,7 @@ class CopyPropagationPass(Pass):
         if isinstance(expr, HLILBinaryOp):
             return self._contains_var(expr.lhs, var) or self._contains_var(expr.rhs, var)
 
-        if isinstance(expr, HLILUnaryOp):
+        if isinstance(expr, (HLILUnaryOp, HLILAddressOf)):
             return self._contains_var(expr.operand, var)
 
         if isinstance(expr, (HLILCall, HLILSyscall, HLILExternCall)):
@@ -383,6 +386,10 @@ class CopyPropagationPass(Pass):
                 return True
 
             return self._replace_var_in_node(node.operand, var, replacement)
+
+        if isinstance(node, HLILAddressOf):
+            # Cannot replace variable with constant in address-of (need lvalue)
+            return False
 
         if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
             for i, arg in enumerate(node.args):

@@ -74,6 +74,7 @@ class HLILOperation(IntEnum2):
     HLIL_CONST          = auto()
     HLIL_BINARY_OP      = auto()
     HLIL_UNARY_OP       = auto()
+    HLIL_ADDRESS_OF     = auto()
     HLIL_CALL           = auto()
     HLIL_SYSCALL        = auto()
 
@@ -248,6 +249,20 @@ class HLILUnaryOp(HLILExpression):
 
     def __repr__(self) -> str:
         return f'HLILUnaryOp({self.op.name})'
+
+
+class HLILAddressOf(HLILExpression):
+    '''Address-of operation: &var'''
+
+    def __init__(self, operand: HLILExpression):
+        super().__init__(HLILOperation.HLIL_ADDRESS_OF)
+        self.operand = operand
+
+    def __str__(self) -> str:
+        return f'&{self.operand}'
+
+    def __repr__(self) -> str:
+        return f'HLILAddressOf({self.operand})'
 
 
 class HLILCall(HLILExpression):

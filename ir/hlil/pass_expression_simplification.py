@@ -9,6 +9,7 @@ from .hlil import (
     HLILVar,
     HLILBinaryOp,
     HLILUnaryOp,
+    HLILAddressOf,
     HLILCall,
     HLILIf,
     HLILWhile,
@@ -140,7 +141,7 @@ class ExpressionSimplificationPass(Pass):
         if isinstance(node, HLILBinaryOp):
             return self._expr_reads_reg0(node.lhs) or self._expr_reads_reg0(node.rhs)
 
-        if isinstance(node, HLILUnaryOp):
+        if isinstance(node, (HLILUnaryOp, HLILAddressOf)):
             return self._expr_reads_reg0(node.operand)
 
         if isinstance(node, HLILCall):
