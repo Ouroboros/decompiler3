@@ -151,6 +151,9 @@ class ScpParser(StrictBase):
             for i in range(entry.param_count):
                 param = FunctionParam(type = param_flags[i], default_value = default_params[i])
                 func.params.append(param)
+
+            # func.params.reverse()
+
             functions.append(func)
 
         # init debug info

@@ -36,7 +36,7 @@ def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
             pipeline.add_pass(ED9TypeInferencePass(parser))
 
         pipeline.add_pass(SSADeconstructionPass())
-        pipeline.add_pass(DeadCodeEliminationPass())
+        # pipeline.add_pass(DeadCodeEliminationPass())  # TODO: check if needed
         pipeline.add_pass(RegGlobalValuePropagationPass())
 
     return pipeline.run(llil_func)
