@@ -27,6 +27,7 @@ class SSAOptimizer:
             # changed |= self.fold_constants()  # Temporarily disabled
             changed |= self.simplify_expressions()
             changed |= self.simplify_conditions()
+            changed |= self.normalize_negations()
             changed |= self.propagate_copies()
             changed |= self.inline_single_use_expressions()
             changed |= self.eliminate_dead_code()
@@ -885,6 +886,100 @@ class SSAOptimizer:
                 return lhs
 
         return None
+
+    # =========================================================================
+    # Negation Normal Form (NNF) - Push negations down to leaves
+    # =========================================================================
+
+    def normalize_negations(self) -> bool:
+        '''
+        Convert expressions to Negation Normal Form (NNF).
+        Push all NOT operators down to comparison leaves:
+        - !(!x) → x
+        - !(x == y) → x != y
+        - !(x && y) → !x || !y (De Morgan)
+        - !(x || y) → !x && !y (De Morgan)
+        '''
+        changed = False
+
+        for block in self.function.basic_blocks:
+            for i, inst in enumerate(block.instructions):
+                new_inst = self._normalize_negations_in_inst(inst)
+                if new_inst is not inst:
+                    block.instructions[i] = new_inst
+                    changed = True
+
+        return changed
+
+    def _normalize_negations_in_inst(self, inst: MediumLevelILInstruction) -> MediumLevelILInstruction:
+        '''Apply NNF to an instruction'''
+        if isinstance(inst, MLILSetVarSSA):
+            new_value = self._push_negation(inst.value, negated=False)
+            if new_value is not inst.value:
+                return MLILSetVarSSA(inst.var, new_value)
+
+        elif isinstance(inst, MLILIf):
+            new_cond = self._push_negation(inst.condition, negated=False)
+            if new_cond is not inst.condition:
+                return MLILIf(new_cond, inst.true_target, inst.false_target)
+
+        return inst
+
+    def _push_negation(self, expr: MediumLevelILInstruction, negated: bool) -> MediumLevelILInstruction:
+        '''
+        Recursively push negation down to leaves.
+        If negated=True, we need to negate this expression.
+        '''
+        if isinstance(expr, MLILLogicalNot):
+            # !x with negated → !!x → x (cancel out)
+            # !x without negated → pass negation down
+            return self._push_negation(expr.operand, not negated)
+
+        elif isinstance(expr, MLILLogicalAnd):
+            if negated:
+                # !(a && b) → !a || !b (De Morgan)
+                lhs = self._push_negation(expr.lhs, True)
+                rhs = self._push_negation(expr.rhs, True)
+                return MLILLogicalOr(lhs, rhs)
+
+            else:
+                lhs = self._push_negation(expr.lhs, False)
+                rhs = self._push_negation(expr.rhs, False)
+                if lhs is not expr.lhs or rhs is not expr.rhs:
+                    return MLILLogicalAnd(lhs, rhs)
+                return expr
+
+        elif isinstance(expr, MLILLogicalOr):
+            if negated:
+                # !(a || b) → !a && !b (De Morgan)
+                lhs = self._push_negation(expr.lhs, True)
+                rhs = self._push_negation(expr.rhs, True)
+                return MLILLogicalAnd(lhs, rhs)
+
+            else:
+                lhs = self._push_negation(expr.lhs, False)
+                rhs = self._push_negation(expr.rhs, False)
+                if lhs is not expr.lhs or rhs is not expr.rhs:
+                    return MLILLogicalOr(lhs, rhs)
+                return expr
+
+        elif isinstance(expr, MLILTestZero):
+            # TestZero(x) = (x == 0)
+            # !TestZero(x) = (x != 0)
+            if negated:
+                return MLILNe(expr.operand, MLILConst(0, is_hex=False))
+            return expr
+
+        elif isinstance(expr, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
+            if negated:
+                return self._invert_comparison(expr)
+            return expr
+
+        else:
+            # For other expressions, if negated, wrap with NOT
+            if negated:
+                return MLILLogicalNot(expr)
+            return expr
 
     def simplify_conditions(self) -> bool:
         '''Simplify conditionals: (expr == 0) → !expr, (expr != 0) → expr'''
