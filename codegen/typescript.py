@@ -222,6 +222,7 @@ class TypeScriptGenerator:
             # Simplify boolean comparisons with 0
             # (bool_expr) != 0 -> bool_expr
             # (bool_expr) == 0 -> !bool_expr
+            # (!x) == 0 -> x (double negation elimination)
             if isinstance(expr.rhs, HLILConst) and expr.rhs.value == 0:
                 if cls._is_boolean_expr(expr.lhs):
                     if expr.op == BinaryOp.NE:
@@ -229,6 +230,10 @@ class TypeScriptGenerator:
                         return cls._format_expr(expr.lhs)
 
                     elif expr.op == BinaryOp.EQ:
+                        # (!x) == 0 -> x (double negation elimination)
+                        if isinstance(expr.lhs, HLILUnaryOp) and expr.lhs.op == UnaryOp.NOT:
+                            return cls._format_expr(expr.lhs.operand)
+
                         # (bool) == 0 -> !bool
                         inner = cls._format_expr(expr.lhs)
                         # Add parentheses if inner is any binary expression (! has higher precedence)
@@ -252,7 +257,25 @@ class TypeScriptGenerator:
             return f'{lhs_str} {op_str} {rhs_str}'
 
         elif isinstance(expr, HLILUnaryOp):
+            # Simplify !(x == 0) -> x and !(x != 0) -> !x
+            if expr.op == UnaryOp.NOT and isinstance(expr.operand, HLILBinaryOp):
+                inner = expr.operand
+                if isinstance(inner.rhs, HLILConst) and inner.rhs.value == 0:
+                    if inner.op == BinaryOp.EQ:
+                        # !(x == 0) -> x
+                        return cls._format_expr(inner.lhs)
+
+                    elif inner.op == BinaryOp.NE:
+                        # !(x != 0) -> x == 0 -> !x
+                        lhs_str = cls._format_expr(inner.lhs)
+                        if isinstance(inner.lhs, HLILBinaryOp):
+                            lhs_str = f'({lhs_str})'
+                        return f'!{lhs_str}'
+
             operand = cls._format_expr(expr.operand)
+            # Add parentheses around binary operands to avoid precedence issues
+            if isinstance(expr.operand, HLILBinaryOp):
+                operand = f'({operand})'
             return f'{UNARY_OP_STR[expr.op]}{operand}'
 
         elif isinstance(expr, HLILAddressOf):

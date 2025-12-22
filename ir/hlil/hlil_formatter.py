@@ -77,6 +77,9 @@ class HLILFormatter:
 
         elif isinstance(expr, HLILUnaryOp):
             operand = cls._format_expr(expr.operand)
+            # Add parentheses around binary operands for clarity
+            if isinstance(expr.operand, HLILBinaryOp):
+                operand = f'({operand})'
             return f'{expr.op}{operand}'
 
         elif isinstance(expr, HLILCall):
