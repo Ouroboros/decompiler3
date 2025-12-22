@@ -6,7 +6,7 @@ from enum import Enum, auto
 from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 from ir.pipeline import Pass
-from .mlil import (
+from ..mlil import (
     MediumLevelILFunction, MediumLevelILBasicBlock, MediumLevelILInstruction,
     MLILConst, MLILVar, MLILBinaryOp, MLILUnaryOp, MLILSetVar,
     MLILIf, MLILRet, MLILCall, MLILSyscall, MLILCallScript,

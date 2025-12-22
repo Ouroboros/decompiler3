@@ -3,9 +3,9 @@
 from typing import Optional
 
 from ir.pipeline import Pass
-from .mlil import MediumLevelILFunction
-from .mlil_type_inference import infer_types, FunctionSignatureDB
-from .mlil_types import unify_types
+from ..mlil import MediumLevelILFunction
+from ..mlil_type_inference import infer_types, FunctionSignatureDB
+from ..mlil_types import unify_types
 
 
 class TypeInferencePass(Pass):

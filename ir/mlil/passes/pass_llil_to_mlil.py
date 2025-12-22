@@ -2,8 +2,8 @@
 
 from ir.pipeline import Pass
 from ir.llil import LowLevelILFunction
-from .mlil import MediumLevelILFunction
-from .llil_to_mlil import LLILToMLILTranslator
+from ..mlil import MediumLevelILFunction
+from ..llil_to_mlil import LLILToMLILTranslator
 
 
 class LLILToMLILPass(Pass):

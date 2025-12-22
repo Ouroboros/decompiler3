@@ -1,5 +1,12 @@
-'''MLIL SSA Optimization Passes'''
+'''MLIL Optimization Passes'''
 
+# Lifting
+from .pass_llil_to_mlil import LLILToMLILPass
+
+# SSA conversion/deconstruction
+from .pass_ssa import SSAConversionPass, SSAOptimizationPass, SSADeconstructionPass
+
+# SSA optimization passes
 from .pass_ssa_nnf import NNFPass
 from .pass_ssa_sccp import SCCPPass, SCCP, LatticeValue
 from .pass_ssa_constant_propagation import ConstantPropagationPass
@@ -7,10 +14,28 @@ from .pass_ssa_copy_propagation import CopyPropagationPass
 from .pass_ssa_expression_simplification import ExpressionSimplificationPass
 from .pass_ssa_condition_simplification import ConditionSimplificationPass
 from .pass_ssa_expression_inlining import ExpressionInliningPass
-from .pass_ssa_dead_code import DeadCodeEliminationPass
+from .pass_ssa_dead_code import DeadCodeEliminationPass as SSADeadCodeEliminationPass
 from .pass_ssa_dead_phi import DeadPhiSourceEliminationPass
+from .pass_ssa_type_inference import TypeInferencePass
+
+# Non-SSA passes
+from .pass_dead_code import DeadCodeEliminationPass
+from .pass_reg_global_propagation import (
+    StorageKind,
+    StorageKey,
+    RegGlobalState,
+    RegGlobalValuePropagator,
+    RegGlobalValuePropagationPass,
+)
 
 __all__ = [
+    # Lifting
+    'LLILToMLILPass',
+    # SSA conversion
+    'SSAConversionPass',
+    'SSAOptimizationPass',
+    'SSADeconstructionPass',
+    # SSA optimization
     'NNFPass',
     'SCCPPass',
     'SCCP',
@@ -20,6 +45,14 @@ __all__ = [
     'ExpressionSimplificationPass',
     'ConditionSimplificationPass',
     'ExpressionInliningPass',
-    'DeadCodeEliminationPass',
+    'SSADeadCodeEliminationPass',
     'DeadPhiSourceEliminationPass',
+    'TypeInferencePass',
+    # Non-SSA
+    'DeadCodeEliminationPass',
+    'StorageKind',
+    'StorageKey',
+    'RegGlobalState',
+    'RegGlobalValuePropagator',
+    'RegGlobalValuePropagationPass',
 ]

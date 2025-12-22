@@ -1,9 +1,8 @@
 '''SSA-related passes'''
 
 from ir.pipeline import Pass
-from .mlil import MediumLevelILFunction
-from .mlil_ssa import convert_to_ssa, convert_from_ssa
-from .mlil_ssa_optimizer import SSAOptimizer
+from ..mlil import MediumLevelILFunction
+from ..mlil_ssa import convert_to_ssa, convert_from_ssa
 
 
 class SSAConversionPass(Pass):
@@ -20,6 +19,8 @@ class SSAOptimizationPass(Pass):
 
     def run(self, mlil_func: MediumLevelILFunction) -> MediumLevelILFunction:
         '''Optimize SSA form'''
+        # Delayed import to avoid circular dependency
+        from ..mlil_ssa_optimizer import SSAOptimizer
         optimizer = SSAOptimizer(mlil_func)
         return optimizer.optimize()
 

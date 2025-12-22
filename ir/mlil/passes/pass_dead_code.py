@@ -1,7 +1,7 @@
 '''Dead code elimination pass'''
 
 from ir.pipeline import Pass
-from .mlil import (
+from ..mlil import (
     MediumLevelILFunction,
     MLILVar, MLILBinaryOp, MLILUnaryOp, MLILSetVar,
     MLILIf, MLILRet, MLILCall, MLILSyscall, MLILCallScript,

@@ -9,7 +9,7 @@ from .passes import (
     ExpressionSimplificationPass,
     ConditionSimplificationPass,
     ExpressionInliningPass,
-    DeadCodeEliminationPass,
+    SSADeadCodeEliminationPass,
     DeadPhiSourceEliminationPass,
 )
 
@@ -34,7 +34,7 @@ class SSAOptimizer:
             NNFPass(),
             CopyPropagationPass(),
             ExpressionInliningPass(),
-            DeadCodeEliminationPass(),
+            SSADeadCodeEliminationPass(),
             DeadPhiSourceEliminationPass(),
         ]
 
