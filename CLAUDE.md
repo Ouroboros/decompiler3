@@ -2,12 +2,18 @@
 
 ## Rules
 
+### -2. Read CLAUDE.md First
+ALWAYS read CLAUDE.md before starting any task to refresh the rules.
+
 ### -1. Language Usage
 - **User communication**: Chinese
 - **Code, comments, commit messages, tool descriptions**: English
 
 ### -0.5. Git Commit Policy
 NEVER auto-commit. Only create commits when explicitly requested by user.
+
+### -0.25. Code Modification Policy
+NEVER modify code during discussion. Only modify code AFTER user explicitly confirms the approach.
 
 ### 0. NEVER TOUCH binaryninja-api/
 READ ONLY - no writes, edits, or deletes.
@@ -57,6 +63,7 @@ Keep comments brief and meaningful. Avoid redundant explanations.
 ## Checklist
 - [ ] User communication in Chinese, everything else in English
 - [ ] No auto-commit (wait for user request)
+- [ ] No code changes during discussion (wait for user confirmation)
 - [ ] No hardcoded numbers (use named constants)
 - [ ] Imports at top level
 - [ ] Spaces around `=`
