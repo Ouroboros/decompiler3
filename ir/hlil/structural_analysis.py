@@ -151,12 +151,13 @@ class StructuralAnalyzer:
                 self.idom[node] = None
                 continue
 
-            # Find closest dominator
+            # Find immediate dominator (closest dominator that dominates all others)
             idom = None
             for candidate in dominators:
                 is_idom = True
                 for other in dominators:
-                    if other != candidate and candidate not in dom[other]:
+                    # candidate is idom if it dominates all other dominators
+                    if other != candidate and other not in dom[candidate]:
                         is_idom = False
                         break
                 if is_idom:
@@ -454,22 +455,20 @@ class StructuralAnalyzer:
         # Return nearest (minimum combined distance)
         return min(common, key=lambda b: reach_true[b] + reach_false[b])
 
-    def _forward_reach(self, start: int, max_depth: int = 100) -> Dict[int, int]:
+    def _forward_reach(self, start: int) -> Dict[int, int]:
         '''Forward reachability, skipping back edges and collapsed nodes'''
         reach = {}
         queue = deque([(start, 0)])
-        visited = set()
 
         while queue:
             block, depth = queue.popleft()
 
-            if block in visited or depth > max_depth:
+            if block in reach:
                 continue
 
             if block not in self.active_nodes:
                 continue
 
-            visited.add(block)
             reach[block] = depth
 
             for succ in self.successors.get(block, []):
@@ -477,7 +476,7 @@ class StructuralAnalyzer:
                 if (block, succ) in self.back_edges:
                     continue
 
-                if succ not in visited and succ in self.active_nodes:
+                if succ not in reach and succ in self.active_nodes:
                     queue.append((succ, depth + 1))
 
         return reach
@@ -534,19 +533,17 @@ class StructuralAnalyzer:
         # Return nearest (minimum combined distance)
         return min(common, key=lambda b: reach_true[b] + reach_false[b])
 
-    def _forward_reach_original(self, start: int, max_depth: int = 100) -> Dict[int, int]:
+    def _forward_reach_original(self, start: int) -> Dict[int, int]:
         '''Forward reachability on original graph, skipping back edges'''
         reach = {}
         queue = deque([(start, 0)])
-        visited = set()
 
         while queue:
             block, depth = queue.popleft()
 
-            if block in visited or depth > max_depth:
+            if block in reach:
                 continue
 
-            visited.add(block)
             reach[block] = depth
 
             for succ in self.original_successors.get(block, []):
@@ -554,7 +551,7 @@ class StructuralAnalyzer:
                 if (block, succ) in self.back_edges:
                     continue
 
-                if succ not in visited:
+                if succ not in reach:
                     queue.append((succ, depth + 1))
 
         return reach

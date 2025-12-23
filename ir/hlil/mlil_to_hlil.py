@@ -685,18 +685,16 @@ class MLILToHLILConverter:
             for tail, _ in loop_info.back_edges:
                 self.loop_ends[tail] = header
 
-    def _get_reachable(self, start_idx: int, max_depth: int = 100) -> Dict[int, int]:
+    def _get_reachable(self, start_idx: int) -> Dict[int, int]:
         reachable = {}
         queue = deque([(start_idx, 0)])
-        visited = set()
         while queue:
             idx, depth = queue.popleft()
-            if idx in visited or depth > max_depth:
+            if idx in reachable:
                 continue
-            visited.add(idx)
             reachable[idx] = depth
             for succ in self.block_successors.get(idx, []):
-                if succ not in visited:
+                if succ not in reachable:
                     queue.append((succ, depth + 1))
         return reachable
 
