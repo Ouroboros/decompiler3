@@ -31,9 +31,9 @@ def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
         pipeline.add_pass(SSAConversionPass())
         pipeline.add_pass(SSAOptimizationPass())
 
-        # Type inference (on SSA form)
-        if infer_types:
-            pipeline.add_pass(ED9TypeInferencePass(parser))
+        # DISABLED: ED9TypeInferencePass - testing
+        # if infer_types:
+        #     pipeline.add_pass(ED9TypeInferencePass(parser))
 
         pipeline.add_pass(SSADeconstructionPass())
         # pipeline.add_pass(DeadCodeEliminationPass())  # TODO: check if needed

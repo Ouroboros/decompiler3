@@ -30,6 +30,9 @@ from ..mlil import (
     MLILLogicalNot,
     MLILBitwiseNot,
     MLILRet,
+    MLILCall,
+    MLILSyscall,
+    MLILCallScript,
 )
 from ..mlil_ssa import (
     MLILVariableSSA,
@@ -114,6 +117,18 @@ class CopyPropagationPass(Pass):
                 new_value = self._replace_in_expr(inst.value, copies)
                 if new_value is not inst.value:
                     return MLILRet(new_value)
+
+        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            new_args = [self._replace_in_expr(arg, copies) for arg in inst.args]
+            if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
+                if isinstance(inst, MLILCall):
+                    return MLILCall(inst.target, new_args)
+
+                elif isinstance(inst, MLILSyscall):
+                    return MLILSyscall(inst.subsystem, inst.cmd, new_args)
+
+                elif isinstance(inst, MLILCallScript):
+                    return MLILCallScript(inst.module, inst.func, new_args)
 
         return inst
 

@@ -21,8 +21,9 @@ def convert_falcom_mlil_to_hlil(mlil_func: MediumLevelILFunction, scp_func: Opti
     pipeline = Pipeline()
     pipeline.add_pass(MLILToHLILPass())
 
-    if scp_func:
-        pipeline.add_pass(FalcomTypeInferencePass(scp_func))
+    # DISABLED: FalcomTypeInferencePass - testing
+    # if scp_func:
+    #     pipeline.add_pass(FalcomTypeInferencePass(scp_func))
 
     pipeline.add_pass(ExpressionSimplificationPass())
     # DISABLED: CopyPropagationPass - moved to MLIL SSA layer
