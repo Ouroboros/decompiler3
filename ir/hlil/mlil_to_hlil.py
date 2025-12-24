@@ -88,6 +88,7 @@ class SSADef:
     reg_index: int
     expr: MediumLevelILInstruction  # The defining expression
     is_call: bool
+    is_global: bool = False  # True for GLOBALS, False for REGS
     is_live_out: bool = False
     use_count: int = 0
     deleted: bool = False
@@ -119,6 +120,10 @@ class RegisterResolver:
       Phase B: Graph rewriting (rewire operands)
       Phase C: Safe DCE
       Phase D: Used during code generation
+
+    Optimization:
+      Each REGS[n]/GLOBALS[n] write creates a local variable.
+      All reads before the next write use that local variable.
     '''
 
     def __init__(self, mlil_func: MediumLevelILFunction):
@@ -127,11 +132,12 @@ class RegisterResolver:
         # Definitions: (block_idx, instr_idx) -> SSADef
         self.definitions: Dict[Tuple[int, int], SSADef] = {}
 
-        # Uses: (block_idx, instr_idx, reg_index) -> SSAUse
-        self.uses: Dict[Tuple[int, int, int], SSAUse] = {}
+        # Uses: (block_idx, instr_idx, type, index) -> SSAUse
+        # type is 'reg' or 'global'
+        self.uses: Dict[Tuple[int, int, str, int], SSAUse] = {}
 
-        # Rewiring map: (block_idx, instr_idx, reg_index) -> SSADef (the def to use instead)
-        self.rewired: Dict[Tuple[int, int, int], SSADef] = {}
+        # Rewiring map: (block_idx, instr_idx, type, index) -> SSADef
+        self.rewired: Dict[Tuple[int, int, str, int], SSADef] = {}
 
         # Deleted instructions
         self.deleted: Set[Tuple[int, int]] = set()
@@ -140,8 +146,14 @@ class RegisterResolver:
         self.predecessors: Dict[int, List[int]] = {}
         self.successors: Dict[int, List[int]] = {}
 
-        # Reaching definitions at block entry: block_idx -> {reg_idx -> Set[SSADef]}
-        self.reaching_defs_entry: Dict[int, Dict[int, Set[SSADef]]] = {}
+        # Reaching definitions at block entry: block_idx -> {var_key -> Set[SSADef]}
+        # var_key is ('reg', index) or ('global', index)
+        self.reaching_defs_entry: Dict[int, Dict[Tuple[str, int], Set[SSADef]]] = {}
+
+        # Local variable names for REGS/GLOBALS optimization
+        # (block_idx, instr_idx) -> var_name
+        self.def_var_names: Dict[Tuple[int, int], str] = {}
+        self._var_counters: Dict[str, int] = {}  # base_name -> counter
 
     def analyze(self):
         '''Run the full analysis and rewriting pipeline'''
@@ -149,6 +161,36 @@ class RegisterResolver:
         self._phase_a_analysis()
         self._phase_b_rewriting()
         self._phase_c_dce()
+        self._assign_var_names()
+
+    def _gen_var_name(self, base: str) -> str:
+        '''Generate unique variable name'''
+        count = self._var_counters.get(base, 0)
+        self._var_counters[base] = count + 1
+        if count == 0:
+            return base
+        return f'{base}_v{count}'
+
+    def _assign_var_names(self):
+        '''Assign local variable names to REGS/GLOBALS definitions that have uses'''
+        for key, ssa_def in self.definitions.items():
+            if ssa_def.use_count == 0 and not ssa_def.is_live_out:
+                continue  # Dead, no var needed
+
+            # Generate var name based on type
+            if ssa_def.is_global:
+                base = f'global{ssa_def.reg_index}'
+
+            elif ssa_def.is_call:
+                base = 'reg0'
+
+            elif ssa_def.reg_index >= 0:
+                base = f'reg{ssa_def.reg_index}'
+
+            else:
+                continue  # Not a register/global def
+
+            self.def_var_names[key] = self._gen_var_name(base)
 
     def _build_cfg(self):
         '''Build predecessor/successor maps'''
@@ -195,10 +237,11 @@ class RegisterResolver:
         '''Phase A: Build def-use chains, compute liveness'''
 
         # Pass 1: Collect all definitions and compute local exit defs
-        local_exit_defs: Dict[int, Dict[int, SSADef]] = {}  # block_idx -> {reg_idx -> SSADef}
+        # Key format: ('reg', index) or ('global', index)
+        local_exit_defs: Dict[int, Dict[Tuple[str, int], SSADef]] = {}
 
         for block_idx, block in enumerate(self.mlil_func.basic_blocks):
-            current_def: Dict[int, SSADef] = {}
+            current_def: Dict[Tuple[str, int], SSADef] = {}
 
             for instr_idx, instr in enumerate(block.instructions):
                 key = (block_idx, instr_idx)
@@ -207,13 +250,18 @@ class RegisterResolver:
                 if isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
                     ssa_def = SSADef(block_idx, instr_idx, 0, instr, is_call=True)
                     self.definitions[key] = ssa_def
-                    current_def[0] = ssa_def
+                    current_def[('reg', 0)] = ssa_def
 
                 elif isinstance(instr, MLILStoreReg):
                     is_call = isinstance(instr.value, (MLILCall, MLILSyscall, MLILCallScript))
                     ssa_def = SSADef(block_idx, instr_idx, instr.index, instr, is_call=is_call)
                     self.definitions[key] = ssa_def
-                    current_def[instr.index] = ssa_def
+                    current_def[('reg', instr.index)] = ssa_def
+
+                elif isinstance(instr, MLILStoreGlobal):
+                    ssa_def = SSADef(block_idx, instr_idx, instr.index, instr, is_call=False, is_global=True)
+                    self.definitions[key] = ssa_def
+                    current_def[('global', instr.index)] = ssa_def
 
             local_exit_defs[block_idx] = current_def
 
@@ -223,12 +271,12 @@ class RegisterResolver:
         # Pass 3: Link uses to definitions (with cross-block support)
         for block_idx, block in enumerate(self.mlil_func.basic_blocks):
             # Start with reaching defs at block entry
-            current_def: Dict[int, SSADef] = {}
+            current_def: Dict[Tuple[str, int], SSADef] = {}
             entry_defs = self.reaching_defs_entry.get(block_idx, {})
-            for reg_idx, defs in entry_defs.items():
+            for var_key, defs in entry_defs.items():
                 # If multiple defs reach, we can't inline (set to None marker)
                 if len(defs) == 1:
-                    current_def[reg_idx] = next(iter(defs))
+                    current_def[var_key] = next(iter(defs))
 
             for instr_idx, instr in enumerate(block.instructions):
                 key = (block_idx, instr_idx)
@@ -239,7 +287,8 @@ class RegisterResolver:
                 # Update current_def after processing uses
                 if key in self.definitions:
                     ssa_def = self.definitions[key]
-                    current_def[ssa_def.reg_index] = ssa_def
+                    var_key = ('global', ssa_def.reg_index) if ssa_def.is_global else ('reg', ssa_def.reg_index)
+                    current_def[var_key] = ssa_def
 
         # Pass 4: Liveness analysis - mark live-out registers before RETURN
         for block_idx, block in enumerate(self.mlil_func.basic_blocks):
@@ -250,14 +299,14 @@ class RegisterResolver:
         # Pass 5: Mark defs as live-out if they reach successor blocks
         self._mark_cross_block_live_out(local_exit_defs)
 
-    def _compute_reaching_definitions(self, local_exit_defs: Dict[int, Dict[int, SSADef]]):
+    def _compute_reaching_definitions(self, local_exit_defs: Dict[int, Dict[Tuple[str, int], SSADef]]):
         '''Forward dataflow: compute reaching definitions at each block entry'''
         num_blocks = len(self.mlil_func.basic_blocks)
 
         # Use (block_idx, instr_idx) tuples as def identifiers (hashable)
-        # exit_defs: block_idx -> {reg_idx -> Set[(block_idx, instr_idx)]}
-        exit_defs: Dict[int, Dict[int, Set[Tuple[int, int]]]] = {}
-        entry_defs: Dict[int, Dict[int, Set[Tuple[int, int]]]] = {}
+        # exit_defs: block_idx -> {var_key -> Set[(block_idx, instr_idx)]}
+        exit_defs: Dict[int, Dict[Tuple[str, int], Set[Tuple[int, int]]]] = {}
+        entry_defs: Dict[int, Dict[Tuple[str, int], Set[Tuple[int, int]]]] = {}
 
         for i in range(num_blocks):
             entry_defs[i] = {}
@@ -274,18 +323,18 @@ class RegisterResolver:
 
             for block_idx in range(num_blocks):
                 # Entry = union of predecessors' exits
-                new_entry: Dict[int, Set[Tuple[int, int]]] = {}
+                new_entry: Dict[Tuple[str, int], Set[Tuple[int, int]]] = {}
                 for pred_idx in self.predecessors.get(block_idx, []):
-                    for reg_idx, def_keys in exit_defs.get(pred_idx, {}).items():
-                        if reg_idx not in new_entry:
-                            new_entry[reg_idx] = set()
-                        new_entry[reg_idx] |= def_keys
+                    for var_key, def_keys in exit_defs.get(pred_idx, {}).items():
+                        if var_key not in new_entry:
+                            new_entry[var_key] = set()
+                        new_entry[var_key] |= def_keys
 
                 # Exit = local defs override entry
-                new_exit: Dict[int, Set[Tuple[int, int]]] = {k: set(v) for k, v in new_entry.items()}
+                new_exit: Dict[Tuple[str, int], Set[Tuple[int, int]]] = {k: set(v) for k, v in new_entry.items()}
                 if block_idx in local_exit_defs:
-                    for reg_idx, ssa_def in local_exit_defs[block_idx].items():
-                        new_exit[reg_idx] = {(ssa_def.block_idx, ssa_def.instr_idx)}
+                    for var_key, ssa_def in local_exit_defs[block_idx].items():
+                        new_exit[var_key] = {(ssa_def.block_idx, ssa_def.instr_idx)}
 
                 # Check for changes
                 if new_exit != exit_defs.get(block_idx, {}):
@@ -295,33 +344,36 @@ class RegisterResolver:
                 entry_defs[block_idx] = new_entry
 
         # Convert entry_defs to reaching_defs_entry with SSADef references
-        for block_idx, reg_defs in entry_defs.items():
+        for block_idx, var_defs in entry_defs.items():
             self.reaching_defs_entry[block_idx] = {}
-            for reg_idx, def_keys in reg_defs.items():
+            for var_key, def_keys in var_defs.items():
                 defs = set()
                 for def_key in def_keys:
                     if def_key in self.definitions:
                         defs.add(self.definitions[def_key])
                 if defs:
-                    self.reaching_defs_entry[block_idx][reg_idx] = defs
+                    self.reaching_defs_entry[block_idx][var_key] = defs
 
-    def _mark_cross_block_live_out(self, local_exit_defs: Dict[int, Dict[int, SSADef]]):
+    def _mark_cross_block_live_out(self, local_exit_defs: Dict[int, Dict[Tuple[str, int], SSADef]]):
         '''Mark definitions as live-out if they may be used in successor blocks'''
-        # Collect which registers each block uses at entry (before any local def)
-        block_entry_uses: Dict[int, Set[int]] = {}
+        # Collect which vars each block uses at entry (before any local def)
+        block_entry_uses: Dict[int, Set[Tuple[str, int]]] = {}
         for block_idx, block in enumerate(self.mlil_func.basic_blocks):
-            entry_uses: Set[int] = set()
-            local_defs: Set[int] = set()
+            entry_uses: Set[Tuple[str, int]] = set()
+            local_defs: Set[Tuple[str, int]] = set()
 
             for instr in block.instructions:
-                # Collect uses of registers not yet defined locally
-                self._collect_reg_uses(instr, entry_uses, local_defs)
+                # Collect uses of vars not yet defined locally
+                self._collect_var_uses(instr, entry_uses, local_defs)
                 # Collect local definitions
                 if isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
-                    local_defs.add(0)
+                    local_defs.add(('reg', 0))
 
                 elif isinstance(instr, MLILStoreReg):
-                    local_defs.add(instr.index)
+                    local_defs.add(('reg', instr.index))
+
+                elif isinstance(instr, MLILStoreGlobal):
+                    local_defs.add(('global', instr.index))
 
             block_entry_uses[block_idx] = entry_uses
 
@@ -332,17 +384,23 @@ class RegisterResolver:
 
             for succ_idx in self.successors.get(block_idx, []):
                 entry_uses = block_entry_uses.get(succ_idx, set())
-                for reg_idx in entry_uses:
-                    if reg_idx in local_exit_defs[block_idx]:
-                        local_exit_defs[block_idx][reg_idx].is_live_out = True
+                for var_key in entry_uses:
+                    if var_key in local_exit_defs[block_idx]:
+                        local_exit_defs[block_idx][var_key].is_live_out = True
 
-    def _collect_reg_uses(self, instr: MediumLevelILInstruction,
-                          entry_uses: Set[int], local_defs: Set[int]):
-        '''Collect register uses that are not locally defined'''
+    def _collect_var_uses(self, instr: MediumLevelILInstruction,
+                          entry_uses: Set[Tuple[str, int]], local_defs: Set[Tuple[str, int]]):
+        '''Collect REGS/GLOBALS uses that are not locally defined'''
         def visit(expr):
             if isinstance(expr, MLILLoadReg):
-                if expr.index not in local_defs:
-                    entry_uses.add(expr.index)
+                var_key = ('reg', expr.index)
+                if var_key not in local_defs:
+                    entry_uses.add(var_key)
+
+            elif isinstance(expr, MLILLoadGlobal):
+                var_key = ('global', expr.index)
+                if var_key not in local_defs:
+                    entry_uses.add(var_key)
 
             elif isinstance(expr, MLILBinaryOp):
                 visit(expr.lhs)
@@ -355,6 +413,9 @@ class RegisterResolver:
                 visit(expr.value)
 
             elif isinstance(expr, MLILStoreReg):
+                visit(expr.value)
+
+            elif isinstance(expr, MLILStoreGlobal):
                 visit(expr.value)
 
             elif isinstance(expr, MLILIf):
@@ -372,15 +433,24 @@ class RegisterResolver:
 
     def _count_uses(self, instr: MediumLevelILInstruction,
                     block_idx: int, instr_idx: int,
-                    current_def: Dict[int, SSADef]):
-        '''Count register uses in an instruction'''
+                    current_def: Dict[Tuple[str, int], SSADef]):
+        '''Count REGS/GLOBALS uses in an instruction'''
 
         def visit(expr):
             if isinstance(expr, MLILLoadReg):
-                ssa_def = current_def.get(expr.index)
+                var_key = ('reg', expr.index)
+                ssa_def = current_def.get(var_key)
                 if ssa_def is not None:
                     ssa_def.use_count += 1
-                    use_key = (block_idx, instr_idx, expr.index)
+                    use_key = (block_idx, instr_idx, 'reg', expr.index)
+                    self.uses[use_key] = SSAUse(block_idx, instr_idx, ssa_def)
+
+            elif isinstance(expr, MLILLoadGlobal):
+                var_key = ('global', expr.index)
+                ssa_def = current_def.get(var_key)
+                if ssa_def is not None:
+                    ssa_def.use_count += 1
+                    use_key = (block_idx, instr_idx, 'global', expr.index)
                     self.uses[use_key] = SSAUse(block_idx, instr_idx, ssa_def)
 
             elif isinstance(expr, MLILBinaryOp):
@@ -465,7 +535,8 @@ class RegisterResolver:
                     for use_k, use in self.uses.items():
                         if (use_k[0] == ssa_def.block_idx and
                             use_k[1] == ssa_def.instr_idx and
-                            use_k[2] == instr.value.index):
+                            use_k[2] == 'reg' and
+                            use_k[3] == instr.value.index):
                             source_def = use.def_ref
                             break
 
@@ -490,9 +561,10 @@ class RegisterResolver:
                     # Only delete non-call assignments (calls have side effects)
                     self.deleted.add(key)
 
-    def get_inlined_expr(self, block_idx: int, instr_idx: int, reg_index: int) -> Optional[SSADef]:
-        '''Get the definition to inline for a LoadReg'''
-        use_key = (block_idx, instr_idx, reg_index)
+    def get_inlined_expr(self, block_idx: int, instr_idx: int,
+                         var_type: str, index: int) -> Optional[SSADef]:
+        '''Get the definition to inline for a LoadReg/LoadGlobal'''
+        use_key = (block_idx, instr_idx, var_type, index)
 
         # Check if rewired
         if use_key in self.rewired:
@@ -522,6 +594,43 @@ class RegisterResolver:
         if key in self.definitions:
             return self.definitions[key].use_count
         return 0
+
+    def get_def_var_name(self, block_idx: int, instr_idx: int) -> Optional[str]:
+        '''Get the local variable name for a definition'''
+        return self.def_var_names.get((block_idx, instr_idx))
+
+    def get_use_var_name(self, block_idx: int, instr_idx: int,
+                         var_type: str, index: int) -> Optional[str]:
+        '''Get the local variable name for a use site (LoadReg/LoadGlobal)'''
+        use_key = (block_idx, instr_idx, var_type, index)
+
+        # Find the definition this use refers to
+        def_ref = None
+        if use_key in self.rewired:
+            def_ref = self.rewired[use_key]
+
+        elif use_key in self.uses:
+            def_ref = self.uses[use_key].def_ref
+
+        if def_ref is None:
+            return None
+
+        def_key = (def_ref.block_idx, def_ref.instr_idx)
+        return self.def_var_names.get(def_key)
+
+    def get_return_var_name(self, block_idx: int, instr_idx: int) -> Optional[str]:
+        '''Get the return value variable name at a return instruction'''
+        # Find the last definition of REG[0] before this return
+        block = self.mlil_func.basic_blocks[block_idx]
+        for i in range(instr_idx - 1, -1, -1):
+            key = (block_idx, i)
+            if key in self.definitions:
+                ssa_def = self.definitions[key]
+                # REG[0] is the return value register (not GLOBALS)
+                if ssa_def.reg_index == 0 and not ssa_def.is_global:
+                    return self.def_var_names.get(key)
+
+        return None
 
 
 # ============================================================================
@@ -637,6 +746,14 @@ class MLILToHLILConverter:
             type_hint = self._get_type_hint(mlil_var.name)
             hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint)
             self.hlil_func.variables.append(hlil_var)
+
+        # Add REGS/GLOBALS local variables (they hold numeric values)
+        added_var_names: Set[str] = set()
+        for var_name in self.resolver.def_var_names.values():
+            if var_name not in added_var_names:
+                added_var_names.add(var_name)
+                hlil_var = HLILVariable(var_name, type_hint=HLILTypeKind.INT)
+                self.hlil_func.variables.append(hlil_var)
 
     def _get_type_hint(self, var_name: str) -> Optional[HLILTypeKind]:
         mlil_type = self.mlil_func.var_types.get(var_name)
@@ -1109,8 +1226,15 @@ class MLILToHLILConverter:
         elif isinstance(instr, MLILRet):
             if instr.value:
                 result.append(HLILReturn(self._convert_expr(instr.value)))
+
             else:
-                result.append(HLILReturn())
+                # Check if there's a _reg0 variable as the return value
+                ret_var = self.resolver.get_return_var_name(block_idx, instr_idx)
+                if ret_var is not None:
+                    result.append(HLILReturn(HLILVar(HLILVariable(ret_var, None))))
+
+                else:
+                    result.append(HLILReturn())
 
         elif isinstance(instr, MLILSetVar):
             result.append(HLILAssign(
@@ -1119,16 +1243,20 @@ class MLILToHLILConverter:
             ))
 
         elif isinstance(instr, MLILStoreReg):
-            # Explicit register writes are global state - ALWAYS emit
-            # (Unlike call return values which can be inlined)
-            var = HLILVariable(kind=VariableKind.REG, index=instr.index)
-            result.append(HLILAssign(HLILVar(var), self._convert_expr(instr.value)))
-            # Also cache for same-block LoadReg inlining
-            self.expr_cache[key] = self._convert_expr(instr.value)
+            # Use local variable if has uses, otherwise skip (dead store)
+            var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
+            if var_name is not None:
+                var = HLILVariable(var_name, None)
+                result.append(HLILAssign(HLILVar(var), self._convert_expr(instr.value)))
+                # Cache for single-use inlining
+                self.expr_cache[key] = self._convert_expr(instr.value)
 
         elif isinstance(instr, MLILStoreGlobal):
-            var = HLILVariable(kind=VariableKind.GLOBAL, index=instr.index)
-            result.append(HLILAssign(HLILVar(var), self._convert_expr(instr.value)))
+            # Use local variable if has uses, otherwise skip (dead store)
+            var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
+            if var_name is not None:
+                var = HLILVariable(var_name, None)
+                result.append(HLILAssign(HLILVar(var), self._convert_expr(instr.value)))
 
         elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
             # Call implicitly writes to REG[0]
@@ -1145,9 +1273,15 @@ class MLILToHLILConverter:
                 result.append(HLILExprStmt(call_expr))
 
             else:
-                # Multiple uses or live-out: emit REGS[0] = call()
-                var = HLILVariable(kind=VariableKind.REG, index=0)
-                result.append(HLILAssign(HLILVar(var), call_expr))
+                # Multiple uses or live-out: assign to local variable
+                var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
+                if var_name is not None:
+                    var = HLILVariable(var_name, None)
+                    result.append(HLILAssign(HLILVar(var), call_expr))
+
+                else:
+                    # No var name (shouldn't happen), emit as statement
+                    result.append(HLILExprStmt(call_expr))
 
         elif isinstance(instr, (MLILIf, MLILGoto)):
             pass
@@ -1184,23 +1318,38 @@ class MLILToHLILConverter:
             return HLILUnaryOp(op, self._convert_expr(expr.operand))
 
         elif isinstance(expr, MLILLoadReg):
-            # Check if we can inline a call result
+            # Check if we can inline a call result (single use)
             inlined_def = self.resolver.get_inlined_expr(
-                self.current_block_idx, self.current_instr_idx, expr.index
+                self.current_block_idx, self.current_instr_idx, 'reg', expr.index
             )
 
             if inlined_def is not None:
                 def_key = (inlined_def.block_idx, inlined_def.instr_idx)
 
-                # Only inline if it's a Call (not StoreReg)
+                # Inline single-use calls
                 if inlined_def.is_call and def_key in self.expr_cache:
                     return self.expr_cache[def_key]
+
+            # Check if there's a local variable for this use
+            var_name = self.resolver.get_use_var_name(
+                self.current_block_idx, self.current_instr_idx, 'reg', expr.index
+            )
+            if var_name is not None:
+                return HLILVar(HLILVariable(var_name, None))
 
             # Default: emit REGS[n]
             var = HLILVariable(kind=VariableKind.REG, index=expr.index)
             return HLILVar(var)
 
         elif isinstance(expr, MLILLoadGlobal):
+            # Check if there's a local variable for this use
+            var_name = self.resolver.get_use_var_name(
+                self.current_block_idx, self.current_instr_idx, 'global', expr.index
+            )
+            if var_name is not None:
+                return HLILVar(HLILVariable(var_name, None))
+
+            # Default: emit GLOBALS[n]
             var = HLILVariable(kind=VariableKind.GLOBAL, index=expr.index)
             return HLILVar(var)
 

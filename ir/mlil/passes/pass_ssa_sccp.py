@@ -1,6 +1,6 @@
 '''SCCP - Sparse Conditional Constant Propagation Pass'''
 
-from typing import Dict, List
+from typing import Dict, List, Set
 from ir.pipeline import Pass
 from ..mlil import (
     MediumLevelILFunction,
@@ -126,6 +126,9 @@ class SCCP:
 
     def __init__(self, function: MediumLevelILFunction):
         self.function = function
+
+        # Variables replaced with constants (for DCE to skip debug.string)
+        self.replaced_vars: Set[MLILVariableSSA] = set()
 
         # Lattice values for SSA variables
         self.var_values: Dict[MLILVariableSSA, LatticeValue] = {}
@@ -570,6 +573,7 @@ class SCCP:
             val = self.var_values.get(expr.var, LatticeValue.bottom())
 
             if val.is_constant():
+                self.replaced_vars.add(expr.var)
                 return MLILConst(val.value, is_hex=is_bitwise)
 
             return expr

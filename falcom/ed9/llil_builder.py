@@ -210,18 +210,19 @@ class FalcomVMBuilder(LowLevelILBuilder):
         offset = -1
         args = [self.vstack_peek(offset - i) for i in range(arg_count)]
 
-        func_id         = self.vstack_peek(offset - arg_count - 4)
-        ret_addr        = self.vstack_peek(offset - arg_count - 3)
-        script          = self.vstack_peek(offset - arg_count - 1)  # 8 bytes
-        script_name     = self.vstack_peek(offset - arg_count - 0)
+        # Verify caller frame via StackLoad -> expr mapping
+        func_id_load     = self.vstack_peek(offset - arg_count - 4)
+        ret_addr_load    = self.vstack_peek(offset - arg_count - 3)
+        script_load      = self.vstack_peek(offset - arg_count - 1)
+        script_name_load = self.vstack_peek(offset - arg_count - 0)
 
         if not all([
-            func_id     is self.caller_frame_inst.func_id,
-            ret_addr    is self.caller_frame_inst.ret_addr,
-            script      is self.caller_frame_inst.script_ptr,
-            script_name is self.caller_frame_inst.script_name,
+            self.get_source_expr(func_id_load) is self.caller_frame_inst.func_id,
+            self.get_source_expr(ret_addr_load) is self.caller_frame_inst.ret_addr,
+            self.get_source_expr(script_load) is self.caller_frame_inst.script_ptr,
+            self.get_source_expr(script_name_load) is self.caller_frame_inst.script_name,
         ]):
-            raise RuntimeError(f'Caller frame mismatch')
+            raise RuntimeError('Caller frame mismatch')
 
         # Create and add CALL_SCRIPT instruction
         # This represents the call that cleans up args + 4 caller frame values

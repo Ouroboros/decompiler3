@@ -3,7 +3,7 @@
 Remove SSA variable assignments that are never used.
 '''
 
-from typing import Dict, List
+from typing import Dict, List, Set
 from ir.pipeline import Pass
 from ..mlil import (
     MediumLevelILFunction,
@@ -31,8 +31,9 @@ from ..mlil_ssa import (
 class DeadCodeEliminationPass(Pass):
     '''Remove unused SSA variable assignments'''
 
-    def __init__(self):
+    def __init__(self, sccp_replaced_vars: Set[MLILVariableSSA] = None):
         self.ssa_uses: Dict[MLILVariableSSA, List[MediumLevelILInstruction]] = {}
+        self.sccp_replaced_vars = sccp_replaced_vars or set()
 
     def run(self, func: MediumLevelILFunction) -> MediumLevelILFunction:
         '''Eliminate dead code'''
@@ -53,9 +54,11 @@ class DeadCodeEliminationPass(Pass):
 
                     else:
                         # Preserve string constants as debug comments
+                        # Skip if variable was replaced by SCCP (string is now in function args)
                         if isinstance(inst.value, MLILConst) and isinstance(inst.value.value, str):
-                            debug_comment = MLILDebug('string', inst.value.value)
-                            new_instructions.append(debug_comment)
+                            if inst.var not in self.sccp_replaced_vars:
+                                debug_comment = MLILDebug('string', inst.value.value)
+                                new_instructions.append(debug_comment)
 
                 elif isinstance(inst, MLILPhi):
                     if len(self.ssa_uses.get(inst.dest, [])) > 0:

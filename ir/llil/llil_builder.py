@@ -62,6 +62,7 @@ class LowLevelILBuilder:
         self.frame_base_sp: Optional[int] = None  # Stack pointer at function entry (for frame-relative access)
         self.__vstack = _VirtualStack()  # Virtual stack for expression tracking
         self.saved_stacks: dict[int, StackSnapshot] = {}  # offset -> StackSnapshot for branches
+        self.__stack_load_to_expr: dict[LowLevelILStackLoad, LowLevelILExpr] = {}  # StackLoad -> source expr
 
     # === Function and Block Creation ===
 
@@ -158,6 +159,14 @@ class LowLevelILBuilder:
         '''Get current vstack size'''
         return self.__vstack.size()
 
+    def get_source_expr(self, stack_load: LowLevelILStackLoad) -> Optional[LowLevelILExpr]:
+        '''Get the original expression for a StackLoad'''
+        return self.__stack_load_to_expr.get(stack_load)
+
+    def set_source_expr(self, stack_load: LowLevelILStackLoad, expr: LowLevelILExpr):
+        '''Set the original expression for a StackLoad'''
+        self.__stack_load_to_expr[stack_load] = expr
+
     def set_current_block(self, block: LowLevelILBasicBlock):
         '''Set the current basic block for instruction insertion'''
         # Verify block has been added to function
@@ -252,14 +261,11 @@ class LowLevelILBuilder:
         self.add_instruction(LowLevelILStackStore(expr, offset = 0, slot_index = slot_index))
         # 2. SpAdd(+1)
         self.emit_sp_add(1, hidden_for_formatter = hidden_for_formatter)
-        # Track on vstack: use StackLoad for mutable values
-        # - Registers: their values change between operations
-        # - Binary/Unary ops: may contain variable references that become stale
-        if isinstance(expr, (LowLevelILRegLoad, LowLevelILBinaryOp, LowLevelILUnaryOp)):
-            self.__vstack_push(LowLevelILStackLoad(offset = 0, slot_index = slot_index))
-
-        else:
-            self.__vstack_push(expr)
+        # Track on vstack: always use StackLoad reference
+        # SCCP will propagate constants where needed
+        stack_load = LowLevelILStackLoad(offset = 0, slot_index = slot_index)
+        self.__vstack_push(stack_load)
+        self.set_source_expr(stack_load, expr)
 
         return expr
 

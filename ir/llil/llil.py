@@ -140,6 +140,12 @@ class LowLevelILStackLoad(LowLevelILExpr):
         self.offset = offset  # Byte offset
         self.slot_index = slot_index  # Absolute stack slot index
 
+    def __eq__(self, other):
+        return object.__eq__(self, other)
+
+    def __hash__(self):
+        return object.__hash__(self)
+
     def __str__(self) -> str:
         # Convert byte offset to word offset for display
         word_offset = self.offset // WORD_SIZE

@@ -33,10 +33,11 @@ from ..mlil_ssa import (
 class DeadPhiSourceEliminationPass(Pass):
     '''Eliminate dead Phi nodes and definitions feeding them'''
 
-    def __init__(self):
+    def __init__(self, sccp_replaced_vars: Set[MLILVariableSSA] = None):
         self.ssa_defs: Dict[MLILVariableSSA, MediumLevelILInstruction] = {}
         self.ssa_uses: Dict[MLILVariableSSA, List[MediumLevelILInstruction]] = {}
         self.inst_block: Dict[MediumLevelILInstruction, MediumLevelILBasicBlock] = {}
+        self.sccp_replaced_vars = sccp_replaced_vars or set()
 
     def run(self, func: MediumLevelILFunction) -> MediumLevelILFunction:
         '''Run dead phi elimination'''
@@ -134,9 +135,11 @@ class DeadPhiSourceEliminationPass(Pass):
                 # Skip definitions that only feed dead Phis
                 if isinstance(inst, MLILSetVarSSA) and inst.var in dead_defs:
                     # Preserve string constants as debug comments
+                    # Skip if variable was replaced by SCCP (string is now in function args)
                     if isinstance(inst.value, MLILConst) and isinstance(inst.value.value, str):
-                        debug_comment = MLILDebug('string', inst.value.value)
-                        new_instructions.append(debug_comment)
+                        if inst.var not in self.sccp_replaced_vars:
+                            debug_comment = MLILDebug('string', inst.value.value)
+                            new_instructions.append(debug_comment)
 
                     continue
 
