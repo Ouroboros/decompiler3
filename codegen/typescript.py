@@ -40,6 +40,25 @@ class TypeScriptGenerator:
         return 'any'
 
     @classmethod
+    def _format_default_value(cls, value) -> str:
+        '''Format default value as TypeScript literal'''
+        if isinstance(value, str):
+            escaped = value.replace('\\', '\\\\').replace('"', '\\"')
+            return f'"{escaped}"'
+
+        elif isinstance(value, float):
+            return format_float(value)
+
+        elif isinstance(value, int):
+            return str(value)
+
+        elif value is None:
+            return 'null'
+
+        else:
+            raise TypeError(f'Unknown default value type: {type(value).__name__}')
+
+    @classmethod
     def _infer_return_type(cls, block: HLILBlock) -> str:
         '''Infer return type from return statements'''
         # Recursively search for return statements
@@ -313,7 +332,7 @@ class TypeScriptGenerator:
         # Function signature with types
         if func.parameters:
             params = ', '.join(
-                f'{p.name}: {cls._format_type(p.type_hint)} = {p.default_value}' if p.default_value is not None else f'{p.name}: {cls._format_type(p.type_hint)}'
+                f'{p.name}: {cls._format_type(p.type_hint)} = {cls._format_default_value(p.default_value)}' if p.default_value is not None else f'{p.name}: {cls._format_type(p.type_hint)}'
                 for p in func.parameters
             )
         else:

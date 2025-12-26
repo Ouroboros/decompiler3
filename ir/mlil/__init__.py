@@ -29,7 +29,7 @@ __all__ = [
     'LLILToMLILPass',
     'SSAConversionPass',
     'SSAOptimizationPass',
-    'TypeInferencePass',
+    'SSATypeInferencePass',
     'SSADeconstructionPass',
     'DeadCodeEliminationPass',
 

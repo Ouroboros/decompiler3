@@ -9,7 +9,7 @@ from .passes import (
     SSAOptimizationPass,
     SSADeconstructionPass,
     # SSA type inference
-    TypeInferencePass,
+    SSATypeInferencePass,
     # Non-SSA
     DeadCodeEliminationPass,
     StorageKind,
@@ -24,7 +24,7 @@ __all__ = [
     'SSAConversionPass',
     'SSAOptimizationPass',
     'SSADeconstructionPass',
-    'TypeInferencePass',
+    'SSATypeInferencePass',
     'DeadCodeEliminationPass',
     'StorageKind',
     'StorageKey',

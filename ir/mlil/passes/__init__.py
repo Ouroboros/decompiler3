@@ -16,7 +16,7 @@ from .pass_ssa_condition_simplification import ConditionSimplificationPass
 from .pass_ssa_expression_inlining import ExpressionInliningPass
 from .pass_ssa_dead_code import DeadCodeEliminationPass as SSADeadCodeEliminationPass
 from .pass_ssa_dead_phi import DeadPhiSourceEliminationPass
-from .pass_ssa_type_inference import TypeInferencePass
+from .pass_ssa_type_inference import SSATypeInferencePass
 
 # Non-SSA passes
 from .pass_dead_code import DeadCodeEliminationPass
@@ -47,7 +47,7 @@ __all__ = [
     'ExpressionInliningPass',
     'SSADeadCodeEliminationPass',
     'DeadPhiSourceEliminationPass',
-    'TypeInferencePass',
+    'SSATypeInferencePass',
     # Non-SSA
     'DeadCodeEliminationPass',
     'StorageKind',

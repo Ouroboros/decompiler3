@@ -733,11 +733,19 @@ class MLILToHLILConverter:
 
         used_vars = defined_vars & read_vars
 
-        for mlil_var in self.mlil_func.parameters:
+        for i, mlil_var in enumerate(self.mlil_func.parameters):
             if mlil_var is None:
                 continue
+
             type_hint = self._get_type_hint(mlil_var.name)
-            hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint, kind=VariableKind.PARAM)
+
+            # Get default value from source_params
+            default_value = None
+            if i < len(self.mlil_func.source_params):
+                default_value = self.mlil_func.source_params[i].default_value
+
+            hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint,
+                                    default_value=default_value, kind=VariableKind.PARAM)
             self.hlil_func.parameters.append(hlil_var)
 
         for mlil_var in self.mlil_func.locals.values():
