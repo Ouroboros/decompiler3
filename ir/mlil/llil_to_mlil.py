@@ -20,7 +20,7 @@ class LLILToMLILTranslator:
         self.llil_func = llil_func
 
         # Create MLIL function
-        self.builder.create_function(llil_func.name, llil_func.start_addr, llil_func.params)
+        self.builder.create_function(llil_func.name, llil_func.start_addr, llil_func.params, is_common_func=llil_func.is_common_func)
 
         # Create MLIL blocks for each LLIL block
         for llil_block in llil_func.basic_blocks:

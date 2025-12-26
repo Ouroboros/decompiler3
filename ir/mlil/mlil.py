@@ -618,7 +618,7 @@ class MediumLevelILBasicBlock:
 class MediumLevelILFunction:
     '''MLIL function container'''
 
-    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None):
+    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False):
         self.name = name
         self.start_addr = start_addr
         self.source_params: List['IRParameter'] = params or []  # Original params from source
@@ -628,6 +628,7 @@ class MediumLevelILFunction:
         self.llil_function: Optional[LowLevelILFunction] = None
         self._inst_block_map: Dict[int, MediumLevelILBasicBlock] = {}
         self.var_types: Dict[str, 'MLILType'] = {}  # Variable name -> inferred type
+        self.is_common_func = is_common_func
 
     @property
     def num_params(self) -> int:

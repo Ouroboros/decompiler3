@@ -18,11 +18,11 @@ class MLILBuilder:
 
     # === Function Management ===
 
-    def create_function(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None):
+    def create_function(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False):
         '''Create MLIL function'''
         if self.function is not None:
             raise RuntimeError('Function already created')
-        self.function = MediumLevelILFunction(name, start_addr, params)
+        self.function = MediumLevelILFunction(name, start_addr, params, is_common_func=is_common_func)
 
     def finalize(self) -> MediumLevelILFunction:
         '''Finalize and return the constructed function'''

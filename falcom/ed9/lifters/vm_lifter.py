@@ -41,7 +41,7 @@ class ED9VMLifter:
 
         builder = FalcomVMBuilder()
         ir_params = self._convert_params(func.params)
-        builder.create_function(func.name, func.offset, ir_params)
+        builder.create_function(func.name, func.offset, ir_params, is_common_func=func.is_common_func)
 
         blocks = self._collect_blocks(func.entry_block)
         blocks.sort(key = lambda b: b.offset)

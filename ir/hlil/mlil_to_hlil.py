@@ -641,7 +641,7 @@ class MLILToHLILConverter:
 
     def __init__(self, mlil_func: MediumLevelILFunction):
         self.mlil_func = mlil_func
-        self.hlil_func = HighLevelILFunction(mlil_func.name, mlil_func.start_addr)
+        self.hlil_func = HighLevelILFunction(mlil_func.name, mlil_func.start_addr, is_common_func=mlil_func.is_common_func)
 
         self.block_successors: Dict[int, List[int]] = {}
         self.visited_blocks: Set[int] = set()

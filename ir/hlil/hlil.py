@@ -537,12 +537,13 @@ class HLILComment(HLILStatement):
 class HighLevelILFunction:
     '''HLIL function container'''
 
-    def __init__(self, name: str, start_addr: int = 0):
+    def __init__(self, name: str, start_addr: int = 0, *, is_common_func: bool = False):
         self.name = name
         self.start_addr = start_addr
         self.body = HLILBlock()
         self.variables: List[HLILVariable] = []  # Local variables
         self.parameters: List[HLILVariable] = []  # Parameters
+        self.is_common_func = is_common_func
 
     def add_statement(self, stmt: HLILStatement):
         '''Add a statement to the function body'''

@@ -66,12 +66,13 @@ class LowLevelILBuilder:
 
     # === Function and Block Creation ===
 
-    def create_function(self, name: str, start_addr: int, params: Union[List['IRParameter'], int] = None, *, num_params: int = None):
+    def create_function(self, name: str, start_addr: int, params: Union[List['IRParameter'], int] = None, *, num_params: int = None, is_common_func: bool = False):
         '''Create function inside builder
 
         Args:
             params: List of IRParameter, or int for backward compatibility (num_params)
             num_params: Deprecated, use params instead
+            is_common_func: Whether this is a shared/included function (syscall wrapper)
         '''
         if self.function is not None:
             raise RuntimeError('Function already created')
@@ -85,7 +86,7 @@ class LowLevelILBuilder:
             from ir.core import IRParameter
             params = [IRParameter(f'arg{i + 1}') for i in range(params)]
 
-        self.function = LowLevelILFunction(name, start_addr, params)
+        self.function = LowLevelILFunction(name, start_addr, params, is_common_func=is_common_func)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
         '''Create basic block and automatically add to function'''

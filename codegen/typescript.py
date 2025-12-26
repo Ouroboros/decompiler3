@@ -7,6 +7,12 @@ from ir.hlil import *
 
 class TypeScriptGenerator:
     _current_func: 'HighLevelILFunction' = None
+    _signature_db = None  # FormatSignatureDB for arg formatting
+
+    @classmethod
+    def set_signature_db(cls, db):
+        '''Set signature database for formatting'''
+        cls._signature_db = db
 
     @classmethod
     def _format_type(cls, type_hint) -> str:
@@ -57,6 +63,43 @@ class TypeScriptGenerator:
 
         else:
             raise TypeError(f'Unknown default value type: {type(value).__name__}')
+
+    @classmethod
+    def _format_call_args(cls, func_name: str, args: list) -> str:
+        '''Format call arguments, using signature hints if available'''
+        if cls._signature_db:
+            sig = cls._signature_db.get_function(func_name)
+            if sig:
+                return cls._format_call_args_with_sig(args, sig.params)
+
+        return ', '.join(cls._format_expr(arg) for arg in args)
+
+    @classmethod
+    def _format_call_args_with_sig(cls, args: list, params: list) -> str:
+        '''Format call arguments with parameter hints'''
+        formatted = []
+        has_variadic = params and params[-1].variadic
+        fixed_count = len(params) - 1 if has_variadic else len(params)
+
+        for i, arg in enumerate(args):
+            if i < fixed_count and params[i].format:
+                formatted_arg = cls._format_arg_with_hint(arg, params[i].format)
+                formatted.append(formatted_arg)
+
+            else:
+                formatted.append(cls._format_expr(arg))
+
+        return ', '.join(formatted)
+
+    @classmethod
+    def _format_arg_with_hint(cls, arg, format_hint: str) -> str:
+        '''Format argument with format hint (hex, enum, etc.)'''
+        if isinstance(arg, HLILConst) and isinstance(arg.value, int):
+            formatted = cls._signature_db.format_value(arg.value, format_hint)
+            if formatted:
+                return formatted
+
+        return cls._format_expr(arg)
 
     @classmethod
     def _infer_return_type(cls, block: HLILBlock) -> str:
@@ -302,16 +345,24 @@ class TypeScriptGenerator:
             return f'addr_of({operand})'
 
         elif isinstance(expr, HLILCall):
-            args = ', '.join(cls._format_expr(arg) for arg in expr.args)
+            args = cls._format_call_args(expr.func_name, expr.args)
             return f'{expr.func_name}({args})'
 
         elif isinstance(expr, HLILSyscall):
-            args = [
-                f'{expr.subsystem}',
-                f'{expr.cmd}',
-                *[cls._format_expr(arg) for arg in expr.args],
-            ]
-            return f'syscall({', '.join(args)})'
+            # Don't replace syscalls in common functions (they are the wrappers themselves)
+            is_common = cls._current_func and cls._current_func.is_common_func
+            sig = cls._signature_db.get_syscall(expr.subsystem, expr.cmd) if cls._signature_db and not is_common else None
+            if sig:
+                args = cls._format_call_args_with_sig(expr.args, sig.params)
+                return f'{sig.name}({args})'
+
+            else:
+                args = [
+                    f'{expr.subsystem}',
+                    f'{expr.cmd}',
+                    *[cls._format_expr(arg) for arg in expr.args],
+                ]
+                return f'syscall({", ".join(args)})'
 
         elif isinstance(expr, HLILExternCall):
             args = [
@@ -565,6 +616,49 @@ function extern_call(target: string, ...args: any[]): any { return undefined; }
 function syscall(subsystem: number, cmd: number, ...args: any[]): any { return undefined; }
 
 '''
+
+
+def generate_syscall_wrappers(signature_db) -> str:
+    '''Generate TypeScript wrapper functions for syscalls'''
+    if not signature_db or not signature_db.syscalls:
+        return ''
+
+    lines = ['// Syscall wrappers']
+
+    for name, sig in signature_db.syscalls.items():
+        # Build parameter list
+        params = []
+        args = []
+        for p in sig.params:
+            if p.variadic:
+                params.append(f'...{p.name}: ({p.type})[]')
+                args.append(f'...{p.name}')
+
+            else:
+                params.append(f'{p.name}: {p.type}')
+                args.append(p.name)
+
+        params_str = ', '.join(params)
+        args_str = ', '.join(args)
+
+        # Determine return type
+        if sig.return_hint:
+            if sig.return_hint.type == 'void':
+                return_type = 'void'
+                body = f'syscall({sig.subsystem}, {sig.cmd}, {args_str});' if args_str else f'syscall({sig.subsystem}, {sig.cmd});'
+
+            else:
+                return_type = 'number'
+                body = f'return syscall({sig.subsystem}, {sig.cmd}, {args_str});' if args_str else f'return syscall({sig.subsystem}, {sig.cmd});'
+
+        else:
+            return_type = 'any'
+            body = f'return syscall({sig.subsystem}, {sig.cmd}, {args_str});' if args_str else f'return syscall({sig.subsystem}, {sig.cmd});'
+
+        lines.append(f'function {name}({params_str}): {return_type} {{ {body} }}')
+
+    lines.append('')
+    return '\n'.join(lines) + '\n'
 
 
 def generate_typescript(func: HighLevelILFunction) -> str:
