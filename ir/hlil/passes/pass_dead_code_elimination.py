@@ -1,7 +1,7 @@
 '''Dead Code Elimination Pass'''
 
 from ir.pipeline import Pass
-from .hlil import (
+from ..hlil import (
     HighLevelILFunction,
     HLILBlock,
     HLILIf,

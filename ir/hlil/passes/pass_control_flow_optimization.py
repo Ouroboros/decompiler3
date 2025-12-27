@@ -2,7 +2,7 @@
 
 from typing import Optional
 from ir.pipeline import Pass
-from .hlil import (
+from ..hlil import (
     HighLevelILFunction,
     HLILBlock,
     HLILInstruction,

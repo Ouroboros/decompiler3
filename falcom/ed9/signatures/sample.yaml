@@ -78,7 +78,7 @@ functions:
   #       type: number
 
 syscalls:
-  msg_talk:
+  mes_message_talk:
     id: [5, 0]
     return:
       type: void
