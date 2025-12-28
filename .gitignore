@@ -1,6 +1,4 @@
 ﻿__pycache__
-.claude
-binaryninja-api/
 *.dot
 *.png
 *.zip
