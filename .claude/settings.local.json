@@ -1,0 +1,53 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git -C:*)",
+      "Bash(git:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(head:*)",
+      "Bash(timeout:*)",
+      "Bash(find:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(tree:*)",
+      "Bash(env:*)",
+      "Bash(echo:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(export PATH:*)",
+      "Bash(wsl which:*)",
+      "Bash(cygpath:*)",
+      "Bash(/mnt/d/Dev/Python/python.exe -m pytest:*)",
+      "Bash(/mnt/d/Dev/Python/python.exe tests/test_scp_parser.py)",
+      "Bash(/mnt/d/Dev/Python/python.exe:*)",
+      "Bash(grep:*)",
+      "Bash(PYTHONPATH=/mnt/d/Dev/Source/Falcom/decompiler3 /mnt/d/Dev/Python/python.exe:*)",
+      "Bash(PYTHONPATH=. /mnt/d/Dev/Python/python.exe:*)"
+    ],
+    "deny": [],
+    "ask": [
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 commit:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 push:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 revert:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 rebase:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 reset:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 merge:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 checkout:*)",
+      "Bash(git -C /mnt/d/Dev/Source/Falcom/decompiler3 cherry-pick:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git revert:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
+      "Bash(git merge:*)",
+      "Bash(git checkout:*)",
+      "Bash(git cherry-pick:*)"
+    ]
+  }
+}
