@@ -79,3 +79,10 @@ Keep comments brief and meaningful. Avoid redundant explanations.
 - Path: `D:\Dev\Python\python.exe`
 - Version: 3.14.0
 - Environment: Git Bash (MINGW64) on Windows
+
+## Active Technologies
+- Python 3.14 + Existing IR modules (ir/llil, ir/mlil, ir/hlil), falcom/ed9 parser (003-ir-pass-validation)
+- N/A (in-memory analysis, text/JSON report output) (003-ir-pass-validation)
+
+## Recent Changes
+- 003-ir-pass-validation: Added Python 3.14 + Existing IR modules
