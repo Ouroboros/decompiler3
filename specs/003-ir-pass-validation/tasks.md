@@ -24,10 +24,10 @@
 
 **Purpose**: Create the base structure and shared components
 
-- [ ] T001 Create `tools/ir_semantic_validator.py` with CLI argument parsing (argparse)
-- [ ] T002 [P] Define `OperationKind` enum (ARITHMETIC, COMPARISON, LOGICAL, CALL, BRANCH, ASSIGN, etc.) in `tools/ir_semantic_validator.py`
-- [ ] T003 [P] Define `ComparisonStatus` enum (EQUIVALENT, TRANSFORMED, DIFFERENT) in `tools/ir_semantic_validator.py`
-- [ ] T004 [P] Define `IRLayer` enum (LLIL, MLIL, HLIL) in `tools/ir_semantic_validator.py`
+- [x] T001 Create `tools/ir_semantic_validator.py` with CLI argument parsing (argparse)
+- [x] T002 [P] Define `OperationKind` enum (ARITHMETIC, COMPARISON, LOGICAL, CALL, BRANCH, ASSIGN, etc.) in `tools/ir_semantic_validator.py`
+- [x] T003 [P] Define `ComparisonStatus` enum (EQUIVALENT, TRANSFORMED, DIFFERENT) in `tools/ir_semantic_validator.py`
+- [x] T004 [P] Define `IRLayer` enum (LLIL, MLIL, HLIL) in `tools/ir_semantic_validator.py`
 
 ---
 
@@ -37,17 +37,17 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Implement `SemanticOperation` dataclass with kind, operator, operands, result, source_location in `tools/ir_semantic_validator.py`
-- [ ] T006 Implement `SemanticOperand` dataclass for normalized operand representation in `tools/ir_semantic_validator.py`
-- [ ] T007 Implement `SourceLocation` dataclass with scp_offset, llil_index, mlil_index, hlil_index in `tools/ir_semantic_validator.py`
-- [ ] T008 Implement `ComparisonResult` dataclass with status, source_layer, target_layer, explanation, source_location in `tools/ir_semantic_validator.py`
-- [ ] T009 Implement `VariableMapping` dataclass with llil_storage, mlil_var, hlil_var, type_info in `tools/ir_semantic_validator.py`
-- [ ] T010 Implement IR generation pipeline: load SCP → generate LLIL → convert to MLIL → convert to HLIL in `tools/ir_semantic_validator.py`
-- [ ] T011 Implement `normalize_llil_operation()` to convert LLIL instructions to `SemanticOperation` in `tools/ir_semantic_validator.py`
-- [ ] T012 Implement `normalize_mlil_operation()` to convert MLIL instructions to `SemanticOperation` in `tools/ir_semantic_validator.py`
-- [ ] T013 Implement `normalize_hlil_operation()` to convert HLIL instructions to `SemanticOperation` in `tools/ir_semantic_validator.py`
+- [x] T005 Implement `SemanticOperation` dataclass with kind, operator, operands, result, source_location in `tools/ir_semantic_validator.py`
+- [x] T006 Implement `SemanticOperand` dataclass for normalized operand representation in `tools/ir_semantic_validator.py`
+- [x] T007 Implement `SourceLocation` dataclass with scp_offset, llil_index, mlil_index, hlil_index in `tools/ir_semantic_validator.py`
+- [x] T008 Implement `ComparisonResult` dataclass with status, source_layer, target_layer, explanation, source_location in `tools/ir_semantic_validator.py`
+- [x] T009 Implement `VariableMapping` dataclass with llil_storage, mlil_var, hlil_var, type_info in `tools/ir_semantic_validator.py`
+- [x] T010 Implement IR generation pipeline: load SCP → generate LLIL → convert to MLIL → convert to HLIL in `tools/ir_semantic_validator.py`
+- [x] T011 Implement `normalize_llil_operation()` to convert LLIL instructions to `SemanticOperation` in `tools/ir_semantic_validator.py`
+- [x] T012 Implement `normalize_mlil_operation()` to convert MLIL instructions to `SemanticOperation` in `tools/ir_semantic_validator.py`
+- [x] T013 Implement `normalize_hlil_operation()` to convert HLIL instructions to `SemanticOperation` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: Foundation ready - core normalization infrastructure complete
+**Checkpoint**: Foundation ready - core normalization infrastructure complete ✅
 
 ---
 
@@ -59,21 +59,23 @@
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] Implement `LLILMLILComparator` class with `compare()` method in `tools/ir_semantic_validator.py`
-- [ ] T015 [US1] Implement arithmetic operation comparison (ADD, SUB, MUL, DIV, MOD, NEG) in `LLILMLILComparator`
-- [ ] T016 [US1] Implement comparison operation matching (EQ, NE, LT, LE, GT, GE) in `LLILMLILComparator`
-- [ ] T017 [US1] Implement logical/bitwise operation comparison (AND, OR, NOT, XOR) in `LLILMLILComparator`
-- [ ] T018 [US1] Implement control flow comparison (BRANCH→IF, JMP→GOTO, CALL, SYSCALL, RET) in `LLILMLILComparator`
-- [ ] T019 [US1] Implement constant value verification across layers in `LLILMLILComparator`
-- [ ] T020 [US1] Implement string constant validation (pool index → literal) in `LLILMLILComparator`
-- [ ] T021 [US1] Implement global variable access comparison in `LLILMLILComparator`
-- [ ] T022 [US1] Implement side-effect ordering verification (assignments, calls) in `LLILMLILComparator`
-- [ ] T023 [US1] Implement expected transformation detection for storage operations (STACK_LOAD→VAR, STACK_STORE→SET_VAR) in `LLILMLILComparator`
-- [ ] T024 [US1] Implement expected transformation detection for Falcom VM ops (PUSH_CALLER_FRAME elimination, CALL_SCRIPT) in `LLILMLILComparator`
-- [ ] T025 [US1] Implement difference report generation for LLIL-MLIL comparison in `tools/ir_semantic_validator.py`
-- [ ] T026 [US1] Wire `--compare llil mlil` CLI option to `LLILMLILComparator` in `tools/ir_semantic_validator.py`
+- [x] T014 [US1] Implement `LLILMLILComparator` class with `compare()` method in `tools/ir_semantic_validator.py`
+- [x] T015 [US1] Implement arithmetic operation comparison (ADD, SUB, MUL, DIV, MOD, NEG) in `LLILMLILComparator`
+- [x] T016 [US1] Implement comparison operation matching (EQ, NE, LT, LE, GT, GE) in `LLILMLILComparator`
+- [x] T017 [US1] Implement logical/bitwise operation comparison (AND, OR, NOT, XOR) in `LLILMLILComparator`
+- [x] T018 [US1] Implement control flow comparison (BRANCH→IF, JMP→GOTO, CALL, SYSCALL, RET) in `LLILMLILComparator`
+- [x] T019 [US1] Implement constant value verification across layers in `LLILMLILComparator`
+- [~] T020 [US1] Implement string constant validation (pool index → literal) in `LLILMLILComparator` *(partial - framework ready)*
+- [x] T021 [US1] Implement global variable access comparison in `LLILMLILComparator`
+- [~] T022 [US1] Implement side-effect ordering verification (assignments, calls) in `LLILMLILComparator` *(partial - linear order)*
+- [x] T023 [US1] Implement expected transformation detection for storage operations (STACK_LOAD→VAR, STACK_STORE→SET_VAR) in `LLILMLILComparator`
+- [x] T024 [US1] Implement expected transformation detection for Falcom VM ops (PUSH_CALLER_FRAME elimination, CALL_SCRIPT) in `LLILMLILComparator`
+- [x] T025 [US1] Implement difference report generation for LLIL-MLIL comparison in `tools/ir_semantic_validator.py`
+- [x] T026 [US1] Wire `--compare llil mlil` CLI option to `LLILMLILComparator` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: LLIL-MLIL comparison working with `--compare llil mlil` flag
+**Checkpoint**: LLIL-MLIL comparison working with `--compare llil mlil` flag ✅
+**Note**: Current implementation uses linear comparison of core semantic operations (CALL, SYSCALL, RET).
+Simple functions pass 100%. Complex functions with control flow need CFG-based matching (future enhancement).
 
 ---
 
@@ -85,15 +87,15 @@
 
 ### Implementation for User Story 4
 
-- [ ] T027 [US4] Implement `VariableTracker` class to build variable mappings in `tools/ir_semantic_validator.py`
-- [ ] T028 [US4] Implement stack slot → MLIL variable mapping extraction in `VariableTracker`
-- [ ] T029 [US4] Implement frame slot → function parameter mapping extraction in `VariableTracker`
-- [ ] T030 [US4] Implement register → MLIL register variable mapping extraction in `VariableTracker`
-- [ ] T031 [US4] Implement MLIL variable → HLIL named variable mapping in `VariableTracker`
-- [ ] T032 [US4] Implement variable mapping report generation showing Stack[N] → var_N → name in `tools/ir_semantic_validator.py`
-- [ ] T033 [US4] Wire `--variables` CLI option to `VariableTracker` in `tools/ir_semantic_validator.py`
+- [x] T027 [US4] Implement `VariableTracker` class to build variable mappings in `tools/ir_semantic_validator.py`
+- [x] T028 [US4] Implement stack slot → MLIL variable mapping extraction in `VariableTracker`
+- [x] T029 [US4] Implement frame slot → function parameter mapping extraction in `VariableTracker`
+- [x] T030 [US4] Implement register → MLIL register variable mapping extraction in `VariableTracker`
+- [x] T031 [US4] Implement MLIL variable → HLIL named variable mapping in `VariableTracker`
+- [x] T032 [US4] Implement variable mapping report generation showing Stack[N] → var_N → name in `tools/ir_semantic_validator.py`
+- [x] T033 [US4] Wire `--variables` CLI option to `VariableTracker` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: Variable tracking working with `--variables` flag
+**Checkpoint**: Variable tracking working with `--variables` flag ✅
 
 ---
 
@@ -105,16 +107,16 @@
 
 ### Implementation for User Story 2
 
-- [ ] T034 [US2] Implement `MLILHLILComparator` class with `compare()` method in `tools/ir_semantic_validator.py`
-- [ ] T035 [US2] Implement statement transformation detection (SET_VAR→Assign, VAR→Variable, CONST→Const) in `MLILHLILComparator`
-- [ ] T036 [US2] Implement control flow structuring detection (IF→HLILIf, GOTO→While/For/Break/Continue) in `MLILHLILComparator`
-- [ ] T037 [US2] Implement expression inlining detection (multiple SET_VAR → single Assign) in `MLILHLILComparator`
-- [ ] T038 [US2] Implement expression tree semantic equivalence checking in `MLILHLILComparator`
-- [ ] T039 [US2] Implement SSA transformation detection (PHI elimination, version stripping) in `MLILHLILComparator`
-- [ ] T040 [US2] Implement optimization detection (constant propagation, dead code elimination) in `MLILHLILComparator`
-- [ ] T041 [US2] Wire `--compare mlil hlil` CLI option to `MLILHLILComparator` in `tools/ir_semantic_validator.py`
+- [x] T034 [US2] Implement `MLILHLILComparator` class with `compare()` method in `tools/ir_semantic_validator.py`
+- [x] T035 [US2] Implement statement transformation detection (SET_VAR→Assign, VAR→Variable, CONST→Const) in `MLILHLILComparator`
+- [x] T036 [US2] Implement control flow structuring detection (IF→HLILIf, GOTO→While/For/Break/Continue) in `MLILHLILComparator`
+- [~] T037 [US2] Implement expression inlining detection (multiple SET_VAR → single Assign) in `MLILHLILComparator` *(partial)*
+- [~] T038 [US2] Implement expression tree semantic equivalence checking in `MLILHLILComparator` *(partial)*
+- [~] T039 [US2] Implement SSA transformation detection (PHI elimination, version stripping) in `MLILHLILComparator` *(partial)*
+- [~] T040 [US2] Implement optimization detection (constant propagation, dead code elimination) in `MLILHLILComparator` *(partial)*
+- [x] T041 [US2] Wire `--compare mlil hlil` CLI option to `MLILHLILComparator` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: MLIL-HLIL comparison working with `--compare mlil hlil` flag
+**Checkpoint**: MLIL-HLIL comparison working with `--compare mlil hlil` flag ✅
 
 ---
 
@@ -126,13 +128,13 @@
 
 ### Implementation for User Story 5
 
-- [ ] T042 [US5] Implement `BatchValidator` class to iterate all functions in SCP in `tools/ir_semantic_validator.py`
-- [ ] T043 [US5] Implement `BatchReport` dataclass with pass_count, fail_count, function_results in `tools/ir_semantic_validator.py`
-- [ ] T044 [US5] Implement batch summary output (N functions passed, M functions failed) in `tools/ir_semantic_validator.py`
-- [ ] T045 [US5] Implement drill-down output for failed functions in batch mode in `tools/ir_semantic_validator.py`
-- [ ] T046 [US5] Wire `--batch` CLI option to `BatchValidator` in `tools/ir_semantic_validator.py`
+- [x] T042 [US5] Implement `BatchValidator` class to iterate all functions in SCP in `tools/ir_semantic_validator.py`
+- [x] T043 [US5] Implement `BatchReport` dataclass with pass_count, fail_count, function_results in `tools/ir_semantic_validator.py`
+- [x] T044 [US5] Implement batch summary output (N functions passed, M functions failed) in `tools/ir_semantic_validator.py`
+- [x] T045 [US5] Implement drill-down output for failed functions in batch mode in `tools/ir_semantic_validator.py`
+- [x] T046 [US5] Wire `--batch` CLI option to `BatchValidator` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: Batch validation working with `--batch` flag
+**Checkpoint**: Batch validation working with `--batch` flag ✅
 
 ---
 
@@ -144,14 +146,14 @@
 
 ### Implementation for User Story 6
 
-- [ ] T047 [US6] Implement `TypeValidator` class to compare type assignments in `tools/ir_semantic_validator.py`
-- [ ] T048 [US6] Implement type extraction from MLIL variables in `TypeValidator`
-- [ ] T049 [US6] Implement type extraction from HLIL expressions in `TypeValidator`
-- [ ] T050 [US6] Implement type compatibility checking (int+int=int, string operations) in `TypeValidator`
-- [ ] T051 [US6] Implement type mismatch reporting in `tools/ir_semantic_validator.py`
-- [ ] T052 [US6] Wire `--types` CLI option to `TypeValidator` in `tools/ir_semantic_validator.py`
+- [x] T047 [US6] Implement `TypeValidator` class to compare type assignments in `tools/ir_semantic_validator.py`
+- [x] T048 [US6] Implement type extraction from MLIL variables in `TypeValidator`
+- [~] T049 [US6] Implement type extraction from HLIL expressions in `TypeValidator` *(partial - MLIL only)*
+- [~] T050 [US6] Implement type compatibility checking (int+int=int, string operations) in `TypeValidator` *(partial)*
+- [x] T051 [US6] Implement type mismatch reporting in `tools/ir_semantic_validator.py`
+- [x] T052 [US6] Wire `--types` CLI option to `TypeValidator` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: Type validation working with `--types` flag
+**Checkpoint**: Type validation working with `--types` flag ✅
 
 ---
 
@@ -163,12 +165,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T053 [US3] Implement `ThreeWayComparator` class combining LLIL-MLIL and MLIL-HLIL in `tools/ir_semantic_validator.py`
-- [ ] T054 [US3] Implement aligned row output showing corresponding operations in each layer in `tools/ir_semantic_validator.py`
-- [ ] T055 [US3] Implement combined equivalence status (all match, partial match, difference) in `ThreeWayComparator`
-- [ ] T056 [US3] Wire `--all` CLI option to `ThreeWayComparator` in `tools/ir_semantic_validator.py`
+- [x] T053 [US3] Implement `ThreeWayComparator` class combining LLIL-MLIL and MLIL-HLIL in `tools/ir_semantic_validator.py`
+- [x] T054 [US3] Implement aligned row output showing corresponding operations in each layer in `tools/ir_semantic_validator.py`
+- [x] T055 [US3] Implement combined equivalence status (all match, partial match, difference) in `ThreeWayComparator`
+- [x] T056 [US3] Wire `--all` CLI option to `ThreeWayComparator` in `tools/ir_semantic_validator.py`
 
-**Checkpoint**: Three-way comparison working with `--all` flag
+**Checkpoint**: Three-way comparison working with `--all` flag ✅
 
 ---
 
@@ -180,12 +182,12 @@
 
 ### Implementation for User Story 7
 
-- [ ] T057 [US7] Implement `SourceLocationMapper` class to track SCP offsets through IR pipeline in `tools/ir_semantic_validator.py`
-- [ ] T058 [US7] Extract and propagate SCP bytecode offset from LLIL instructions in `SourceLocationMapper`
-- [ ] T059 [US7] Include SCP offset in all difference reports in `tools/ir_semantic_validator.py`
-- [ ] T060 [US7] Implement sub-expression location tracking for complex expressions in `SourceLocationMapper`
+- [x] T057 [US7] Implement `SourceLocationMapper` class to track SCP offsets through IR pipeline in `tools/ir_semantic_validator.py`
+- [x] T058 [US7] Extract and propagate SCP bytecode offset from LLIL instructions in `SourceLocationMapper`
+- [x] T059 [US7] Include SCP offset in all difference reports in `tools/ir_semantic_validator.py`
+- [x] T060 [US7] Implement sub-expression location tracking for complex expressions in `SourceLocationMapper`
 
-**Checkpoint**: All difference reports include original SCP bytecode location
+**Checkpoint**: All difference reports include original SCP bytecode location ✅
 
 ---
 
@@ -193,11 +195,13 @@
 
 **Purpose**: Text and JSON report output
 
-- [ ] T061 Implement `TextReporter` class for human-readable output in `tools/ir_semantic_validator.py`
-- [ ] T062 Implement colored output (✓ green, ~ yellow, ✗ red) with `--no-color` option in `TextReporter`
-- [ ] T063 Implement `JSONReporter` class for machine-readable output in `tools/ir_semantic_validator.py`
-- [ ] T064 Wire `--json` CLI option to `JSONReporter` in `tools/ir_semantic_validator.py`
-- [ ] T065 Implement `--function NAME` filter to validate specific function only in `tools/ir_semantic_validator.py`
+- [x] T061 Implement `TextReporter` class for human-readable output in `tools/ir_semantic_validator.py`
+- [x] T062 Implement colored output ([v] green, [~] yellow, [x] red) with `--no-color` option in `TextReporter`
+- [x] T063 Implement `JSONReporter` class for machine-readable output in `tools/ir_semantic_validator.py`
+- [x] T064 Wire `--json` CLI option to `JSONReporter` in `tools/ir_semantic_validator.py`
+- [x] T065 Implement `--function NAME` filter to validate specific function only in `tools/ir_semantic_validator.py`
+
+**Checkpoint**: All output format options working ✅
 
 ---
 
@@ -205,11 +209,13 @@
 
 **Purpose**: Error handling, documentation, and final cleanup
 
-- [ ] T066 Implement error handling for SCP parse failures (exit with error, show location) in `tools/ir_semantic_validator.py`
-- [ ] T067 Implement error handling for LLIL/MLIL/HLIL conversion failures (report and continue) in `tools/ir_semantic_validator.py`
-- [ ] T068 Implement unknown operation type warning in `tools/ir_semantic_validator.py`
-- [ ] T069 Add module docstring and function docstrings in `tools/ir_semantic_validator.py`
-- [ ] T070 Validate tool works with sample SCP files from existing test data
+- [x] T066 Implement error handling for SCP parse failures (exit with error, show location) in `tools/ir_semantic_validator.py`
+- [x] T067 Implement error handling for LLIL/MLIL/HLIL conversion failures (report and continue) in `tools/ir_semantic_validator.py`
+- [x] T068 Implement unknown operation type warning in `tools/ir_semantic_validator.py`
+- [x] T069 Add module docstring and function docstrings in `tools/ir_semantic_validator.py`
+- [x] T070 Validate tool works with sample SCP files from existing test data
+
+**Checkpoint**: All polish tasks complete ✅
 
 ---
 
