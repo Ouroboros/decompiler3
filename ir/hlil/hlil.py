@@ -84,6 +84,8 @@ class HLILInstruction:
 
     def __init__(self, operation: HLILOperation):
         self.operation = operation
+        self.address: int = 0  # Source SCP bytecode offset (inherited from MLIL)
+        self.mlil_index: int = -1  # Source MLIL instruction index (for debugging/mapping)
 
     def __str__(self) -> str:
         return f'{self.operation.name}'

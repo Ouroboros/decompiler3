@@ -1215,47 +1215,66 @@ class MLILToHLILConverter:
 
         return None
 
+    def _set_hlil_source_info(self, hlil_instr: HLILInstruction,
+                               mlil_instr: MediumLevelILInstruction,
+                               mlil_index: int) -> None:
+        '''Propagate source address info from MLIL to HLIL'''
+        hlil_instr.address = mlil_instr.address
+        hlil_instr.mlil_index = mlil_index
+
     def _convert_instruction(self, instr: MediumLevelILInstruction,
                               block_idx: int, instr_idx: int) -> List[HLILStatement]:
         '''Convert instruction, may return multiple statements for temp vars'''
         key = (block_idx, instr_idx)
         result = []
 
+        # Get global instruction index for MLIL
+        mlil_index = instr.inst_index
+
         # Check if deleted by DCE
         if self.resolver.is_deleted(block_idx, instr_idx):
             return result
 
         if isinstance(instr, MLILDebug):
-            result.append(HLILComment(f'{instr.debug_type}({instr.value})'))
+            stmt = HLILComment(f'{instr.debug_type}({instr.value})')
+            self._set_hlil_source_info(stmt, instr, mlil_index)
+            result.append(stmt)
 
         elif isinstance(instr, MLILNop):
             pass
 
         elif isinstance(instr, MLILRet):
             if instr.value:
-                result.append(HLILReturn(self._convert_expr(instr.value)))
+                stmt = HLILReturn(self._convert_expr(instr.value))
 
             else:
                 # Check if there's a _reg0 variable as the return value
                 ret_var = self.resolver.get_return_var_name(block_idx, instr_idx)
                 if ret_var is not None:
-                    result.append(HLILReturn(HLILVar(HLILVariable(ret_var, None))))
+                    stmt = HLILReturn(HLILVar(HLILVariable(ret_var, None)))
 
                 else:
-                    result.append(HLILReturn())
+                    stmt = HLILReturn()
+
+            self._set_hlil_source_info(stmt, instr, mlil_index)
+            result.append(stmt)
 
         elif isinstance(instr, MLILSetVar):
-            result.append(HLILAssign(
+            stmt = HLILAssign(
                 HLILVar(HLILVariable(instr.var.name, None)),
                 self._convert_expr(instr.value)
-            ))
+            )
+            self._set_hlil_source_info(stmt, instr, mlil_index)
+            result.append(stmt)
 
         elif isinstance(instr, MLILStoreReg):
             # Use local variable if has uses, otherwise skip (dead store)
             var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
             if var_name is not None:
                 var = HLILVariable(var_name, None)
-                result.append(HLILAssign(HLILVar(var), self._convert_expr(instr.value)))
+                stmt = HLILAssign(HLILVar(var), self._convert_expr(instr.value))
+                self._set_hlil_source_info(stmt, instr, mlil_index)
+                result.append(stmt)
                 # Cache for single-use inlining
                 self.expr_cache[key] = self._convert_expr(instr.value)
 
@@ -1264,7 +1283,9 @@ class MLILToHLILConverter:
             var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
             if var_name is not None:
                 var = HLILVariable(var_name, None)
-                result.append(HLILAssign(HLILVar(var), self._convert_expr(instr.value)))
+                stmt = HLILAssign(HLILVar(var), self._convert_expr(instr.value))
+                self._set_hlil_source_info(stmt, instr, mlil_index)
+                result.append(stmt)
 
         elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
             # Call implicitly writes to REG[0]
@@ -1278,24 +1299,32 @@ class MLILToHLILConverter:
 
             elif use_count == 0 and not (ssa_def and ssa_def.is_live_out):
                 # Unused result: emit as statement for side effects
-                result.append(HLILExprStmt(call_expr))
+                stmt = HLILExprStmt(call_expr)
+                self._set_hlil_source_info(stmt, instr, mlil_index)
+                result.append(stmt)
 
             else:
                 # Multiple uses or live-out: assign to local variable
                 var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
                 if var_name is not None:
                     var = HLILVariable(var_name, None)
-                    result.append(HLILAssign(HLILVar(var), call_expr))
+                    stmt = HLILAssign(HLILVar(var), call_expr)
+                    self._set_hlil_source_info(stmt, instr, mlil_index)
+                    result.append(stmt)
 
                 else:
                     # No var name (shouldn't happen), emit as statement
-                    result.append(HLILExprStmt(call_expr))
+                    stmt = HLILExprStmt(call_expr)
+                    self._set_hlil_source_info(stmt, instr, mlil_index)
+                    result.append(stmt)
 
         elif isinstance(instr, (MLILIf, MLILGoto)):
             pass
 
         elif isinstance(instr, MediumLevelILExpr):
-            result.append(HLILExprStmt(self._convert_expr(instr)))
+            stmt = HLILExprStmt(self._convert_expr(instr))
+            self._set_hlil_source_info(stmt, instr, mlil_index)
+            result.append(stmt)
 
         return result
 

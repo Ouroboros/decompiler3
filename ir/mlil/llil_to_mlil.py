@@ -39,6 +39,8 @@ class LLILToMLILTranslator:
     def _translate_block(self, llil_block: LowLevelILBasicBlock, mlil_block: MediumLevelILBasicBlock):
         '''Translate a single LLIL block to MLIL'''
         for llil_inst in llil_block.instructions:
+            # Set source address for MLIL instructions
+            self.builder.set_current_address(llil_inst.address)
             self._translate_instruction(llil_inst)
 
     def _translate_instruction(self, llil_inst: LowLevelILInstruction):

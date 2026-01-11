@@ -2,113 +2,64 @@
 Sync Impact Report
 ==================
 Version change: 1.0.0 → 1.1.0
-Modified principles: Removed "Protected Directories", renumbered III-IX to III-VIII
+Bump rationale: MINOR - removed one principle (backward compatible)
+
+Modified principles: None
 Added sections: None
-Removed sections: Protected Directories principle
+Removed sections:
+  - VII. Read-Only Boundaries (binaryninja-api/ restriction)
+
 Templates requiring updates:
-  - .specify/templates/plan-template.md: ✅ compatible
-  - .specify/templates/spec-template.md: ✅ compatible
-  - .specify/templates/tasks-template.md: ✅ compatible
+  - .specify/templates/plan-template.md: ✅ No constitution references
+  - .specify/templates/spec-template.md: ✅ No constitution references
+  - .specify/templates/tasks-template.md: ✅ No constitution references
+
 Follow-up TODOs: None
 -->
 
-# ED9 Decompiler Constitution
+# Falcom Decompiler Constitution
 
 ## Core Principles
 
-### I. Language Separation
+### I. No Dynamic Attribute Manipulation
+**NEVER** use `getattr`, `hasattr`, `setattr`, or `delattr` to add, remove, or manipulate class type fields.
 
-- **User communication**: Chinese
-- **Code, comments, commit messages, tool descriptions**: English
+- All class attributes must be explicitly declared in the class definition
+- Use direct attribute access (`obj.attr`) instead of `getattr(obj, 'attr')`
+- Use type annotations and explicit field definitions
+- If an attribute might not exist, the class design is wrong - fix the class, not the access pattern
 
-This ensures clear separation between user-facing communication and technical artifacts that may be shared or reviewed by international contributors.
+**Rationale**: Dynamic attribute manipulation hides type information, bypasses static analysis, and creates maintenance nightmares. If you need to check whether an attribute exists, the code architecture is fundamentally broken.
 
-### II. Git Discipline
+### II. Explicit Type Definitions
+All class fields must be:
+- Declared at class level or in `__init__`
+- Have explicit type annotations
+- Have default values or be guaranteed initialized
 
-- NEVER auto-commit; commits MUST be explicitly requested by user
-- Commit messages MUST be concise (1-2 sentences), no signatures or metadata
-- Code modifications MUST NOT occur during discussion; wait for explicit user confirmation
+### III. No Hardcoded Magic Numbers
+Use named constants instead of literal numbers in code.
+- Define constants at module level: `WORD_SIZE = 4`
+- Reference constants in expressions: `offset // WORD_SIZE`
+- Document constants in comments when referenced
 
-### III. No Magic Numbers
+### IV. Import Organization
+- All imports at module top level
+- Exception: Circular dependency resolution with explanatory comment
 
-- All numeric constants MUST use named constants (e.g., `offset // WORD_SIZE` not `offset // 4`)
-- Common constants defined in `ir/llil.py`: `WORD_SIZE = 4`
-- Comments referencing values MUST also use constant names
+### V. Code Style Consistency
+- Space around assignment operators: `x = 5`
+- Blank lines between conditional blocks (`if`/`elif`/`else`)
+- English-only for code, comments, and commit messages
+- Chinese for user communication
 
-### IV. Import Structure
-
-- All imports MUST be at module top level
-- Exception: circular dependency imports inside functions, with explanatory comment
-
-### V. Code Formatting
-
-- Assignment operators MUST have surrounding spaces: `x = 5`
-- Blank lines MUST separate conditional blocks (`if`/`elif`, `elif`/`elif`, `elif`/`else`, `if`/`else`)
-
-### VI. Method Decorators
-
-- NEVER use `@staticmethod`
-- Use `@classmethod` instead for inheritance support
-
-### VII. English-Only Comments
-
-- All code comments MUST be in English
-- No Chinese or other languages in code comments
-
-### VIII. Concise Documentation
-
-- Comments MUST be brief and meaningful
-- Avoid redundant explanations that restate obvious code behavior
-- Prefer self-explanatory names over verbose comments
-
-## Code Style
-
-### Formatting Checklist
-
-- [ ] Spaces around `=`
-- [ ] Blank lines between conditional blocks
-- [ ] Imports at top level
-- [ ] Named constants (no magic numbers)
-- [ ] `@classmethod` not `@staticmethod`
-- [ ] English-only comments
-- [ ] Concise comments
-
-## Development Workflow
-
-### Before Any Task
-
-1. Read CLAUDE.md to refresh rules
-2. Verify understanding of user requirements
-
-### During Implementation
-
-1. Wait for explicit user confirmation before modifying code
-2. Use named constants for all numeric values
-3. Follow formatting rules strictly
-
-### Commit Process
-
-1. Wait for explicit user request to commit
-2. Write concise commit message (1-2 sentences)
-3. No signatures or metadata in commit messages
+### VI. No Auto-Commit Policy
+Never auto-commit changes. Only create commits when explicitly requested by user.
 
 ## Governance
 
-This constitution defines the non-negotiable coding standards for the ED9 Decompiler project. All contributions MUST comply with these principles.
+This constitution supersedes all other practices. Violations must be corrected before code is merged.
 
-### Amendment Process
+All code modifications require explicit user confirmation before implementation.
 
-1. Propose change with rationale
-2. Document impact on existing code
-3. Update version according to semantic versioning:
-   - MAJOR: Backward incompatible changes to principles
-   - MINOR: New principles or expanded guidance
-   - PATCH: Clarifications, wording fixes
-
-### Compliance
-
-- All code reviews MUST verify compliance with these principles
-- Violations MUST be corrected before merge
-- Runtime guidance is maintained in `CLAUDE.md`
-
-**Version**: 1.1.0 | **Ratified**: 2025-12-28 | **Last Amended**: 2025-12-28
+**Version**: 1.1.0 | **Ratified**: 2026-01-09 | **Last Amended**: 2026-01-09

@@ -57,6 +57,8 @@ class ED9VMLifter:
             builder.set_current_block(llil_blocks[block.offset])
             # Restore stack state for this block if it was saved by a previous branch
             for inst in block.instructions:
+                # Set current SCP instruction address for LLIL address tracking
+                builder.set_current_address(inst.offset)
                 self._translate_instruction(builder, inst, block, block_map, llil_blocks)
 
         return builder.finalize()

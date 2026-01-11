@@ -63,6 +63,7 @@ class LowLevelILBuilder:
         self.__vstack = _VirtualStack()  # Virtual stack for expression tracking
         self.saved_stacks: dict[int, StackSnapshot] = {}  # offset -> StackSnapshot for branches
         self.__stack_load_to_expr: dict[LowLevelILStackLoad, LowLevelILExpr] = {}  # StackLoad -> source expr
+        self.__current_address: int = 0  # Current source instruction address
 
     # === Function and Block Creation ===
 
@@ -100,6 +101,16 @@ class LowLevelILBuilder:
         # Automatically add to function
         self.function.add_basic_block(block)
         return block
+
+    # === Source Address Tracking ===
+
+    def set_current_address(self, addr: int) -> None:
+        """Set current source instruction address for subsequent LLIL instructions"""
+        self.__current_address = addr
+
+    def get_current_address(self) -> int:
+        """Get current source instruction address"""
+        return self.__current_address
 
     # === Stack Pointer Management (Public Interface) ===
 
@@ -225,6 +236,10 @@ class LowLevelILBuilder:
         '''Add instruction to current block and update stack pointer tracking'''
         if self.current_block is None:
             raise RuntimeError('No current basic block set')
+
+        # Set source address from current context
+        inst.address = self.__current_address
+
         self.current_block.add_instruction(inst)
 
         # Update stack pointer based on instruction type
