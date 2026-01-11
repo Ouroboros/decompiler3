@@ -28,7 +28,10 @@
       "Bash(/mnt/d/Dev/Python/python.exe:*)",
       "Bash(grep:*)",
       "Bash(PYTHONPATH=/mnt/d/Dev/Source/Falcom/decompiler3 /mnt/d/Dev/Python/python.exe:*)",
-      "Bash(PYTHONPATH=. /mnt/d/Dev/Python/python.exe:*)"
+      "Bash(PYTHONPATH=. /mnt/d/Dev/Python/python.exe:*)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "WebSearch",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": [
