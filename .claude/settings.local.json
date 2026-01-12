@@ -31,7 +31,8 @@
       "Bash(PYTHONPATH=. /mnt/d/Dev/Python/python.exe:*)",
       "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
       "WebSearch",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(openspec validate:*)"
     ],
     "deny": [],
     "ask": [

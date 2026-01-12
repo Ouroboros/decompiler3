@@ -115,14 +115,14 @@ class ExpressionSimplificationPass(Pass):
         elif op_type == MLILMul:
             if isinstance(rhs, MLILConst):
                 if rhs.value == 0:
-                    return MLILConst(0, is_hex=False)
+                    return MLILConst(0, is_hex = False)
 
                 elif rhs.value == 1:
                     return lhs
 
             if isinstance(lhs, MLILConst):
                 if lhs.value == 0:
-                    return MLILConst(0, is_hex=False)
+                    return MLILConst(0, is_hex = False)
 
                 elif lhs.value == 1:
                     return rhs
@@ -134,14 +134,14 @@ class ExpressionSimplificationPass(Pass):
         elif op_type == MLILAnd:
             if isinstance(rhs, MLILConst):
                 if rhs.value == 0:
-                    return MLILConst(0, is_hex=False)
+                    return MLILConst(0, is_hex = False)
 
                 elif rhs.value == 0xFFFFFFFF:
                     return lhs
 
             if isinstance(lhs, MLILConst):
                 if lhs.value == 0:
-                    return MLILConst(0, is_hex=False)
+                    return MLILConst(0, is_hex = False)
 
                 elif lhs.value == 0xFFFFFFFF:
                     return rhs
@@ -152,14 +152,14 @@ class ExpressionSimplificationPass(Pass):
                     return lhs
 
                 elif rhs.value == 0xFFFFFFFF:
-                    return MLILConst(0xFFFFFFFF, is_hex=True)
+                    return MLILConst(0xFFFFFFFF, is_hex = True)
 
             if isinstance(lhs, MLILConst):
                 if lhs.value == 0:
                     return rhs
 
                 elif lhs.value == 0xFFFFFFFF:
-                    return MLILConst(0xFFFFFFFF, is_hex=True)
+                    return MLILConst(0xFFFFFFFF, is_hex = True)
 
         elif op_type == MLILXor:
             if isinstance(rhs, MLILConst) and rhs.value == 0:

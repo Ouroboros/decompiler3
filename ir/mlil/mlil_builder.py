@@ -27,7 +27,7 @@ class MLILBuilder:
         '''Create MLIL function'''
         if self.function is not None:
             raise RuntimeError('Function already created')
-        self.function = MediumLevelILFunction(name, start_addr, params, is_common_func=is_common_func)
+        self.function = MediumLevelILFunction(name, start_addr, params, is_common_func = is_common_func)
 
     def finalize(self) -> MediumLevelILFunction:
         '''Finalize and return the constructed function'''

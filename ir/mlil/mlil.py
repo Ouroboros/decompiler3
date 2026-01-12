@@ -107,10 +107,10 @@ class MediumLevelILOperation(IntEnum2):
 class MediumLevelILInstruction(ILInstruction):
     '''Base class for MLIL instructions'''
 
-    def __init__(self, operation: MediumLevelILOperation):
+    def __init__(self, operation: MediumLevelILOperation, *, address: int = 0):
         super().__init__()
         self.operation = operation
-        self.address = 0
+        self.address = address
         self.inst_index = -1  # Inherited from LLIL instruction index
         self.llil_index = -1  # Source LLIL instruction index (for debugging/mapping)
         self.options = ILOptions()
@@ -168,8 +168,8 @@ class MLILVariable:
 class MLILConst(MediumLevelILExpr, Constant):
     '''Constant value (int, float, or string)'''
 
-    def __init__(self, value: Any, is_hex: bool = False):
-        super().__init__(MediumLevelILOperation.MLIL_CONST)
+    def __init__(self, value: Any, is_hex: bool = False, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_CONST, **kwargs)
         self.value = value
         self.is_hex = is_hex
 
@@ -194,8 +194,8 @@ class MLILConst(MediumLevelILExpr, Constant):
 class MLILUndef(MediumLevelILExpr):
     '''Undefined value (result of call via AddressOf, etc.)'''
 
-    def __init__(self):
-        super().__init__(MediumLevelILOperation.MLIL_UNDEF)
+    def __init__(self, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_UNDEF, **kwargs)
 
     def __str__(self) -> str:
         return '<undef>'
@@ -206,8 +206,8 @@ class MLILUndef(MediumLevelILExpr):
 class MLILVar(MediumLevelILExpr):
     '''Load variable value'''
 
-    def __init__(self, var: MLILVariable):
-        super().__init__(MediumLevelILOperation.MLIL_VAR)
+    def __init__(self, var: MLILVariable, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_VAR, **kwargs)
         self.var = var
 
     def __str__(self) -> str:
@@ -217,8 +217,8 @@ class MLILVar(MediumLevelILExpr):
 class MLILSetVar(MediumLevelILStatement):
     '''Store value to variable'''
 
-    def __init__(self, var: MLILVariable, value: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_SET_VAR)
+    def __init__(self, var: MLILVariable, value: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_SET_VAR, **kwargs)
         self.var = var
         self.value = value
 
@@ -231,8 +231,8 @@ class MLILSetVar(MediumLevelILStatement):
 class MLILBinaryOp(MediumLevelILExpr, BinaryOperation):
     '''Base class for binary operations'''
 
-    def __init__(self, operation: MediumLevelILOperation, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(operation)
+    def __init__(self, operation: MediumLevelILOperation, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(operation, **kwargs)
         self.lhs = lhs
         self.rhs = rhs
 
@@ -262,95 +262,95 @@ class MLILBinaryOp(MediumLevelILExpr, BinaryOperation):
 
 
 class MLILAdd(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_ADD, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_ADD, lhs, rhs, **kwargs)
 
 
 class MLILSub(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_SUB, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_SUB, lhs, rhs, **kwargs)
 
 
 class MLILMul(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_MUL, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_MUL, lhs, rhs, **kwargs)
 
 
 class MLILDiv(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_DIV, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_DIV, lhs, rhs, **kwargs)
 
 
 class MLILMod(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_MOD, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_MOD, lhs, rhs, **kwargs)
 
 
 class MLILAnd(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_AND, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_AND, lhs, rhs, **kwargs)
 
 
 class MLILOr(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_OR, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_OR, lhs, rhs, **kwargs)
 
 
 class MLILXor(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_XOR, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_XOR, lhs, rhs, **kwargs)
 
 
 class MLILShl(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_SHL, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_SHL, lhs, rhs, **kwargs)
 
 
 class MLILShr(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_SHR, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_SHR, lhs, rhs, **kwargs)
 
 
 class MLILLogicalAnd(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_LOGICAL_AND, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LOGICAL_AND, lhs, rhs, **kwargs)
 
 
 class MLILLogicalOr(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_LOGICAL_OR, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LOGICAL_OR, lhs, rhs, **kwargs)
 
 
 # === Comparison Operations ===
 
 class MLILEq(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_EQ, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_EQ, lhs, rhs, **kwargs)
 
 
 class MLILNe(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_NE, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_NE, lhs, rhs, **kwargs)
 
 
 class MLILLt(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_LT, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LT, lhs, rhs, **kwargs)
 
 
 class MLILLe(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_LE, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LE, lhs, rhs, **kwargs)
 
 
 class MLILGt(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_GT, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_GT, lhs, rhs, **kwargs)
 
 
 class MLILGe(MLILBinaryOp):
-    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_GE, lhs, rhs)
+    def __init__(self, lhs: MediumLevelILInstruction, rhs: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_GE, lhs, rhs, **kwargs)
 
 
 # === Unary Operations ===
@@ -358,8 +358,8 @@ class MLILGe(MLILBinaryOp):
 class MLILUnaryOp(MediumLevelILExpr, UnaryOperation):
     '''Base class for unary operations'''
 
-    def __init__(self, operation: MediumLevelILOperation, operand: MediumLevelILInstruction):
-        super().__init__(operation)
+    def __init__(self, operation: MediumLevelILOperation, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(operation, **kwargs)
         self.operand = operand
 
     def __str__(self) -> str:
@@ -373,18 +373,18 @@ class MLILUnaryOp(MediumLevelILExpr, UnaryOperation):
 
 
 class MLILNeg(MLILUnaryOp):
-    def __init__(self, operand: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_NEG, operand)
+    def __init__(self, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_NEG, operand, **kwargs)
 
 
 class MLILLogicalNot(MLILUnaryOp):
-    def __init__(self, operand: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_LOGICAL_NOT, operand)
+    def __init__(self, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LOGICAL_NOT, operand, **kwargs)
 
 
 class MLILTestZero(MLILUnaryOp):
-    def __init__(self, operand: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_TEST_ZERO, operand)
+    def __init__(self, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_TEST_ZERO, operand, **kwargs)
 
     def __str__(self) -> str:
         return f'({self.operand} == 0)'
@@ -392,15 +392,15 @@ class MLILTestZero(MLILUnaryOp):
 
 class MLILBitwiseNot(MLILUnaryOp):
     '''Bitwise NOT (~x)'''
-    def __init__(self, operand: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_BITWISE_NOT, operand)
+    def __init__(self, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_BITWISE_NOT, operand, **kwargs)
 
 
 class MLILAddressOf(MLILUnaryOp):
     '''Address-of operation (&var)'''
 
-    def __init__(self, operand: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_ADDRESS_OF, operand)
+    def __init__(self, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_ADDRESS_OF, operand, **kwargs)
 
     def __str__(self) -> str:
         return f'&{self.operand}'
@@ -411,8 +411,8 @@ class MLILAddressOf(MLILUnaryOp):
 class MLILGoto(MediumLevelILStatement, Terminal):
     '''Unconditional jump'''
 
-    def __init__(self, target: 'MediumLevelILBasicBlock'):
-        super().__init__(MediumLevelILOperation.MLIL_GOTO)
+    def __init__(self, target: 'MediumLevelILBasicBlock', **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_GOTO, **kwargs)
         self.target = target
 
     def __str__(self) -> str:
@@ -422,8 +422,8 @@ class MLILGoto(MediumLevelILStatement, Terminal):
 class MLILIf(MediumLevelILStatement, Terminal):
     '''Conditional branch'''
 
-    def __init__(self, condition: MediumLevelILInstruction, true_target: 'MediumLevelILBasicBlock', false_target: 'MediumLevelILBasicBlock'):
-        super().__init__(MediumLevelILOperation.MLIL_IF)
+    def __init__(self, condition: MediumLevelILInstruction, true_target: 'MediumLevelILBasicBlock', false_target: 'MediumLevelILBasicBlock', **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_IF, **kwargs)
         self.condition = condition
         self.true_target = true_target
         self.false_target = false_target
@@ -435,8 +435,8 @@ class MLILIf(MediumLevelILStatement, Terminal):
 class MLILRet(MediumLevelILStatement, Terminal):
     '''Return from function'''
 
-    def __init__(self, value: Optional[MediumLevelILInstruction] = None):
-        super().__init__(MediumLevelILOperation.MLIL_RET)
+    def __init__(self, value: Optional[MediumLevelILInstruction] = None, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_RET, **kwargs)
         self.value = value
 
     def __str__(self) -> str:
@@ -451,8 +451,8 @@ class MLILRet(MediumLevelILStatement, Terminal):
 class MLILCall(MediumLevelILStatement):
     '''Function call'''
 
-    def __init__(self, target: str, args: List[MediumLevelILInstruction]):
-        super().__init__(MediumLevelILOperation.MLIL_CALL)
+    def __init__(self, target: str, args: List[MediumLevelILInstruction], **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_CALL, **kwargs)
         self.target = target
         self.args = args
 
@@ -464,8 +464,8 @@ class MLILCall(MediumLevelILStatement):
 class MLILSyscall(MediumLevelILStatement):
     '''System call'''
 
-    def __init__(self, subsystem: int, cmd: int, args: List[MediumLevelILInstruction]):
-        super().__init__(MediumLevelILOperation.MLIL_SYSCALL)
+    def __init__(self, subsystem: int, cmd: int, args: List[MediumLevelILInstruction], **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_SYSCALL, **kwargs)
         self.subsystem = subsystem
         self.cmd = cmd
         self.args = args
@@ -483,8 +483,8 @@ class MLILSyscall(MediumLevelILStatement):
 class MLILCallScript(MediumLevelILStatement):
     '''Falcom script call'''
 
-    def __init__(self, module: str, func: str, args: List[MediumLevelILInstruction]):
-        super().__init__(MediumLevelILOperation.MLIL_CALL_SCRIPT)
+    def __init__(self, module: str, func: str, args: List[MediumLevelILInstruction], **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_CALL_SCRIPT, **kwargs)
         self.module = module
         self.func = func
         self.args = args
@@ -499,8 +499,8 @@ class MLILCallScript(MediumLevelILStatement):
 class MLILLoadGlobal(MediumLevelILExpr):
     '''Load global variable'''
 
-    def __init__(self, index: int):
-        super().__init__(MediumLevelILOperation.MLIL_LOAD_GLOBAL)
+    def __init__(self, index: int, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LOAD_GLOBAL, **kwargs)
         self.index = index
 
     def __str__(self) -> str:
@@ -510,8 +510,8 @@ class MLILLoadGlobal(MediumLevelILExpr):
 class MLILStoreGlobal(MediumLevelILStatement):
     '''Store to global variable'''
 
-    def __init__(self, index: int, value: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_STORE_GLOBAL)
+    def __init__(self, index: int, value: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_STORE_GLOBAL, **kwargs)
         self.index = index
         self.value = value
 
@@ -524,8 +524,8 @@ class MLILStoreGlobal(MediumLevelILStatement):
 class MLILLoadReg(MediumLevelILExpr):
     '''Load register'''
 
-    def __init__(self, index: int):
-        super().__init__(MediumLevelILOperation.MLIL_LOAD_REG)
+    def __init__(self, index: int, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_LOAD_REG, **kwargs)
         self.index = index
 
     def __str__(self) -> str:
@@ -535,8 +535,8 @@ class MLILLoadReg(MediumLevelILExpr):
 class MLILStoreReg(MediumLevelILStatement):
     '''Store to register'''
 
-    def __init__(self, index: int, value: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_STORE_REG)
+    def __init__(self, index: int, value: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_STORE_REG, **kwargs)
         self.index = index
         self.value = value
 
@@ -549,8 +549,8 @@ class MLILStoreReg(MediumLevelILStatement):
 class MLILNop(MediumLevelILStatement):
     '''No operation'''
 
-    def __init__(self):
-        super().__init__(MediumLevelILOperation.MLIL_NOP)
+    def __init__(self, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_NOP, **kwargs)
 
     def __str__(self) -> str:
         return 'nop'
@@ -559,8 +559,8 @@ class MLILNop(MediumLevelILStatement):
 class MLILDebug(MediumLevelILStatement):
     '''Debug information'''
 
-    def __init__(self, debug_type: str, value: Any):
-        super().__init__(MediumLevelILOperation.MLIL_DEBUG)
+    def __init__(self, debug_type: str, value: Any, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_DEBUG, **kwargs)
         self.debug_type = debug_type
         self.value = value
 

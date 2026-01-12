@@ -52,12 +52,12 @@ class NNFPass(Pass):
     def _normalize_inst(self, inst: MediumLevelILInstruction) -> MediumLevelILInstruction:
         '''Apply NNF to an instruction'''
         if isinstance(inst, MLILSetVarSSA):
-            new_value = self._push_negation(inst.value, negated=False)
+            new_value = self._push_negation(inst.value, negated = False)
             if new_value is not inst.value:
                 return MLILSetVarSSA(inst.var, new_value)
 
         elif isinstance(inst, MLILIf):
-            new_cond = self._push_negation(inst.condition, negated=False)
+            new_cond = self._push_negation(inst.condition, negated = False)
             if new_cond is not inst.condition:
                 return MLILIf(new_cond, inst.true_target, inst.false_target)
 
@@ -102,7 +102,7 @@ class NNFPass(Pass):
             # TestZero(x) = (x == 0)
             # !TestZero(x) = (x != 0)
             if negated:
-                return MLILNe(expr.operand, MLILConst(0, is_hex=False))
+                return MLILNe(expr.operand, MLILConst(0, is_hex = False))
             return expr
 
         elif isinstance(expr, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):

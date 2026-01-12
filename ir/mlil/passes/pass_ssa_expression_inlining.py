@@ -253,39 +253,39 @@ class ExpressionInliningPass(Pass):
         if isinstance(inst, MLILSetVarSSA):
             new_value = self._inline_in_expr(inst.value, inlinable)
             if new_value is not inst.value:
-                return MLILSetVarSSA(inst.var, new_value)
+                return MLILSetVarSSA(inst.var, new_value, address = inst.address)
 
         elif isinstance(inst, MLILIf):
             new_condition = self._inline_in_expr(inst.condition, inlinable)
             if new_condition is not inst.condition:
-                return MLILIf(new_condition, inst.true_target, inst.false_target)
+                return MLILIf(new_condition, inst.true_target, inst.false_target, address = inst.address)
 
         elif isinstance(inst, MLILRet):
             if inst.value is not None:
                 new_value = self._inline_in_expr(inst.value, inlinable)
                 if new_value is not inst.value:
-                    return MLILRet(new_value)
+                    return MLILRet(new_value, address = inst.address)
 
         elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
             new_args = [self._inline_in_expr(arg, inlinable) for arg in inst.args]
             if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
                 if isinstance(inst, MLILCall):
-                    return MLILCall(inst.target, new_args)
+                    return MLILCall(inst.target, new_args, address = inst.address)
 
                 elif isinstance(inst, MLILSyscall):
-                    return MLILSyscall(inst.subsystem, inst.cmd, new_args)
+                    return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address)
 
                 elif isinstance(inst, MLILCallScript):
-                    return MLILCallScript(inst.module, inst.func, new_args)
+                    return MLILCallScript(inst.module, inst.func, new_args, address = inst.address)
 
         elif isinstance(inst, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._inline_in_expr(inst.value, inlinable)
             if new_value is not inst.value:
                 if isinstance(inst, MLILStoreGlobal):
-                    return MLILStoreGlobal(inst.index, new_value)
+                    return MLILStoreGlobal(inst.index, new_value, address = inst.address)
 
                 else:
-                    return MLILStoreReg(inst.index, new_value)
+                    return MLILStoreReg(inst.index, new_value, address = inst.address)
 
         return inst
 

@@ -25,7 +25,7 @@ class StorageKind(Enum):
     GLOBAL = auto()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen = True)
 class StorageKey:
     '''Key for cycle detection in substitute'''
     kind: StorageKind
@@ -35,13 +35,13 @@ class StorageKey:
 @dataclass
 class RegGlobalState:
     '''State for REG/GLOBAL value tracking'''
-    reg: Dict[int, Optional[MediumLevelILInstruction]] = field(default_factory=dict)
-    global_: Dict[int, Optional[MediumLevelILInstruction]] = field(default_factory=dict)
+    reg: Dict[int, Optional[MediumLevelILInstruction]] = field(default_factory = dict)
+    global_: Dict[int, Optional[MediumLevelILInstruction]] = field(default_factory = dict)
 
     def copy(self) -> 'RegGlobalState':
         return RegGlobalState(
-            reg=dict(self.reg),
-            global_=dict(self.global_)
+            reg = dict(self.reg),
+            global_ = dict(self.global_)
         )
 
 
@@ -469,13 +469,13 @@ class RegGlobalValuePropagator:
                       new_args: List[MediumLevelILInstruction]) -> MediumLevelILInstruction:
         '''Rebuild call instruction with new arguments'''
         if isinstance(inst, MLILCall):
-            return MLILCall(inst.target, new_args)
+            return MLILCall(inst.target, new_args, address = inst.address)
 
         elif isinstance(inst, MLILSyscall):
-            return MLILSyscall(inst.subsystem, inst.cmd, new_args)
+            return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address)
 
         elif isinstance(inst, MLILCallScript):
-            return MLILCallScript(inst.module, inst.func, new_args)
+            return MLILCallScript(inst.module, inst.func, new_args, address = inst.address)
 
         else:
             raise NotImplementedError(f'Unhandled call type: {type(inst).__name__}')

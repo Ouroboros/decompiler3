@@ -34,8 +34,8 @@ class SSAOptimizer:
             NNFPass(),
             CopyPropagationPass(),
             ExpressionInliningPass(),
-            SSADeadCodeEliminationPass(sccp_replaced_vars=sccp.replaced_vars),
-            DeadPhiSourceEliminationPass(sccp_replaced_vars=sccp.replaced_vars),
+            SSADeadCodeEliminationPass(sccp_replaced_vars = sccp.replaced_vars),
+            DeadPhiSourceEliminationPass(sccp_replaced_vars = sccp.replaced_vars),
         ]
 
         # Iterative optimization until fixpoint

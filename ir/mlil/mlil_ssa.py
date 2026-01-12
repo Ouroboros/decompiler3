@@ -39,8 +39,8 @@ class MLILVariableSSA:
 class MLILVarSSA(MediumLevelILExpr):
     '''Load SSA variable value'''
 
-    def __init__(self, var: MLILVariableSSA):
-        super().__init__(MediumLevelILOperation.MLIL_VAR_SSA)
+    def __init__(self, var: MLILVariableSSA, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_VAR_SSA, **kwargs)
         self.var = var
 
     def __str__(self) -> str:
@@ -50,8 +50,8 @@ class MLILVarSSA(MediumLevelILExpr):
 class MLILSetVarSSA(MediumLevelILStatement):
     '''Assign to SSA variable'''
 
-    def __init__(self, var: MLILVariableSSA, value: MediumLevelILInstruction):
-        super().__init__(MediumLevelILOperation.MLIL_SET_VAR_SSA)
+    def __init__(self, var: MLILVariableSSA, value: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_SET_VAR_SSA, **kwargs)
         self.var = var
         self.value = value
 
@@ -62,8 +62,8 @@ class MLILSetVarSSA(MediumLevelILStatement):
 class MLILPhi(MediumLevelILStatement):
     '''Phi node: merge values from predecessors'''
 
-    def __init__(self, dest: MLILVariableSSA, sources: List[Tuple[MLILVariableSSA, MediumLevelILBasicBlock]]):
-        super().__init__(MediumLevelILOperation.MLIL_PHI)
+    def __init__(self, dest: MLILVariableSSA, sources: List[Tuple[MLILVariableSSA, MediumLevelILBasicBlock]], **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_PHI, **kwargs)
         self.dest = dest
         self.sources = sources  # [(ssa_var, predecessor_block), ...]
 
@@ -387,7 +387,7 @@ class SSAConstructor:
             new_ver = self._new_version(inst.var)
             pushed.append(inst.var)
 
-            return MLILSetVarSSA(MLILVariableSSA(inst.var, new_ver), new_value)
+            return MLILSetVarSSA(MLILVariableSSA(inst.var, new_ver), new_value, address = inst.address)
 
         elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
             # Find variables passed via AddressOf (output parameters)
@@ -467,37 +467,37 @@ class SSAConstructor:
             new_cond = self._rename_expr(stmt.condition)
 
             if new_cond is not stmt.condition:
-                return MLILIf(new_cond, stmt.true_target, stmt.false_target)
+                return MLILIf(new_cond, stmt.true_target, stmt.false_target, address = stmt.address)
 
         elif isinstance(stmt, MLILRet):
             if stmt.value is not None:
                 new_value = self._rename_expr(stmt.value)
 
                 if new_value is not stmt.value:
-                    return MLILRet(new_value)
+                    return MLILRet(new_value, address = stmt.address)
 
         elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
             new_args = [self._rename_expr(arg) for arg in stmt.args]
 
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
-                    return MLILCall(stmt.target, new_args)
+                    return MLILCall(stmt.target, new_args, address = stmt.address)
 
                 elif isinstance(stmt, MLILSyscall):
-                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args)
+                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address)
 
                 elif isinstance(stmt, MLILCallScript):
-                    return MLILCallScript(stmt.module, stmt.func, new_args)
+                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._rename_expr(stmt.value)
 
             if new_value is not stmt.value:
                 if isinstance(stmt, MLILStoreGlobal):
-                    return MLILStoreGlobal(stmt.index, new_value)
+                    return MLILStoreGlobal(stmt.index, new_value, address = stmt.address)
 
                 else:
-                    return MLILStoreReg(stmt.index, new_value)
+                    return MLILStoreReg(stmt.index, new_value, address = stmt.address)
 
         return stmt
 
@@ -787,7 +787,7 @@ class SSADeconstructor:
                 continue
 
             # Sort by version for deterministic output (version 0 gets base name priority)
-            ssa_vars.sort(key=lambda v: v.version)
+            ssa_vars.sort(key = lambda v: v.version)
             base_var = ssa_vars[0].base_var
 
             # Find connected components of non-interfering variables
@@ -882,34 +882,34 @@ class SSADeconstructor:
         if isinstance(stmt, MLILIf):
             new_cond = self._apply_mapping_to_expr(stmt.condition)
             if new_cond is not stmt.condition:
-                return MLILIf(new_cond, stmt.true_target, stmt.false_target)
+                return MLILIf(new_cond, stmt.true_target, stmt.false_target, address = stmt.address)
 
         elif isinstance(stmt, MLILRet):
             if stmt.value:
                 new_value = self._apply_mapping_to_expr(stmt.value)
                 if new_value is not stmt.value:
-                    return MLILRet(new_value)
+                    return MLILRet(new_value, address = stmt.address)
 
         elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
             new_args = [self._apply_mapping_to_expr(arg) for arg in stmt.args]
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
-                    return MLILCall(stmt.target, new_args)
+                    return MLILCall(stmt.target, new_args, address = stmt.address)
 
                 elif isinstance(stmt, MLILSyscall):
-                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args)
+                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address)
 
                 elif isinstance(stmt, MLILCallScript):
-                    return MLILCallScript(stmt.module, stmt.func, new_args)
+                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._apply_mapping_to_expr(stmt.value)
             if new_value is not stmt.value:
                 if isinstance(stmt, MLILStoreGlobal):
-                    return MLILStoreGlobal(stmt.index, new_value)
+                    return MLILStoreGlobal(stmt.index, new_value, address = stmt.address)
 
                 else:
-                    return MLILStoreReg(stmt.index, new_value)
+                    return MLILStoreReg(stmt.index, new_value, address = stmt.address)
 
         return stmt
 
