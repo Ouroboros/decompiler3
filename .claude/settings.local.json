@@ -32,7 +32,9 @@
       "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
       "WebSearch",
       "Bash(mkdir:*)",
-      "Bash(openspec validate:*)"
+      "Bash(openspec validate:*)",
+      "Bash(openspec archive:*)",
+      "Bash(openspec list:*)"
     ],
     "deny": [],
     "ask": [

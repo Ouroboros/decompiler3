@@ -20,7 +20,7 @@ Goals:
 ### Code Style
 - Named constants instead of magic numbers: `offset // WORD_SIZE` not `offset // 4`
 - Imports at module top level (not inside functions)
-- Spaces around `=` in assignments
+- Spaces around `=` everywhere (assignments, default params, kwargs)
 - Blank lines between if/elif/else blocks
 - English-only comments (concise, no redundancy)
 - `@classmethod` instead of `@staticmethod`
