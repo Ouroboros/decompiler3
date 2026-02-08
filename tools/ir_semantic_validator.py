@@ -3801,8 +3801,11 @@ def format_sync_table(table: AddressTable, use_color: bool = True) -> str:
     lines.append(header)
     lines.append(separator)
 
-    # Table rows
+    # Table rows (skip eliminated entries)
     for mapping in table.sorted_by_offset():
+        if mapping.status == MappingStatus.ELIMINATED:
+            continue
+
         row = format_sync_row(mapping, addr_width, llil_width, mlil_width, hlil_width, use_color)
         lines.append(row)
 
@@ -3821,11 +3824,13 @@ def format_sync_table(table: AddressTable, use_color: bool = True) -> str:
         tr_pct = table.transformed_count / total * 100
         df_pct = table.different_count / total * 100
         el_pct = table.eliminated_count / total * 100
+        in_pct = table.inlined_count / total * 100
 
         lines.append(f"  = Equivalent:  {table.equivalent_count:3d} ({eq_pct:5.1f}%)")
         lines.append(f"  ~ Transformed: {table.transformed_count:3d} ({tr_pct:5.1f}%)")
         lines.append(f"  ! Different:   {table.different_count:3d} ({df_pct:5.1f}%)")
         lines.append(f"  o Eliminated:  {table.eliminated_count:3d} ({el_pct:5.1f}%)")
+        lines.append(f"  > Inlined:     {table.inlined_count:3d} ({in_pct:5.1f}%)")
 
     return "\n".join(lines)
 
@@ -3934,9 +3939,12 @@ def format_llil_mlil_sync_table(
     lines.append(header)
     lines.append(separator)
 
-    # Table rows (only LLIL-MLIL)
+    # Table rows (only LLIL-MLIL, skip eliminated)
     for mapping in table.sorted_by_offset():
         if not mapping.llil_text and not mapping.mlil_text:
+            continue
+
+        if mapping.status == MappingStatus.ELIMINATED:
             continue
 
         symbol, label = STATUS_SYMBOLS.get(mapping.status, ("?", "???"))
@@ -3987,7 +3995,7 @@ def format_llil_mlil_sync_table(
 
     # Legend and summary
     lines.append("")
-    lines.append("Legend: ==equivalent, ~=transformed, !=different, o=eliminated")
+    lines.append("Legend: ==equivalent, ~=transformed, !=different, o=eliminated, >=inlined")
     lines.append("")
 
     total = len([m for m in table.mappings if m.llil_text or m.mlil_text])
@@ -3995,11 +4003,15 @@ def format_llil_mlil_sync_table(
         eq_count = sum(1 for m in table.mappings if m.status == MappingStatus.EQUIVALENT and (m.llil_text or m.mlil_text))
         tr_count = sum(1 for m in table.mappings if m.status == MappingStatus.TRANSFORMED and (m.llil_text or m.mlil_text))
         df_count = sum(1 for m in table.mappings if m.status == MappingStatus.DIFFERENT and (m.llil_text or m.mlil_text))
+        el_count = sum(1 for m in table.mappings if m.status == MappingStatus.ELIMINATED and (m.llil_text or m.mlil_text))
+        in_count = sum(1 for m in table.mappings if m.status == MappingStatus.INLINED and (m.llil_text or m.mlil_text))
 
         lines.append(f"Summary: {total} SCP offsets mapped")
         lines.append(f"  = Equivalent:  {eq_count:3d} ({eq_count/total*100:5.1f}%)")
         lines.append(f"  ~ Transformed: {tr_count:3d} ({tr_count/total*100:5.1f}%)")
         lines.append(f"  ! Different:   {df_count:3d} ({df_count/total*100:5.1f}%)")
+        lines.append(f"  o Eliminated:  {el_count:3d} ({el_count/total*100:5.1f}%)")
+        lines.append(f"  > Inlined:     {in_count:3d} ({in_count/total*100:5.1f}%)")
 
     return "\n".join(lines)
 
@@ -4033,9 +4045,12 @@ def format_mlil_hlil_sync_table(
     lines.append(header)
     lines.append(separator)
 
-    # Table rows (only MLIL-HLIL)
+    # Table rows (only MLIL-HLIL, skip eliminated)
     for mapping in table.sorted_by_offset():
         if not mapping.mlil_text and not mapping.hlil_text:
+            continue
+
+        if mapping.status == MappingStatus.ELIMINATED:
             continue
 
         symbol, label = STATUS_SYMBOLS.get(mapping.status, ("?", "???"))
@@ -4082,11 +4097,15 @@ def format_mlil_hlil_sync_table(
         eq_count = sum(1 for m in table.mappings if m.status == MappingStatus.EQUIVALENT and (m.mlil_text or m.hlil_text))
         tr_count = sum(1 for m in table.mappings if m.status == MappingStatus.TRANSFORMED and (m.mlil_text or m.hlil_text))
         df_count = sum(1 for m in table.mappings if m.status == MappingStatus.DIFFERENT and (m.mlil_text or m.hlil_text))
+        el_count = sum(1 for m in table.mappings if m.status == MappingStatus.ELIMINATED and (m.mlil_text or m.hlil_text))
+        in_count = sum(1 for m in table.mappings if m.status == MappingStatus.INLINED and (m.mlil_text or m.hlil_text))
 
         lines.append(f"Summary: {total} SCP offsets mapped")
         lines.append(f"  = Equivalent:  {eq_count:3d} ({eq_count/total*100:5.1f}%)")
         lines.append(f"  ~ Transformed: {tr_count:3d} ({tr_count/total*100:5.1f}%)")
         lines.append(f"  ! Different:   {df_count:3d} ({df_count/total*100:5.1f}%)")
+        lines.append(f"  o Eliminated:  {el_count:3d} ({el_count/total*100:5.1f}%)")
+        lines.append(f"  > Inlined:     {in_count:3d} ({in_count/total*100:5.1f}%)")
 
     return "\n".join(lines)
 
