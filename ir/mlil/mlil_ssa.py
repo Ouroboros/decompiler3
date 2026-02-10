@@ -411,7 +411,7 @@ class SSAConstructor:
 
                 # Pseudo-definition: var#new = <undef> (call modified the variable)
                 new_ssa_var = MLILVariableSSA(var, new_ver)
-                pseudo_def = MLILSetVarSSA(new_ssa_var, MLILUndef())
+                pseudo_def = MLILSetVarSSA(new_ssa_var, MLILUndef(), address = inst.address)
                 result.append(pseudo_def)
 
             return result
@@ -845,7 +845,7 @@ class SSADeconstructor:
             if isinstance(inst.value, MLILUndef):
                 return None
 
-            return MLILSetVar(new_var, new_value)
+            return MLILSetVar(new_var, new_value, address = inst.address)
 
         elif isinstance(inst, MLILPhi):
             raise RuntimeError('Phi node not eliminated')
@@ -918,6 +918,13 @@ class SSADeconstructor:
         # Build set of parameter variables for quick lookup
         param_vars = set(self.function.parameters)
 
+        # Build SSA variable → defining instruction address map
+        def_addr = {}
+        for block in self.function.basic_blocks:
+            for inst in block.instructions:
+                if isinstance(inst, MLILSetVarSSA):
+                    def_addr[inst.var] = inst.address
+
         for block in self.function.basic_blocks:
             phi_nodes = [inst for inst in block.instructions if isinstance(inst, MLILPhi)]
 
@@ -941,7 +948,8 @@ class SSADeconstructor:
 
                     # Insert SSA copy: phi.dest = ssa_var
                     # This preserves SSA info for liveness analysis
-                    copy = MLILSetVarSSA(phi.dest, MLILVarSSA(ssa_var))
+                    copy = MLILSetVarSSA(phi.dest, MLILVarSSA(ssa_var),
+                                         address = def_addr.get(ssa_var, 0))
 
                     # Insert before terminal instruction
                     if pred_block.instructions and pred_block.has_terminal:

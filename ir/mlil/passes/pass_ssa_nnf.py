@@ -54,12 +54,12 @@ class NNFPass(Pass):
         if isinstance(inst, MLILSetVarSSA):
             new_value = self._push_negation(inst.value, negated = False)
             if new_value is not inst.value:
-                return MLILSetVarSSA(inst.var, new_value)
+                return MLILSetVarSSA(inst.var, new_value, address = inst.address)
 
         elif isinstance(inst, MLILIf):
             new_cond = self._push_negation(inst.condition, negated = False)
             if new_cond is not inst.condition:
-                return MLILIf(new_cond, inst.true_target, inst.false_target)
+                return MLILIf(new_cond, inst.true_target, inst.false_target, address = inst.address)
 
         return inst
 
