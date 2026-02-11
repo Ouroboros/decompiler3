@@ -638,6 +638,11 @@ class MediumLevelILFunction:
     def add_basic_block(self, block: MediumLevelILBasicBlock):
         self.basic_blocks.append(block)
 
+    def renumber_blocks(self):
+        '''Renumber basic blocks to match list positions after removal'''
+        for i, block in enumerate(self.basic_blocks):
+            block.index = i
+
     def create_block(self, start: int = 0, label: str = None) -> MediumLevelILBasicBlock:
         block = MediumLevelILBasicBlock(len(self.basic_blocks), start, label)
         self.add_basic_block(block)

@@ -234,8 +234,9 @@ class DominanceAnalysis:
 class SSAConstructor:
     '''Convert MLIL to SSA form (iterative algorithms)'''
 
-    def __init__(self, function: MediumLevelILFunction):
+    def __init__(self, function: MediumLevelILFunction, remove_unreachable: bool = False):
         self.function = function
+        self.remove_unreachable = remove_unreachable
         self.dom_analysis = DominanceAnalysis(function)
 
         # Variable tracking
@@ -248,9 +249,11 @@ class SSAConstructor:
         # Step 1: Dominance analysis
         self.dom_analysis.analyze()
 
-        # Remove unreachable blocks from function
-        reachable_set = set(self.dom_analysis.blocks)
-        self.function.basic_blocks = [b for b in self.function.basic_blocks if b in reachable_set]
+        # Optionally remove unreachable blocks
+        if self.remove_unreachable:
+            reachable_set = set(self.dom_analysis.blocks)
+            self.function.basic_blocks = [b for b in self.function.basic_blocks if b in reachable_set]
+            self.function.renumber_blocks()
 
         # Step 2: Collect variable definitions
         self._collect_defs()

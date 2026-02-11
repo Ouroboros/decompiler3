@@ -773,6 +773,8 @@ class MLILToHLILConverter:
         return hlil_type
 
     def _build_cfg(self):
+        num_blocks = len(self.mlil_func.basic_blocks)
+
         for i, block in enumerate(self.mlil_func.basic_blocks):
             successors = []
             if block.instructions:
@@ -780,6 +782,7 @@ class MLILToHLILConverter:
                 if isinstance(last_instr, MLILIf):
                     if last_instr.true_target is not None:
                         successors.append(last_instr.true_target.index)
+
                     if last_instr.false_target is not None:
                         successors.append(last_instr.false_target.index)
 
@@ -788,13 +791,12 @@ class MLILToHLILConverter:
                         successors.append(last_instr.target.index)
 
                 elif not isinstance(last_instr, MLILRet):
-                    if i + 1 < len(self.mlil_func.basic_blocks):
+                    if i + 1 < num_blocks:
                         successors.append(i + 1)
 
             self.block_successors[i] = successors
 
         # Initialize structural analyzer with the built CFG
-        num_blocks = len(self.mlil_func.basic_blocks)
         if num_blocks > 0:
             self.structural_analyzer = StructuralAnalyzer(num_blocks, self.block_successors)
 

@@ -124,8 +124,9 @@ class LatticeValue:
 class SCCP:
     '''Sparse Conditional Constant Propagation'''
 
-    def __init__(self, function: MediumLevelILFunction):
+    def __init__(self, function: MediumLevelILFunction, remove_unreachable: bool = False):
         self.function = function
+        self.remove_unreachable = remove_unreachable
 
         # Variables replaced with constants (for DCE to skip debug.string)
         self.replaced_vars: Set[MLILVariableSSA] = set()
@@ -498,13 +499,15 @@ class SCCP:
         '''Apply SCCP results: remove unreachable code, replace constants'''
         changed = False
 
-        # Remove unreachable blocks
-        reachable_blocks = [b for b in self.function.basic_blocks
-                           if self.block_reachable.get(b, False)]
+        # Optionally remove unreachable blocks
+        if self.remove_unreachable:
+            reachable_blocks = [b for b in self.function.basic_blocks
+                               if self.block_reachable.get(b, False)]
 
-        if len(reachable_blocks) < len(self.function.basic_blocks):
-            self.function.basic_blocks = reachable_blocks
-            changed = True
+            if len(reachable_blocks) < len(self.function.basic_blocks):
+                self.function.basic_blocks = reachable_blocks
+                self.function.renumber_blocks()
+                changed = True
 
         # Replace constant variables
         for block in self.function.basic_blocks:
