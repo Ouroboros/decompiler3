@@ -1335,6 +1335,7 @@ def _get_unary_op_kind(op: Optional[UnaryOp]) -> OperationKind:
 class CFGNode:
     """Basic block node in CFG"""
     id: int
+    address: int = 0
     operations: List[SemanticOperation] = field(default_factory=list)
     successors: List[int] = field(default_factory=list)
     predecessors: List[int] = field(default_factory=list)
@@ -1389,10 +1390,13 @@ def build_cfg_from_llil(llil_func: LowLevelILFunction) -> CFG:
                 LowLevelILOperation.LLIL_SP_ADD,
             ):
                 continue
-            ops.append(normalize_llil_operation(instr))
+            sem_op = normalize_llil_operation(instr)
+            if sem_op.kind != OperationKind.NOP:
+                ops.append(sem_op)
 
         node = CFGNode(
             id=i,
+            address=bb.start,
             operations=ops,
             is_entry=(i == 0),
         )
@@ -1427,10 +1431,13 @@ def build_cfg_from_mlil(mlil_func: MediumLevelILFunction) -> CFG:
     for i, bb in enumerate(mlil_func.basic_blocks):
         ops = []
         for instr in bb.instructions:
-            ops.append(normalize_mlil_operation(instr))
+            sem_op = normalize_mlil_operation(instr)
+            if sem_op.kind != OperationKind.NOP:
+                ops.append(sem_op)
 
         node = CFGNode(
             id=i,
+            address=bb.start,
             operations=ops,
             is_entry=(i == 0),
         )
@@ -1490,13 +1497,13 @@ def build_cfg_from_hlil(hlil_func: HighLevelILFunction) -> CFG:
                 if stmt.operation == HLILOperation.HLIL_IF:
                     # Save current block
                     if current_ops:
-                        node = CFGNode(id=current_id, operations=current_ops)
+                        node = CFGNode(id=current_id, address=current_ops[0].source_location.scp_offset if current_ops else 0, operations=current_ops)
                         cfg.add_node(node)
                         current_id += 1
                         current_ops = []
 
                     # Create condition block
-                    cond_node = CFGNode(id=current_id, operations=[op])
+                    cond_node = CFGNode(id=current_id, address=op.source_location.scp_offset, operations=[op])
                     cfg.add_node(cond_node)
                     cond_id = current_id
                     current_id += 1
@@ -1529,7 +1536,7 @@ def build_cfg_from_hlil(hlil_func: HighLevelILFunction) -> CFG:
                 elif stmt.operation in (HLILOperation.HLIL_WHILE, HLILOperation.HLIL_FOR):
                     # Save current block
                     if current_ops:
-                        node = CFGNode(id=current_id, operations=current_ops)
+                        node = CFGNode(id=current_id, address=current_ops[0].source_location.scp_offset if current_ops else 0, operations=current_ops)
                         cfg.add_node(node)
                         prev_id = current_id
                         current_id += 1
@@ -1537,7 +1544,7 @@ def build_cfg_from_hlil(hlil_func: HighLevelILFunction) -> CFG:
                         cfg.add_edge(prev_id, current_id)
 
                     # Create loop header
-                    header_node = CFGNode(id=current_id, operations=[op], is_loop_header=True)
+                    header_node = CFGNode(id=current_id, address=op.source_location.scp_offset, operations=[op], is_loop_header=True)
                     cfg.add_node(header_node)
                     header_id = current_id
                     current_id += 1
@@ -1557,11 +1564,12 @@ def build_cfg_from_hlil(hlil_func: HighLevelILFunction) -> CFG:
                     exits.append(header_id)  # Loop exit
                     continue
 
-            current_ops.append(op)
+            if op.kind != OperationKind.NOP:
+                current_ops.append(op)
 
         # Save remaining ops
         if current_ops:
-            node = CFGNode(id=current_id, operations=current_ops)
+            node = CFGNode(id=current_id, address=current_ops[0].source_location.scp_offset if current_ops else 0, operations=current_ops)
             cfg.add_node(node)
             exits.append(current_id)
             current_id += 1
@@ -2017,27 +2025,65 @@ class CFGMatcher:
         self.similarity_details: Dict[Tuple[int, int], BlockSimilarity] = {}
 
     def match(self) -> List[Tuple[int, int]]:
-        """Find optimal block matching between CFGs"""
+        """Find optimal block matching between CFGs.
+
+        Pass 1: match blocks by SCP address (exact, O(N)).
+        Pass 2: remaining unmatched blocks use similarity fallback.
+        """
         if not self.source_cfg.nodes or not self.target_cfg.nodes:
             return []
 
-        matrix, self.similarity_details = build_initial_similarity_matrix(
-            self.source_cfg, self.target_cfg
-        )
-
-        matrix = propagate_similarity(
-            matrix, self.source_cfg, self.target_cfg
-        )
-
-        idx_matches = hungarian_matching(matrix)
-
-        source_nodes = list(self.source_cfg.nodes.keys())
-        target_nodes = list(self.target_cfg.nodes.keys())
-
         self.matches = []
-        for i, j in idx_matches:
-            if i < len(source_nodes) and j < len(target_nodes):
-                self.matches.append((source_nodes[i], target_nodes[j]))
+        matched_src: set = set()
+        matched_tgt: set = set()
+
+        # Pass 1: address-based matching
+        src_by_addr: Dict[int, int] = {}
+        for nid, node in self.source_cfg.nodes.items():
+            if node.address != 0:
+                src_by_addr[node.address] = nid
+
+        for tgt_id, tgt_node in self.target_cfg.nodes.items():
+            if tgt_node.address != 0 and tgt_node.address in src_by_addr:
+                src_id = src_by_addr[tgt_node.address]
+                if src_id not in matched_src:
+                    self.matches.append((src_id, tgt_id))
+                    matched_src.add(src_id)
+                    matched_tgt.add(tgt_id)
+
+        # Pass 2: similarity fallback for unmatched blocks
+        remaining_src = [n for n in self.source_cfg.nodes if n not in matched_src]
+        remaining_tgt = [n for n in self.target_cfg.nodes if n not in matched_tgt]
+
+        if remaining_src and remaining_tgt:
+            sub_src_cfg = CFG()
+            for nid in remaining_src:
+                sub_src_cfg.add_node(self.source_cfg.nodes[nid])
+
+            sub_tgt_cfg = CFG()
+            for nid in remaining_tgt:
+                sub_tgt_cfg.add_node(self.target_cfg.nodes[nid])
+
+            matrix, sub_details = build_initial_similarity_matrix(sub_src_cfg, sub_tgt_cfg)
+            self.similarity_details.update(sub_details)
+            matrix = propagate_similarity(matrix, sub_src_cfg, sub_tgt_cfg)
+            idx_matches = hungarian_matching(matrix)
+
+            sub_src_nodes = list(sub_src_cfg.nodes.keys())
+            sub_tgt_nodes = list(sub_tgt_cfg.nodes.keys())
+
+            for i, j in idx_matches:
+                if i < len(sub_src_nodes) and j < len(sub_tgt_nodes):
+                    self.matches.append((sub_src_nodes[i], sub_tgt_nodes[j]))
+
+        # Compute similarity details for address-matched blocks
+        for src_id, tgt_id in self.matches:
+            if (src_id, tgt_id) not in self.similarity_details:
+                src_node = self.source_cfg.nodes[src_id]
+                tgt_node = self.target_cfg.nodes[tgt_id]
+                self.similarity_details[(src_id, tgt_id)] = compute_combined_block_similarity(
+                    src_node, tgt_node
+                )
 
         return self.matches
 
@@ -2544,8 +2590,8 @@ class IRLayerComparator:
             similarity = matcher.get_similarity(src_id, tgt_id)
             sim_score = similarity.score if similarity else 0.0
 
-            src_offset = src_node.operations[0].source_location.scp_offset if src_node.operations else 0
-            tgt_offset = tgt_node.operations[0].source_location.scp_offset if tgt_node.operations else 0
+            src_offset = src_node.address
+            tgt_offset = tgt_node.address
 
             block_result = BlockComparisonResult(
                 source_block_id=src_id,
@@ -2627,13 +2673,49 @@ class IRLayerComparator:
         for node_id, node in self.source_cfg.nodes.items():
             if node_id not in matched_source and node.operations:
                 report.unmatched_source_blocks.append(node_id)
+                block_result = BlockComparisonResult(
+                    source_block_id=node_id,
+                    target_block_id=-1,
+                    similarity=0.0,
+                    source_offset=node.address,
+                    target_offset=0,
+                )
                 for op in node.operations:
                     stats.eliminated += 1
+                    block_result.results.append(ComparisonResult(
+                        status=ComparisonStatus.ELIMINATED,
+                        source_layer=self.source_layer,
+                        target_layer=self.target_layer,
+                        source_op=op,
+                        target_op=None,
+                        explanation=f"Eliminated: {op.operator}",
+                        source_location=op.source_location,
+                    ))
+                report.block_results.append(block_result)
 
         # Handle unmatched target blocks
         for node_id, node in self.target_cfg.nodes.items():
             if node_id not in matched_target and node.operations:
                 report.unmatched_target_blocks.append(node_id)
+                block_result = BlockComparisonResult(
+                    source_block_id=-1,
+                    target_block_id=node_id,
+                    similarity=0.0,
+                    source_offset=0,
+                    target_offset=node.address,
+                )
+                for op in node.operations:
+                    block_result.results.append(ComparisonResult(
+                        status=ComparisonStatus.INLINED,
+                        source_layer=self.source_layer,
+                        target_layer=self.target_layer,
+                        source_op=None,
+                        target_op=op,
+                        explanation=f"Added: {op.operator}",
+                        source_location=op.source_location,
+                    ))
+                    stats.inlined += 1
+                report.block_results.append(block_result)
 
         # Side-effect validation
         all_source_ops: List[SemanticOperation] = []
@@ -2777,18 +2859,31 @@ class Formatter:
         else:
             lines.append(f"{self.cyan}=== {src_name} -> {tgt_name} ==={self.reset}")
 
+        lines.append(self.match_statistics(report.statistics))
         lines.append("")
 
         for block in report.block_results:
-            lines.append(
-                f"Block {block.source_block_id} [0x{block.source_offset:X}] <-> "
-                f"Block {block.target_block_id} [0x{block.target_offset:X}] "
-                f"(similarity: {block.similarity:.2f})"
-            )
+            if block.target_block_id == -1:
+                lines.append(
+                    f"{src_name} Block {block.source_block_id} [0x{block.source_offset:X}] -> (eliminated)"
+                )
+
+            elif block.source_block_id == -1:
+                lines.append(
+                    f"{tgt_name} Block {block.target_block_id} [0x{block.target_offset:X}] (added)"
+                )
+
+            else:
+                lines.append(
+                    f"Block {block.source_block_id} [0x{block.source_offset:X}] <-> "
+                    f"Block {block.target_block_id} [0x{block.target_offset:X}] "
+                    f"(similarity: {block.similarity:.2f})"
+                )
 
             for result in block.results:
                 symbol, label = STATUS_SYMBOLS.get(result.status, ("?", "???"))
-                scp_offset = f"[0x{result.source_location.scp_offset:03X}]"
+                addr = result.source_location.scp_offset
+                scp_offset = f"[0x{addr:X}]"
                 color = self._status_color(result.status)
 
                 src_text = str(result.source_op) if result.source_op else "(none)"
@@ -2802,23 +2897,12 @@ class Formatter:
 
             lines.append("")
 
-        if report.unmatched_source_blocks:
-            for block_id in report.unmatched_source_blocks:
-                lines.append(f"{self.dim}Unmatched: {src_name} Block {block_id} -> (eliminated){self.reset}")
-            lines.append("")
-
-        if report.unmatched_target_blocks:
-            for block_id in report.unmatched_target_blocks:
-                lines.append(f"{self.yellow}Unmatched: {tgt_name} Block {block_id} (added){self.reset}")
-            lines.append("")
 
         if report.side_effect_violations:
             lines.append(f"{self.red}Side-Effect Violations:{self.reset}")
             for v in report.side_effect_violations:
                 lines.append(f"  {self.red}! {v.explanation}{self.reset}")
             lines.append("")
-
-        lines.append(self.match_statistics(report.statistics))
 
         return "\n".join(lines)
 
