@@ -674,6 +674,14 @@ class ControlFlowOptimizationPass(Pass):
         if len(cases) < MIN_CASES or scrutinee is None:
             return None
 
+        # A bare loop break inside a case would become a switch break after conversion
+        for _, case_body in cases:
+            if self._contains_bare_break(case_body):
+                return None
+
+        if default_body and self._contains_bare_break(default_body):
+            return None
+
         switch_cases = []
         for case_value, case_body in reversed(cases):
             switch_cases.append(HLILSwitchCase(HLILConst(case_value), case_body))
@@ -682,6 +690,23 @@ class ControlFlowOptimizationPass(Pass):
             switch_cases.append(HLILSwitchCase(None, default_body))
 
         return HLILSwitch(scrutinee, switch_cases)
+
+    def _contains_bare_break(self, block: Optional[HLILBlock]) -> bool:
+        '''Check for an unlabeled break not owned by a nested loop or switch'''
+        if not block or not block.statements:
+            return False
+
+        for stmt in block.statements:
+            if isinstance(stmt, HLILBreak) and stmt.label is None:
+                return True
+
+            if isinstance(stmt, HLILIf):
+                if self._contains_bare_break(stmt.true_block) or self._contains_bare_break(stmt.false_block):
+                    return True
+
+            # Breaks inside nested While/DoWhile/Switch belong to those constructs
+
+        return False
 
     def _merge_nested_switches(self, block: HLILBlock):
         if not block or not block.statements:

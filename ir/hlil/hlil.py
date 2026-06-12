@@ -359,15 +359,17 @@ class HLILIf(HLILStatement):
 
 
 class HLILWhile(HLILStatement):
-    '''While loop: while (cond) { ... }'''
+    '''While loop: while (cond) { ... }, optionally labeled for cross-level break/continue'''
 
-    def __init__(self, condition: HLILExpression, body: 'HLILBlock'):
+    def __init__(self, condition: HLILExpression, body: 'HLILBlock', label: Optional[str] = None):
         super().__init__(HLILOperation.HLIL_WHILE)
         self.condition = condition
         self.body = body
+        self.label = label
 
     def __str__(self) -> str:
-        return f'while ({self.condition}) {{ ... }}'
+        prefix = f'{self.label}: ' if self.label else ''
+        return f'{prefix}while ({self.condition}) {{ ... }}'
 
     def __repr__(self) -> str:
         return f'HLILWhile(cond={self.condition})'
@@ -444,29 +446,31 @@ class HLILSwitch(HLILStatement):
 
 
 class HLILBreak(HLILStatement):
-    '''Break statement'''
+    '''Break statement, optionally labeled for breaking an outer loop'''
 
-    def __init__(self):
+    def __init__(self, label: Optional[str] = None):
         super().__init__(HLILOperation.HLIL_BREAK)
+        self.label = label
 
     def __str__(self) -> str:
-        return 'break'
+        return f'break {self.label}' if self.label else 'break'
 
     def __repr__(self) -> str:
-        return 'HLILBreak()'
+        return f'HLILBreak({self.label})' if self.label else 'HLILBreak()'
 
 
 class HLILContinue(HLILStatement):
-    '''Continue statement'''
+    '''Continue statement, optionally labeled for continuing an outer loop'''
 
-    def __init__(self):
+    def __init__(self, label: Optional[str] = None):
         super().__init__(HLILOperation.HLIL_CONTINUE)
+        self.label = label
 
     def __str__(self) -> str:
-        return 'continue'
+        return f'continue {self.label}' if self.label else 'continue'
 
     def __repr__(self) -> str:
-        return 'HLILContinue()'
+        return f'HLILContinue({self.label})' if self.label else 'HLILContinue()'
 
 
 class HLILReturn(HLILStatement):

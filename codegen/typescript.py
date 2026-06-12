@@ -510,9 +510,10 @@ class TypeScriptGenerator:
             lines.append(f'{indent_str}}}')
 
         elif isinstance(stmt, HLILWhile):
-            # while (condition) { ... }
+            # while (condition) { ... }, optionally labeled
             cond_str = cls._format_expr(stmt.condition)
-            lines.append(f'{indent_str}while ({cond_str}) {{')
+            label_prefix = f'{stmt.label}: ' if stmt.label else ''
+            lines.append(f'{indent_str}{label_prefix}while ({cond_str}) {{')
             lines.extend(cls._generate_block(stmt.body, indent + 1))
             lines.append(f'{indent_str}}}')
 
@@ -557,10 +558,16 @@ class TypeScriptGenerator:
             lines.append(f'{indent_str}}}')
 
         elif isinstance(stmt, HLILBreak):
-            lines.append(f'{indent_str}break;')
+            if stmt.label:
+                lines.append(f'{indent_str}break {stmt.label};')
+            else:
+                lines.append(f'{indent_str}break;')
 
         elif isinstance(stmt, HLILContinue):
-            lines.append(f'{indent_str}continue;')
+            if stmt.label:
+                lines.append(f'{indent_str}continue {stmt.label};')
+            else:
+                lines.append(f'{indent_str}continue;')
 
         elif isinstance(stmt, HLILReturn):
             if stmt.value is not None:

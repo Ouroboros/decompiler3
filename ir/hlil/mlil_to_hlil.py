@@ -1,5 +1,6 @@
 '''MLIL to HLIL Converter - SSA-based Graph Rewriting'''
 
+import sys
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Optional, Tuple, Union
@@ -109,6 +110,14 @@ class SSAUse:
     block_idx: int
     instr_idx: int
     def_ref: SSADef  # Points to the definition
+
+
+@dataclass
+class LoopStackEntry:
+    '''Active loop context for break/continue generation'''
+    header: int
+    exit: Optional[int]
+    label: Optional[str] = None
 
 
 class RegisterResolver:
@@ -651,6 +660,9 @@ class MLILToHLILConverter:
         self.loop_headers: Set[int] = set()  # Blocks that are loop headers
         self.loop_ends: Dict[int, int] = {}  # back_edge_source -> loop_header
 
+        # Active loops, innermost last (for break/continue generation)
+        self.loop_stack: List[LoopStackEntry] = []
+
         # Structural analyzer for accurate merge point detection
         self.structural_analyzer: Optional[StructuralAnalyzer] = None
 
@@ -898,94 +910,106 @@ class MLILToHLILConverter:
     def _process_loop(self, header_idx: int, target_block: HLILBlock,
                       stop_at: Optional[int]) -> Optional[int]:
         '''Process a loop starting at header_idx'''
-        self.visited_blocks.add(header_idx)
-        self.globally_processed.add(header_idx)
-
         mlil_block = self.mlil_func.basic_blocks[header_idx]
+        header_label = mlil_block.label
+
+        loop_info = self.structural_analyzer.get_loop_info(header_idx) if self.structural_analyzer else None
+
+        if loop_info is None:
+            print(f'[loop] no LoopInfo for header {header_label} in {self.mlil_func.name}', file = sys.stderr)
+            return self._reconstruct_control_flow(header_idx, target_block, stop_at, force_plain = True)
+
         last_instr = mlil_block.instructions[-1] if mlil_block.instructions else None
 
-        # Find the exit block (where loop exits to)
-        exit_block_idx = None
         loop_body_start = None
+        exit_block_idx = None
+        condition = None
+        header_if_into_body = False
 
         if isinstance(last_instr, MLILIf):
-            # while (cond) pattern: if (cond) goto exit else body
-            # or: if (!cond) goto body else exit
             true_target = last_instr.true_target.index if last_instr.true_target else None
             false_target = last_instr.false_target.index if last_instr.false_target else None
+            true_in_body = true_target in loop_info.body
+            false_in_body = false_target in loop_info.body
 
-            # Determine which branch is the loop body and which is exit
-            # The exit branch leads outside the loop (not back to header)
-            true_reaches_header = self._can_reach(true_target, header_idx, set())
-            false_reaches_header = self._can_reach(false_target, header_idx, set())
-
-            if true_reaches_header and not false_reaches_header:
-                # true branch is loop body, false is exit
+            if true_in_body and not false_in_body:
                 loop_body_start = true_target
                 exit_block_idx = false_target
                 condition = self._convert_expr(last_instr.condition)
 
-            elif false_reaches_header and not true_reaches_header:
-                # false branch is loop body, true is exit
+            elif false_in_body and not true_in_body:
                 loop_body_start = false_target
                 exit_block_idx = true_target
                 condition = _negate_condition(self._convert_expr(last_instr.condition))
 
-            else:
-                # Both or neither reach header - complex loop, use while(true)
+            elif true_in_body and false_in_body:
+                # Loop condition is not at the header: while(1) with the if inside the body
                 condition = HLILConst(1)
-                loop_body_start = true_target
-                exit_block_idx = None
+                header_if_into_body = True
+
+            else:
+                print(f'[loop] cannot decide loop body at header {header_label} in {self.mlil_func.name} (treated as non-loop)', file = sys.stderr)
+                return self._reconstruct_control_flow(header_idx, target_block, stop_at, force_plain = True)
+
+        elif isinstance(last_instr, MLILGoto) and last_instr.target is not None and last_instr.target.index in loop_info.body:
+            loop_body_start = last_instr.target.index
+            condition = HLILConst(1)
 
         else:
-            # Infinite loop: while (true)
-            condition = HLILConst(1)
-            if isinstance(last_instr, MLILGoto) and last_instr.target:
-                loop_body_start = last_instr.target.index
+            print(f'[loop] cannot decide loop body at header {header_label} in {self.mlil_func.name} (treated as non-loop)', file = sys.stderr)
+            return self._reconstruct_control_flow(header_idx, target_block, stop_at, force_plain = True)
 
-        # Process instructions before the terminator in header block
+        self.visited_blocks.add(header_idx)
+        self.globally_processed.add(header_idx)
+
+        stack_entry = LoopStackEntry(header = header_idx, exit = exit_block_idx)
+        self.loop_stack.append(stack_entry)
+
+        loop_body = HLILBlock()
+
+        # Header instructions before the terminator: outside the loop normally,
+        # inside the body when the header condition itself moves into the body
         self.current_block_idx = header_idx
+        header_stmt_target = loop_body if header_if_into_body else target_block
+        has_real_header_instr = False
+
         for instr_idx, instr in enumerate(mlil_block.instructions[:-1]):
             self.current_instr_idx = instr_idx
+
+            if not is_nop_instr(instr):
+                has_real_header_instr = True
+
             stmts = self._convert_instruction(instr, header_idx, instr_idx)
             for stmt in stmts:
-                target_block.add_statement(stmt)
+                header_stmt_target.add_statement(stmt)
 
-        # Create loop body
-        loop_body = HLILBlock()
-        if loop_body_start is not None:
-            self._reconstruct_control_flow(loop_body_start, loop_body, stop_at=header_idx)
+        if has_real_header_instr and not header_if_into_body:
+            print(f'[loop] header {header_label} in {self.mlil_func.name} has non-comment instructions (emitted outside the loop)', file = sys.stderr)
 
-        # Create while statement
-        while_stmt = HLILWhile(condition, loop_body)
+        if header_if_into_body:
+            self._process_if_statement(last_instr, header_idx, loop_body, stop_at = header_idx)
+
+        elif loop_body_start is not None:
+            self._reconstruct_control_flow(loop_body_start, loop_body, stop_at = header_idx, jump_source = last_instr)
+
+        # Drop the redundant trailing continue of this loop's own body
+        if loop_body.statements:
+            tail = loop_body.statements[-1]
+
+            if isinstance(tail, HLILContinue) and tail.label is None:
+                loop_body.statements.pop()
+
+        self.loop_stack.pop()
+
+        while_stmt = HLILWhile(condition, loop_body, label = stack_entry.label)
         target_block.add_statement(while_stmt)
 
-        # Process code after loop (exit block)
+        # Process code after the loop (outside the popped loop context)
         if exit_block_idx is not None:
             self.visited_blocks.discard(exit_block_idx)
-            return self._reconstruct_control_flow(exit_block_idx, target_block, stop_at=stop_at)
+            return self._reconstruct_control_flow(exit_block_idx, target_block, stop_at = stop_at, jump_source = last_instr)
 
         return None
-
-    def _can_reach(self, from_idx: Optional[int], to_idx: int, visited: Set[int]) -> bool:
-        '''Check if from_idx can reach to_idx through CFG without crossing other loop headers'''
-        if from_idx is None:
-            return False
-
-        stack = [from_idx]
-        while stack:
-            idx = stack.pop()
-            if idx == to_idx:
-                return True
-            if idx in visited:
-                continue
-            # Don't cross other loop headers (except the target)
-            if idx in self.loop_headers and idx != to_idx:
-                continue
-            visited.add(idx)
-            stack.extend(self.block_successors.get(idx, []))
-
-        return False
 
     def _process_if_statement(self, if_instr: MLILIf, block_idx: int,
                                target_block: HLILBlock, stop_at: Optional[int]) -> Optional[int]:
@@ -1000,7 +1024,7 @@ class MLILToHLILConverter:
         if true_target_idx == false_target_idx and true_target_idx is not None:
             always_true = HLILBinaryOp(BinaryOp.OR, condition, HLILConst(1))
             body = HLILBlock()
-            self._reconstruct_control_flow(true_target_idx, body, stop_at=stop_at)
+            self._reconstruct_control_flow(true_target_idx, body, stop_at=stop_at, jump_source = if_instr)
             if_stmt = HLILIf(always_true, body, None)
             target_block.add_statement(HLILComment(f'if (C || true) {{ A }}'))
             target_block.add_statement(if_stmt)
@@ -1049,7 +1073,7 @@ class MLILToHLILConverter:
             # Add outer stop_at to visited, but not if it's our true_target
             if stop_at is not None and stop_at != merge_block_idx and stop_at != true_target_idx:
                 self.visited_blocks.add(stop_at)
-            self._reconstruct_control_flow(true_target_idx, true_block, stop_at=branch_stop)
+            self._reconstruct_control_flow(true_target_idx, true_block, stop_at=branch_stop, jump_source = if_instr)
 
         all_visited = self.visited_blocks.copy()
 
@@ -1067,7 +1091,7 @@ class MLILToHLILConverter:
             self.visited_blocks = saved_visited.copy()
             if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
                 self.visited_blocks.add(stop_at)
-            self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
+            self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop, jump_source = if_instr)
             all_visited |= self.visited_blocks
 
         elif false_target_idx is not None and not false_is_empty:
@@ -1075,7 +1099,7 @@ class MLILToHLILConverter:
             self.visited_blocks = saved_visited.copy()
             if stop_at is not None and stop_at != merge_block_idx and stop_at != false_target_idx:
                 self.visited_blocks.add(stop_at)
-            self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop)
+            self._reconstruct_control_flow(false_target_idx, false_block, stop_at=branch_stop, jump_source = if_instr)
             all_visited |= self.visited_blocks
 
         self.visited_blocks = all_visited
@@ -1139,50 +1163,92 @@ class MLILToHLILConverter:
             if stop_at is not None and merge_block_idx == stop_at:
                 return merge_block_idx
             self.visited_blocks.discard(merge_block_idx)
-            return self._reconstruct_control_flow(merge_block_idx, target_block, stop_at=stop_at)
+            return self._reconstruct_control_flow(merge_block_idx, target_block, stop_at=stop_at, jump_source = if_instr)
 
         return None
 
     def _reconstruct_control_flow(self, block_idx: int, target_block: HLILBlock,
-                                   stop_at: Optional[int] = None) -> Optional[int]:
-        seen_passthrough = set()
-        while self._is_passthrough_block(block_idx) and block_idx not in seen_passthrough and block_idx != stop_at:
-            seen_passthrough.add(block_idx)
-            mlil_block = self.mlil_func.basic_blocks[block_idx]
-            last_instr = mlil_block.instructions[-1]
-            if isinstance(last_instr, MLILGoto) and last_instr.target:
-                block_idx = last_instr.target.index
-            else:
-                break
+                                   stop_at: Optional[int] = None,
+                                   jump_source: Optional[MediumLevelILInstruction] = None,
+                                   force_plain: bool = False) -> Optional[int]:
+        '''Reconstruct structured statements starting at block_idx.
 
-        if block_idx >= len(self.mlil_func.basic_blocks):
-            return None
+        Sequential block chains are followed iteratively to keep recursion
+        depth bounded by control structure nesting, not chain length.
+        force_plain skips the loop-header dispatch for the first block only
+        (used by _process_loop fallbacks to avoid bouncing back).
+        '''
+        while True:
+            seen_passthrough = set()
+            while self._is_passthrough_block(block_idx) and block_idx not in seen_passthrough and block_idx != stop_at:
+                seen_passthrough.add(block_idx)
+                mlil_block = self.mlil_func.basic_blocks[block_idx]
+                last_instr = mlil_block.instructions[-1]
+                if isinstance(last_instr, MLILGoto) and last_instr.target:
+                    block_idx = last_instr.target.index
+                else:
+                    break
 
-        # Skip already processed blocks
-        if block_idx in self.visited_blocks or block_idx in self.globally_processed:
-            return None
-        if stop_at is not None and block_idx == stop_at:
-            # Reached the merge point - stop here, don't process this block
-            # The merge block will be processed after the if-else by the outer scope
+            if block_idx >= len(self.mlil_func.basic_blocks):
+                return None
+
+            # Jump to an active loop's exit becomes break, to its header becomes continue
+            for depth, entry in enumerate(reversed(self.loop_stack)):
+                if entry.exit == block_idx or entry.header == block_idx:
+                    if depth > 0 and entry.label is None:
+                        entry.label = f'loop_{entry.header}'
+
+                    label = entry.label if depth > 0 else None
+
+                    if entry.exit == block_idx:
+                        stmt = HLILBreak(label = label)
+
+                    else:
+                        stmt = HLILContinue(label = label)
+
+                    if jump_source is not None:
+                        self._set_hlil_source_info(stmt, jump_source, jump_source.inst_index)
+
+                    else:
+                        first_instrs = self.mlil_func.basic_blocks[block_idx].instructions
+                        stmt.address = first_instrs[0].address if first_instrs else 0
+
+                    target_block.add_statement(stmt)
+                    return None
+
+            # Skip already processed blocks
+            if block_idx in self.visited_blocks or block_idx in self.globally_processed:
+                if block_idx in self.loop_headers and block_idx in self.globally_processed:
+                    block_label = self.mlil_func.basic_blocks[block_idx].label
+                    print(f'[loop] jump into inactive loop header {block_label} in {self.mlil_func.name} (possible lost path)', file = sys.stderr)
+                return None
+
+            if stop_at is not None and block_idx == stop_at:
+                # Reached the merge point - stop here, don't process this block
+                # The merge block will be processed after the if-else by the outer scope
+                self.visited_blocks.add(block_idx)
+                return block_idx
+
+            # Check if this is a loop header
+            if not force_plain and block_idx in self.loop_headers:
+                return self._process_loop(block_idx, target_block, stop_at)
+
+            force_plain = False
             self.visited_blocks.add(block_idx)
-            return block_idx
+            self.globally_processed.add(block_idx)
 
-        # Check if this is a loop header
-        if block_idx in self.loop_headers:
-            return self._process_loop(block_idx, target_block, stop_at)
+            self.current_block_idx = block_idx
+            mlil_block = self.mlil_func.basic_blocks[block_idx]
 
-        self.visited_blocks.add(block_idx)
-        self.globally_processed.add(block_idx)
-        self.current_block_idx = block_idx
-        mlil_block = self.mlil_func.basic_blocks[block_idx]
+            for instr_idx, instr in enumerate(mlil_block.instructions[:-1]):
+                self.current_instr_idx = instr_idx
+                stmts = self._convert_instruction(instr, block_idx, instr_idx)
+                for stmt in stmts:
+                    target_block.add_statement(stmt)
 
-        for instr_idx, instr in enumerate(mlil_block.instructions[:-1]):
-            self.current_instr_idx = instr_idx
-            stmts = self._convert_instruction(instr, block_idx, instr_idx)
-            for stmt in stmts:
-                target_block.add_statement(stmt)
+            if not mlil_block.instructions:
+                return None
 
-        if mlil_block.instructions:
             last_instr = mlil_block.instructions[-1]
             last_instr_idx = len(mlil_block.instructions) - 1
             self.current_instr_idx = last_instr_idx
@@ -1193,14 +1259,12 @@ class MLILToHLILConverter:
                 )
 
             elif isinstance(last_instr, MLILGoto):
-                if last_instr.target is not None:
-                    target_idx = last_instr.target.index
-                    # Check if this is a back edge (loop continue)
-                    if target_idx in self.loop_headers and target_idx in self.globally_processed:
-                        # Back edge - loop continues naturally
-                        return None
-                    return self._reconstruct_control_flow(target_idx, target_block, stop_at=stop_at)
-                return None
+                if last_instr.target is None:
+                    return None
+
+                block_idx = last_instr.target.index
+                jump_source = last_instr
+                continue
 
             elif isinstance(last_instr, MLILRet):
                 stmts = self._convert_instruction(last_instr, block_idx, last_instr_idx)
@@ -1212,10 +1276,13 @@ class MLILToHLILConverter:
                 stmts = self._convert_instruction(last_instr, block_idx, last_instr_idx)
                 for stmt in stmts:
                     target_block.add_statement(stmt)
-                if block_idx + 1 < len(self.mlil_func.basic_blocks):
-                    return self._reconstruct_control_flow(block_idx + 1, target_block, stop_at=stop_at)
 
-        return None
+                if block_idx + 1 >= len(self.mlil_func.basic_blocks):
+                    return None
+
+                jump_source = last_instr
+                block_idx = block_idx + 1
+                continue
 
     def _set_hlil_source_info(self, hlil_instr: HLILInstruction,
                                mlil_instr: MediumLevelILInstruction,
