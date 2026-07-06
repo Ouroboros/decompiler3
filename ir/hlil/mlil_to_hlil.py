@@ -188,7 +188,7 @@ class RegisterResolver:
 
             # Generate var name based on type
             if ssa_def.is_global:
-                base = f'global{ssa_def.reg_index}'
+                continue  # Globals are emitted as literal GLOBALS[i], no local name
 
             elif ssa_def.is_call:
                 base = 'reg0'
@@ -566,8 +566,9 @@ class RegisterResolver:
         for key, ssa_def in self.definitions.items():
             if ssa_def.use_count == 0 and not ssa_def.is_live_out:
                 # Dead and not live-out - can delete
-                if not ssa_def.is_call:
-                    # Only delete non-call assignments (calls have side effects)
+                if not ssa_def.is_call and not ssa_def.is_global:
+                    # Only delete non-call assignments (calls have side effects).
+                    # Global stores are shared-state writes, never deletable.
                     self.deleted.add(key)
 
     def get_inlined_expr(self, block_idx: int, instr_idx: int,
@@ -1348,13 +1349,11 @@ class MLILToHLILConverter:
                 self.expr_cache[key] = self._convert_expr(instr.value)
 
         elif isinstance(instr, MLILStoreGlobal):
-            # Use local variable if has uses, otherwise skip (dead store)
-            var_name = self.resolver.get_def_var_name(block_idx, instr_idx)
-            if var_name is not None:
-                var = HLILVariable(var_name, None)
-                stmt = HLILAssign(HLILVar(var), self._convert_expr(instr.value))
-                self._set_hlil_source_info(stmt, instr, mlil_index)
-                result.append(stmt)
+            # Globals are shared state: always emit the literal array write
+            var = HLILVariable(kind=VariableKind.GLOBAL, index=instr.index)
+            stmt = HLILAssign(HLILVar(var), self._convert_expr(instr.value))
+            self._set_hlil_source_info(stmt, instr, mlil_index)
+            result.append(stmt)
 
         elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
             # Call implicitly writes to REG[0]

@@ -28,6 +28,7 @@ from ..hlil import (
     HLILContinue,
     HLILComment,
     HLILVariable,
+    VariableKind,
     BinaryOp,
     UnaryOp,
 )
@@ -384,6 +385,10 @@ class ControlFlowOptimizationPass(Pass):
 
         outer_var = cond.lhs.var
 
+        # Globals are shared-state writes, never a redundant discriminant reload
+        if outer_var.kind == VariableKind.GLOBAL:
+            return
+
         # Find first non-nop statement in else block
         false_stmts = if_stmt.false_block.statements
         assign_idx = 0
@@ -639,7 +644,7 @@ class ControlFlowOptimizationPass(Pass):
                 scrutinee = var_expr
 
             else:
-                if scrutinee.var.name != var_expr.var.name:
+                if scrutinee.var != var_expr.var:
                     break
 
             case_value = const_expr.value
@@ -659,7 +664,7 @@ class ControlFlowOptimizationPass(Pass):
                 if len(real_stmts) == 1:
                     next_stmt = real_stmts[0]
                     if isinstance(next_stmt, HLILSwitch):
-                        if isinstance(next_stmt.scrutinee, HLILVar) and scrutinee and next_stmt.scrutinee.var.name == scrutinee.var.name:
+                        if isinstance(next_stmt.scrutinee, HLILVar) and scrutinee and next_stmt.scrutinee.var == scrutinee.var:
                             for nested_case in next_stmt.cases:
                                 if nested_case.is_default():
                                     default_body = nested_case.body
@@ -721,7 +726,7 @@ class ControlFlowOptimizationPass(Pass):
                         nested_stmt = case.body.statements[0]
                         if isinstance(nested_stmt, HLILSwitch):
                             if isinstance(nested_stmt.scrutinee, HLILVar) and isinstance(stmt.scrutinee, HLILVar):
-                                if nested_stmt.scrutinee.var.name == stmt.scrutinee.var.name:
+                                if nested_stmt.scrutinee.var == stmt.scrutinee.var:
                                     if case.is_default():
                                         stmt.cases.remove(case)
                                         stmt.cases.extend(nested_stmt.cases)

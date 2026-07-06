@@ -4,3 +4,7 @@
 *.zip
 
 tests
+openspec
+.claude
+.gemini
+.codex

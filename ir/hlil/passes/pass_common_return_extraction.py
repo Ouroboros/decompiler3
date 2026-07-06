@@ -94,7 +94,7 @@ class CommonReturnExtractionPass(Pass):
             return ret1.value.value == ret2.value.value
 
         if isinstance(ret1.value, HLILVar) and isinstance(ret2.value, HLILVar):
-            return ret1.value.var.name == ret2.value.var.name
+            return ret1.value.var == ret2.value.var
 
         return False
 

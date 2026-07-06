@@ -161,7 +161,7 @@ class TestScpParser(unittest.TestCase):
 
         # test_file = Path(__file__).parent / 'mp2000_ev.dat'
         test_file = Path(__file__).parent / 'debug.dat'
-        test_file = Path(__file__).parent / 'mp3010_01.dat'
+        # test_file = Path(__file__).parent / 'mp3010_01.dat'
         # test_file = ED9_DATA_DIR / 'c0600.dat'
 
         if not test_file.exists():
@@ -179,7 +179,7 @@ class TestScpParser(unittest.TestCase):
 
             # Test disassembly and formatting
             disassembled_functions = parser.disasm_all_functions(
-                # filter_func = lambda f: f.name == 'QS301_00_00_END'
+                # filter_func = lambda f: f.name == 'TestCitySet'
             )
 
             formatted_lines = []
