@@ -66,6 +66,12 @@ class ComparisonStatus(Enum):
     INLINED = auto()        # Multiple source ops merged into one target op
 
 
+class ViolationSeverity(Enum):
+    """Severity for semantic validation results"""
+    HARD_FAIL = auto()
+    SOFT_SIGNAL = auto()
+
+
 class IRLayer(Enum):
     """IR layer identifier"""
     LLIL = auto()
@@ -128,9 +134,10 @@ class SemanticOperation:
     """Normalized operation for cross-layer comparison"""
     kind: OperationKind
     operator: str           # Specific operator (ADD, SUB, EQ, etc.)
-    operands: List[SemanticOperand] = field(default_factory=list)
+    operands: List[SemanticOperand] = field(default_factory = list)
     result: Optional[SemanticOperand] = None
-    source_location: SourceLocation = field(default_factory=SourceLocation)
+    source_location: SourceLocation = field(default_factory = SourceLocation)
+    provenance_mlil_indices: List[int] = field(default_factory = list)
 
     def __str__(self) -> str:
         ops_str = ", ".join(str(op) for op in self.operands)
@@ -166,6 +173,8 @@ class MatchStatistics:
     different: int = 0
     eliminated: int = 0
     inlined: int = 0
+    hard_fail: int = 0
+    soft_signal: int = 0
 
     @property
     def block_coverage(self) -> float:
@@ -181,7 +190,15 @@ class MatchStatistics:
 
     @property
     def total_classified(self) -> int:
-        return self.equivalent + self.transformed + self.different + self.eliminated + self.inlined
+        return (
+            self.equivalent
+            + self.transformed
+            + self.different
+            + self.eliminated
+            + self.inlined
+            + self.hard_fail
+            + self.soft_signal
+        )
 
     def status_percentages(self) -> Dict[str, float]:
         total = self.total_classified
@@ -206,6 +223,8 @@ class MatchStatistics:
         self.different += other.different
         self.eliminated += other.eliminated
         self.inlined += other.inlined
+        self.hard_fail += other.hard_fail
+        self.soft_signal += other.soft_signal
 
 
 @dataclass
@@ -225,12 +244,47 @@ class ComparisonReport:
     source_layer: IRLayer
     target_layer: IRLayer
     function_name: str = ""
-    block_results: List[BlockComparisonResult] = field(default_factory=list)
-    unmatched_source_blocks: List[int] = field(default_factory=list)
-    unmatched_target_blocks: List[int] = field(default_factory=list)
-    side_effect_violations: List[ComparisonResult] = field(default_factory=list)
-    statistics: MatchStatistics = field(default_factory=MatchStatistics)
+    block_results: List[BlockComparisonResult] = field(default_factory = list)
+    unmatched_source_blocks: List[int] = field(default_factory = list)
+    unmatched_target_blocks: List[int] = field(default_factory = list)
+    side_effect_violations: List[ComparisonResult] = field(default_factory = list)
+    hard_fail_violations: List[ComparisonResult] = field(default_factory = list)
+    soft_signal_warnings: List[ComparisonResult] = field(default_factory = list)
+    quality_metrics: Dict[str, Union[int, float, Dict[str, int]]] = field(default_factory = dict)
+    statistics: MatchStatistics = field(default_factory = MatchStatistics)
     passed: bool = True
+
+
+@dataclass
+class SemanticAtom:
+    """Comparison unit used by provenance-first matching"""
+    kind: OperationKind
+    operator: str
+    operands: List[SemanticOperand] = field(default_factory = list)
+    source_location: SourceLocation = field(default_factory = SourceLocation)
+    provenance_mlil_indices: List[int] = field(default_factory = list)
+    fingerprint: str = ""
+    critical: bool = False
+
+
+@dataclass
+class EffectEvent:
+    """Observable side-effect event for behavior validation"""
+    category: str  # call, write_global, write_reg, return
+    signature: str
+    family: str = ""
+    target_key: str = ""
+    source_location: SourceLocation = field(default_factory = SourceLocation)
+    provenance_mlil_indices: List[int] = field(default_factory = list)
+
+
+@dataclass
+class MatchedEffectEvent:
+    """One matched source/target critical effect pair"""
+    source_index: int
+    target_index: int
+    score: int
+    match_kind: str
 
 
 @dataclass
@@ -835,11 +889,27 @@ def _extract_llil_operands(instr: LowLevelILInstruction) -> List[SemanticOperand
     return operands
 
 
+def _get_instruction_index(instr: Any, attributes: Tuple[str, ...]) -> int:
+    """Return the first non-negative instruction index found on an IR node."""
+    for attr in attributes:
+        if not hasattr(instr, attr):
+            continue
+        value = getattr(instr, attr)
+        if isinstance(value, int) and value >= 0:
+            return value
+    return -1
+
+
 def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperation:
     """Convert MLIL instruction to normalized SemanticOperation"""
     op = instr.operation
     scp_offset = instr.address if hasattr(instr, 'address') else 0
-    loc = SourceLocation(scp_offset=scp_offset, mlil_index=instr.instr_index if hasattr(instr, 'instr_index') else -1)
+    mlil_index = _get_instruction_index(instr, MLIL_INDEX_ATTRIBUTES)
+    loc = SourceLocation(
+        scp_offset = scp_offset,
+        mlil_index = mlil_index
+    )
+    provenance = [loc.mlil_index] if loc.mlil_index >= 0 else []
 
     # Arithmetic operations
     if op in (MediumLevelILOperation.MLIL_ADD, MediumLevelILOperation.MLIL_SUB,
@@ -849,7 +919,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.ARITHMETIC,
             operator=op.name.replace('MLIL_', ''),
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_NEG:
@@ -857,7 +928,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.ARITHMETIC,
             operator='NEG',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Comparison operations
@@ -868,7 +940,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.COMPARISON,
             operator=op.name.replace('MLIL_', ''),
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_TEST_ZERO:
@@ -876,7 +949,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.COMPARISON,
             operator='TEST_ZERO',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Logical operations
@@ -885,7 +959,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.LOGICAL,
             operator=op.name.replace('MLIL_', ''),
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_LOGICAL_NOT:
@@ -893,7 +968,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.LOGICAL,
             operator='LOGICAL_NOT',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Bitwise operations
@@ -904,7 +980,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.BITWISE,
             operator=op.name.replace('MLIL_', ''),
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_BITWISE_NOT:
@@ -912,7 +989,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.BITWISE,
             operator='BITWISE_NOT',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Control flow
@@ -921,7 +999,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.BRANCH,
             operator='GOTO',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_IF:
@@ -929,7 +1008,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.BRANCH,
             operator='IF',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_CALL:
@@ -937,7 +1017,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.CALL,
             operator='CALL',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_SYSCALL:
@@ -945,7 +1026,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.CALL,
             operator='SYSCALL',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_CALL_SCRIPT:
@@ -953,7 +1035,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.CALL,
             operator='CALL_SCRIPT',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_RET:
@@ -961,7 +1044,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.RETURN,
             operator='RET',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Variable operations
@@ -970,15 +1054,22 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.LOAD,
             operator='VAR',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_SET_VAR:
+        result = None
+        if hasattr(instr, 'var') and instr.var is not None:
+            var_name = instr.var.name if hasattr(instr.var, 'name') else str(instr.var)
+            result = SemanticOperand(kind = 'var', value = var_name)
         return SemanticOperation(
             kind=OperationKind.ASSIGN,
             operator='SET_VAR',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            result=result,
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_CONST:
@@ -986,7 +1077,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.LOAD,
             operator='CONST',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Global and register
@@ -995,15 +1087,21 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.LOAD,
             operator='LOAD_GLOBAL',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_STORE_GLOBAL:
+        result = None
+        if hasattr(instr, 'index'):
+            result = SemanticOperand(kind = 'global', value = f"GLOBALS[{instr.index}]")
         return SemanticOperation(
             kind=OperationKind.ASSIGN,
             operator='STORE_GLOBAL',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            result=result,
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_LOAD_REG:
@@ -1011,15 +1109,21 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
             kind=OperationKind.LOAD,
             operator='LOAD_REG',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == MediumLevelILOperation.MLIL_STORE_REG:
+        result = None
+        if hasattr(instr, 'index'):
+            result = SemanticOperand(kind = 'reg', value = f"REGS[{instr.index}]")
         return SemanticOperation(
             kind=OperationKind.ASSIGN,
             operator='STORE_REG',
             operands=_extract_mlil_operands(instr),
-            source_location=loc
+            result=result,
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # NOP
@@ -1027,7 +1131,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
         return SemanticOperation(
             kind=OperationKind.NOP,
             operator=op.name.replace('MLIL_', ''),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Unknown
@@ -1035,7 +1140,8 @@ def normalize_mlil_operation(instr: MediumLevelILInstruction) -> SemanticOperati
     return SemanticOperation(
         kind=OperationKind.UNKNOWN,
         operator=op.name,
-        source_location=loc
+        source_location=loc,
+        provenance_mlil_indices=provenance,
     )
 
 
@@ -1043,12 +1149,25 @@ def _extract_mlil_operands(instr: MediumLevelILInstruction) -> List[SemanticOper
     """Extract operands from MLIL instruction"""
     operands = []
 
+    if hasattr(instr, 'target'):
+        operands.append(SemanticOperand(kind = 'var', value = str(instr.target)))
+
+    if hasattr(instr, 'module') and hasattr(instr, 'func'):
+        operands.append(SemanticOperand(kind = 'var', value = f"{instr.module}.{instr.func}"))
+
+    if hasattr(instr, 'subsystem') and hasattr(instr, 'cmd'):
+        operands.append(SemanticOperand(kind = 'var', value = f"{instr.subsystem}:{instr.cmd}"))
+
     if hasattr(instr, 'value'):
         operands.append(SemanticOperand(kind='const', value=instr.value))
 
     if hasattr(instr, 'var') and instr.var is not None:
         var_name = instr.var.name if hasattr(instr.var, 'name') else str(instr.var)
         operands.append(SemanticOperand(kind='var', value=var_name))
+
+    if hasattr(instr, 'args') and instr.args is not None:
+        for arg in instr.args:
+            operands.append(SemanticOperand(kind = 'expr', value = str(arg)))
 
     if hasattr(instr, 'left') and hasattr(instr, 'right'):
         if isinstance(instr.left, MediumLevelILInstruction):
@@ -1076,7 +1195,9 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
     """Convert HLIL instruction to normalized SemanticOperation"""
     op = instr.operation
     scp_offset = instr.address if hasattr(instr, 'address') else 0
-    loc = SourceLocation(scp_offset=scp_offset)
+    mlil_index = _get_instruction_index(instr, HLIL_INDEX_ATTRIBUTES)
+    loc = SourceLocation(scp_offset = scp_offset, mlil_index = mlil_index)
+    provenance = [mlil_index] if mlil_index >= 0 else []
 
     # Control flow statements
     if op == HLILOperation.HLIL_IF:
@@ -1084,7 +1205,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CONTROL_FLOW,
             operator='IF',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_WHILE:
@@ -1092,7 +1214,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CONTROL_FLOW,
             operator='WHILE',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_DO_WHILE:
@@ -1100,7 +1223,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CONTROL_FLOW,
             operator='DO_WHILE',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_FOR:
@@ -1108,7 +1232,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CONTROL_FLOW,
             operator='FOR',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_SWITCH:
@@ -1116,21 +1241,24 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CONTROL_FLOW,
             operator='SWITCH',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_BREAK:
         return SemanticOperation(
             kind=OperationKind.CONTROL_FLOW,
             operator='BREAK',
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_CONTINUE:
         return SemanticOperation(
             kind=OperationKind.CONTROL_FLOW,
             operator='CONTINUE',
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_RETURN:
@@ -1138,7 +1266,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.RETURN,
             operator='RETURN',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Assignment
@@ -1150,7 +1279,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
                     kind=OperationKind.CALL,
                     operator='CALL',
                     operands=_extract_hlil_operands(instr.src),
-                    source_location=loc
+                    source_location=loc,
+                    provenance_mlil_indices=provenance,
                 )
 
             elif src_op == HLILOperation.HLIL_SYSCALL:
@@ -1158,14 +1288,20 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
                     kind=OperationKind.CALL,
                     operator='SYSCALL',
                     operands=_extract_hlil_operands(instr.src),
-                    source_location=loc
+                    source_location=loc,
+                    provenance_mlil_indices=provenance,
                 )
 
+        result = None
+        if hasattr(instr, 'dest') and hasattr(instr.dest, 'var') and instr.dest.var is not None:
+            result = SemanticOperand(kind = 'var', value = instr.dest.var.name if hasattr(instr.dest.var, 'name') else str(instr.dest.var))
         return SemanticOperation(
             kind=OperationKind.ASSIGN,
             operator='ASSIGN',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            result=result,
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Block
@@ -1173,19 +1309,25 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
         return SemanticOperation(
             kind=OperationKind.NOP,
             operator='BLOCK',
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Expression statement - unwrap
     elif op == HLILOperation.HLIL_EXPR_STMT:
         if hasattr(instr, 'expr') and instr.expr is not None:
-            return normalize_hlil_operation(instr.expr)
+            return _apply_location_fallback(
+                normalize_hlil_operation(instr.expr),
+                loc,
+                provenance,
+            )
 
         return SemanticOperation(
             kind=OperationKind.NOP,
             operator='EXPR_STMT',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Comment
@@ -1193,7 +1335,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
         return SemanticOperation(
             kind=OperationKind.NOP,
             operator='COMMENT',
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Expressions
@@ -1202,7 +1345,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.LOAD,
             operator='VAR',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_CONST:
@@ -1210,7 +1354,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.LOAD,
             operator='CONST',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_BINARY_OP:
@@ -1219,7 +1364,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=_get_binary_op_kind(bin_op),
             operator=bin_op.name if bin_op else 'BINARY_OP',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_UNARY_OP:
@@ -1228,7 +1374,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=_get_unary_op_kind(unary_op),
             operator=unary_op.name if unary_op else 'UNARY_OP',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_CALL:
@@ -1236,7 +1383,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CALL,
             operator='CALL',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     elif op == HLILOperation.HLIL_SYSCALL:
@@ -1244,7 +1392,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
             kind=OperationKind.CALL,
             operator='SYSCALL',
             operands=_extract_hlil_operands(instr),
-            source_location=loc
+            source_location=loc,
+            provenance_mlil_indices=provenance,
         )
 
     # Unknown
@@ -1253,7 +1402,8 @@ def normalize_hlil_operation(instr: HLILInstruction) -> SemanticOperation:
     return SemanticOperation(
         kind=OperationKind.UNKNOWN,
         operator=op_name,
-        source_location=loc
+        source_location=loc,
+        provenance_mlil_indices=provenance,
     )
 
 
@@ -1261,12 +1411,25 @@ def _extract_hlil_operands(instr: HLILInstruction) -> List[SemanticOperand]:
     """Extract operands from HLIL instruction"""
     operands = []
 
+    if hasattr(instr, 'func_name'):
+        operands.append(SemanticOperand(kind = 'var', value = str(instr.func_name)))
+
+    if hasattr(instr, 'target'):
+        operands.append(SemanticOperand(kind = 'var', value = str(instr.target)))
+
+    if hasattr(instr, 'subsystem') and hasattr(instr, 'cmd'):
+        operands.append(SemanticOperand(kind = 'var', value = f"{instr.subsystem}:{instr.cmd}"))
+
     if hasattr(instr, 'value'):
         operands.append(SemanticOperand(kind='const', value=instr.value))
 
     if hasattr(instr, 'var') and instr.var is not None:
         var_name = instr.var.name if hasattr(instr.var, 'name') else str(instr.var)
         operands.append(SemanticOperand(kind='var', value=var_name))
+
+    if hasattr(instr, 'args') and instr.args is not None:
+        for arg in instr.args:
+            operands.append(SemanticOperand(kind = 'expr', value = str(arg)))
 
     if hasattr(instr, 'left') and hasattr(instr, 'right'):
         if isinstance(instr.left, HLILInstruction):
@@ -1752,6 +1915,17 @@ class BlockSimilarity:
 def compute_operation_similarity(op1: SemanticOperation, op2: SemanticOperation) -> float:
     """Compare two SemanticOperations (0.0-1.0 score)"""
     score = 0.0
+    source_indices = set(op1.provenance_mlil_indices)
+    target_indices = set(op2.provenance_mlil_indices)
+
+    if not source_indices and op1.source_location.mlil_index >= 0:
+        source_indices = {op1.source_location.mlil_index}
+    if not target_indices and op2.source_location.mlil_index >= 0:
+        target_indices = {op2.source_location.mlil_index}
+
+    # Provenance-first bonus to stabilize mapping under HLIL restructuring.
+    if source_indices and target_indices and source_indices.intersection(target_indices):
+        score += 0.3
 
     # Kind match (40%)
     if op1.kind == op2.kind:
@@ -2296,7 +2470,552 @@ def classify_difference(
 
 
 # =============================================================================
-# Section 9: Side-Effect Validation
+# Section 9: Provenance + Behavior Validation
+# =============================================================================
+
+CRITICAL_OPERATORS = {
+    'CALL', 'SYSCALL', 'CALL_SCRIPT', 'RET', 'RETURN', 'STORE_GLOBAL', 'SET_GLOBAL'
+}
+
+CRITICAL_BRANCH_OPERATORS = {'IF', 'GOTO', 'WHILE', 'FOR'}
+
+EFFECT_CATEGORY_CALL = 'call'
+EFFECT_CATEGORY_WRITE_GLOBAL = 'write_global'
+EFFECT_CATEGORY_WRITE_REG = 'write_reg'
+EFFECT_CATEGORY_RETURN = 'return'
+
+CALL_FAMILY = 'call_family'
+RETURN_FAMILY = 'return_family'
+UNKNOWN_TARGET_KEY = 'unknown'
+MATCH_KIND_PROVENANCE = 'provenance'
+MATCH_KIND_ADDRESS = 'address'
+MATCH_KIND_SIGNATURE = 'signature'
+MATCH_KIND_FAMILY_TARGET = 'family_target'
+
+PROVENANCE_MATCH_SCORE = 100
+ADDRESS_MATCH_SCORE = 80
+SIGNATURE_MATCH_SCORE = 40
+FAMILY_TARGET_MATCH_SCORE = 30
+CONDITION_EQUIVALENT_MATCH_SCORE = 40
+MIN_EFFECT_MATCH_SCORE = FAMILY_TARGET_MATCH_SCORE
+MIN_CONDITION_MATCH_SCORE = CONDITION_EQUIVALENT_MATCH_SCORE
+
+MLIL_INDEX_ATTRIBUTES = ('inst_index', 'instr_index', 'mlil_index')
+HLIL_INDEX_ATTRIBUTES = ('mlil_index', 'inst_index')
+
+
+def _semantic_fingerprint(op: SemanticOperation) -> str:
+    operand_fingerprint = ",".join(f"{operand.kind}:{operand.value}" for operand in op.operands)
+    return f"{op.kind.name}:{op.operator}:{operand_fingerprint}"
+
+
+def semantic_operation_to_atom(op: SemanticOperation) -> SemanticAtom:
+    provenance = list(op.provenance_mlil_indices)
+    if not provenance and op.source_location.mlil_index >= 0:
+        provenance = [op.source_location.mlil_index]
+
+    critical = (
+        op.operator in CRITICAL_OPERATORS
+        or op.operator in CRITICAL_BRANCH_OPERATORS
+        or (op.kind == OperationKind.ASSIGN and op.operator in ('STORE_GLOBAL', 'STORE_REG', 'ASSIGN', 'SET_VAR'))
+    )
+
+    return SemanticAtom(
+        kind = op.kind,
+        operator = op.operator,
+        operands = list(op.operands),
+        source_location = op.source_location,
+        provenance_mlil_indices = sorted(set(provenance)),
+        fingerprint = _semantic_fingerprint(op),
+        critical = critical,
+    )
+
+
+def extract_semantic_atoms(ops: List[SemanticOperation]) -> List[SemanticAtom]:
+    return [semantic_operation_to_atom(op) for op in ops]
+
+
+def _build_provenance_index(atoms: List[SemanticAtom]) -> Dict[int, List[int]]:
+    provenance_index: Dict[int, List[int]] = {}
+    for atom_idx, atom in enumerate(atoms):
+        for provenance in atom.provenance_mlil_indices:
+            provenance_index.setdefault(provenance, []).append(atom_idx)
+    return provenance_index
+
+
+def _normalized_operator_family(operator: str) -> str:
+    if operator in ('CALL', 'SYSCALL', 'CALL_SCRIPT'):
+        return CALL_FAMILY
+    if operator in ('RET', 'RETURN'):
+        return RETURN_FAMILY
+    if operator in ('STORE_GLOBAL', 'SET_GLOBAL'):
+        return EFFECT_CATEGORY_WRITE_GLOBAL
+    if operator in ('STORE_REG',):
+        return EFFECT_CATEGORY_WRITE_REG
+    if operator in ('SET_VAR', 'ASSIGN'):
+        return 'write_var'
+    if operator in CRITICAL_BRANCH_OPERATORS:
+        return 'branch_condition'
+    return operator
+
+
+def _has_provenance_overlap(left: List[int], right: List[int]) -> bool:
+    return bool(set(left).intersection(right))
+
+
+def _atom_match_score(source_atom: SemanticAtom, target_atom: SemanticAtom) -> int:
+    score = 0
+    if source_atom.kind != target_atom.kind:
+        return score
+
+    source_family = _normalized_operator_family(source_atom.operator)
+    target_family = _normalized_operator_family(target_atom.operator)
+    if source_family != target_family:
+        return score
+
+    if _has_provenance_overlap(source_atom.provenance_mlil_indices, target_atom.provenance_mlil_indices):
+        score += PROVENANCE_MATCH_SCORE
+
+    if source_atom.fingerprint == target_atom.fingerprint:
+        score += SIGNATURE_MATCH_SCORE
+
+    if len(source_atom.operands) == len(target_atom.operands):
+        score += FAMILY_TARGET_MATCH_SCORE
+
+    return score
+
+
+def _match_atoms_provenance_first(
+    source_atoms: List[SemanticAtom],
+    target_atoms: List[SemanticAtom],
+) -> Tuple[List[Tuple[int, int]], int, int]:
+    """Match source/target atoms by provenance first, then fingerprint fallback."""
+    matches: List[Tuple[int, int]] = []
+    used_target_indices: set[int] = set()
+    provenance_matches = 0
+    fallback_matches = 0
+
+    target_by_provenance = _build_provenance_index(target_atoms)
+    target_by_fingerprint: Dict[str, List[int]] = {}
+    for target_idx, atom in enumerate(target_atoms):
+        target_by_fingerprint.setdefault(atom.fingerprint, []).append(target_idx)
+
+    for source_idx, source_atom in enumerate(source_atoms):
+        matched_target_idx = -1
+
+        # Pass 1: provenance-first mapping.
+        for provenance in source_atom.provenance_mlil_indices:
+            candidate_indices = target_by_provenance.get(provenance, [])
+            for candidate_idx in candidate_indices:
+                if candidate_idx in used_target_indices:
+                    continue
+                candidate = target_atoms[candidate_idx]
+                if _atom_match_score(source_atom, candidate) >= PROVENANCE_MATCH_SCORE:
+                    matched_target_idx = candidate_idx
+                    break
+            if matched_target_idx >= 0:
+                break
+
+        if matched_target_idx >= 0:
+            matches.append((source_idx, matched_target_idx))
+            used_target_indices.add(matched_target_idx)
+            provenance_matches += 1
+            continue
+
+        # Pass 2: semantic-fingerprint fallback.
+        for candidate_idx in target_by_fingerprint.get(source_atom.fingerprint, []):
+            if candidate_idx in used_target_indices:
+                continue
+            candidate = target_atoms[candidate_idx]
+            if _atom_match_score(source_atom, candidate) >= SIGNATURE_MATCH_SCORE:
+                matched_target_idx = candidate_idx
+                break
+
+        if matched_target_idx >= 0:
+            matches.append((source_idx, matched_target_idx))
+            used_target_indices.add(matched_target_idx)
+            fallback_matches += 1
+
+    return matches, provenance_matches, fallback_matches
+
+
+def _extract_write_signature(op: SemanticOperation) -> Tuple[str, str]:
+    destination = "unknown"
+    if op.result is not None:
+        destination = str(op.result.value)
+    elif op.operands:
+        destination = str(op.operands[0].value)
+
+    if 'GLOBAL' in destination or op.operator in ('STORE_GLOBAL', 'SET_GLOBAL'):
+        return EFFECT_CATEGORY_WRITE_GLOBAL, destination
+    return EFFECT_CATEGORY_WRITE_REG, destination
+
+
+def _normalize_operand_key(operand: Optional[SemanticOperand]) -> str:
+    if operand is None:
+        return UNKNOWN_TARGET_KEY
+    if operand.kind in ('var', 'reg', 'global', 'const'):
+        return f"{operand.kind}:{operand.value}"
+    return operand.kind
+
+
+def _apply_location_fallback(
+    op: SemanticOperation,
+    source_location: SourceLocation,
+    provenance: List[int],
+) -> SemanticOperation:
+    """Preserve statement source info when HLIL expressions drop it."""
+    if op.source_location.scp_offset == 0 and source_location.scp_offset != 0:
+        op.source_location.scp_offset = source_location.scp_offset
+    if op.source_location.mlil_index < 0 and source_location.mlil_index >= 0:
+        op.source_location.mlil_index = source_location.mlil_index
+    if not op.provenance_mlil_indices and provenance:
+        op.provenance_mlil_indices = list(provenance)
+    return op
+
+
+def _build_effect_event(op: SemanticOperation, category: str, family: str, target_key: str) -> EffectEvent:
+    provenance = list(op.provenance_mlil_indices)
+    if not provenance and op.source_location.mlil_index >= 0:
+        provenance = [op.source_location.mlil_index]
+    return EffectEvent(
+        category = category,
+        signature = f"{family}:{target_key}",
+        family = family,
+        target_key = target_key,
+        source_location = op.source_location,
+        provenance_mlil_indices = provenance,
+    )
+
+
+def semantic_op_to_effect_event(op: SemanticOperation) -> Optional[EffectEvent]:
+    if op.kind == OperationKind.CALL:
+        target_key = _normalize_operand_key(op.operands[0] if op.operands else None)
+        return _build_effect_event(op, EFFECT_CATEGORY_CALL, CALL_FAMILY, target_key)
+
+    if op.kind == OperationKind.ASSIGN:
+        category, destination = _extract_write_signature(op)
+        target_key = destination if destination else UNKNOWN_TARGET_KEY
+        return _build_effect_event(op, category, category, target_key)
+
+    if op.kind == OperationKind.RETURN or op.operator in ('RET', 'RETURN'):
+        target_key = _normalize_operand_key(op.operands[0] if op.operands else None)
+        return _build_effect_event(op, EFFECT_CATEGORY_RETURN, RETURN_FAMILY, target_key)
+
+    return None
+
+
+def build_effect_event_sequence(ops: List[SemanticOperation]) -> List[EffectEvent]:
+    events: List[EffectEvent] = []
+    for op in ops:
+        event = semantic_op_to_effect_event(op)
+        if event is not None:
+            events.append(event)
+    return events
+
+
+def _effect_match_kind(source_event: EffectEvent, target_event: EffectEvent) -> str:
+    if _has_provenance_overlap(source_event.provenance_mlil_indices, target_event.provenance_mlil_indices):
+        return MATCH_KIND_PROVENANCE
+    if (
+        source_event.source_location.scp_offset != 0
+        and source_event.source_location.scp_offset == target_event.source_location.scp_offset
+    ):
+        return MATCH_KIND_ADDRESS
+    if source_event.signature == target_event.signature:
+        return MATCH_KIND_SIGNATURE
+    return MATCH_KIND_FAMILY_TARGET
+
+
+def _effect_match_score(source_event: EffectEvent, target_event: EffectEvent) -> int:
+    if source_event.category != target_event.category:
+        return 0
+
+    score = 0
+    if _has_provenance_overlap(source_event.provenance_mlil_indices, target_event.provenance_mlil_indices):
+        score += PROVENANCE_MATCH_SCORE
+
+    if (
+        source_event.source_location.scp_offset != 0
+        and source_event.source_location.scp_offset == target_event.source_location.scp_offset
+    ):
+        score += ADDRESS_MATCH_SCORE
+
+    if source_event.signature == target_event.signature:
+        score += SIGNATURE_MATCH_SCORE
+
+    if (
+        source_event.family == target_event.family
+        and source_event.target_key != UNKNOWN_TARGET_KEY
+        and source_event.target_key == target_event.target_key
+    ):
+        score += FAMILY_TARGET_MATCH_SCORE
+
+    return score
+
+
+def _match_effect_events(
+    source_events: List[EffectEvent],
+    target_events: List[EffectEvent],
+) -> Tuple[List[MatchedEffectEvent], List[int], List[int]]:
+    candidates: List[Tuple[int, int, int]] = []
+    for source_index, source_event in enumerate(source_events):
+        for target_index, target_event in enumerate(target_events):
+            score = _effect_match_score(source_event, target_event)
+            if score >= MIN_EFFECT_MATCH_SCORE:
+                candidates.append((score, source_index, target_index))
+
+    candidates.sort(key = lambda item: (-item[0], abs(item[1] - item[2])))
+
+    matches: List[MatchedEffectEvent] = []
+    used_source_indices: set[int] = set()
+    used_target_indices: set[int] = set()
+
+    for score, source_index, target_index in candidates:
+        if source_index in used_source_indices or target_index in used_target_indices:
+            continue
+        source_event = source_events[source_index]
+        target_event = target_events[target_index]
+        matches.append(MatchedEffectEvent(
+            source_index = source_index,
+            target_index = target_index,
+            score = score,
+            match_kind = _effect_match_kind(source_event, target_event),
+        ))
+        used_source_indices.add(source_index)
+        used_target_indices.add(target_index)
+
+    unmatched_source = [index for index in range(len(source_events)) if index not in used_source_indices]
+    unmatched_target = [index for index in range(len(target_events)) if index not in used_target_indices]
+    matches.sort(key = lambda match: match.source_index)
+    return matches, unmatched_source, unmatched_target
+
+
+def _normalize_condition_signature(op: SemanticOperation) -> str:
+    if op.operator in ('WHILE', 'FOR', 'IF'):
+        operands = [f"{operand.kind}:{operand.value}" for operand in op.operands]
+        joined = ",".join(sorted(operands))
+        return f"branch_condition:{joined}"
+
+    if op.operator in ('EQ', 'NE', 'LT', 'LE', 'GT', 'GE'):
+        if len(op.operands) >= 2:
+            left = f"{op.operands[0].kind}:{op.operands[0].value}"
+            right = f"{op.operands[1].kind}:{op.operands[1].value}"
+            if op.operator in ('EQ', 'NE'):
+                pair = "|".join(sorted([left, right]))
+                return f"{op.operator}:{pair}"
+            return f"{op.operator}:{left}|{right}"
+    return _semantic_fingerprint(op)
+
+
+def _is_condition_semantically_equivalent(source: SemanticOperation, target: SemanticOperation) -> bool:
+    source_sig = _normalize_condition_signature(source)
+    target_sig = _normalize_condition_signature(target)
+    if source_sig == target_sig:
+        return True
+
+    equivalent_pairs = {
+        ('GOTO', 'WHILE'),
+        ('GOTO', 'FOR'),
+    }
+    if (source.operator, target.operator) in equivalent_pairs or (target.operator, source.operator) in equivalent_pairs:
+        return True
+    return False
+
+
+def _condition_match_score(source_condition: SemanticOperation, target_condition: SemanticOperation) -> int:
+    score = 0
+    if _has_provenance_overlap(
+        source_condition.provenance_mlil_indices,
+        target_condition.provenance_mlil_indices,
+    ):
+        score += PROVENANCE_MATCH_SCORE
+
+    if _is_condition_semantically_equivalent(source_condition, target_condition):
+        score += CONDITION_EQUIVALENT_MATCH_SCORE
+
+    return score
+
+
+def _match_condition_operations(
+    source_conditions: List[SemanticOperation],
+    target_conditions: List[SemanticOperation],
+) -> List[Tuple[int, int]]:
+    candidates: List[Tuple[int, int, int]] = []
+    for source_index, source_condition in enumerate(source_conditions):
+        for target_index, target_condition in enumerate(target_conditions):
+            score = _condition_match_score(source_condition, target_condition)
+            if score >= MIN_CONDITION_MATCH_SCORE:
+                candidates.append((score, source_index, target_index))
+
+    candidates.sort(key = lambda item: (-item[0], abs(item[1] - item[2])))
+    matches: List[Tuple[int, int]] = []
+    used_source_indices: set[int] = set()
+    used_target_indices: set[int] = set()
+
+    for _, source_index, target_index in candidates:
+        if source_index in used_source_indices or target_index in used_target_indices:
+            continue
+        matches.append((source_index, target_index))
+        used_source_indices.add(source_index)
+        used_target_indices.add(target_index)
+
+    return matches
+
+
+def _hard_fail_category_for_event(event: EffectEvent, missing_target: bool) -> str:
+    prefix = 'missing' if missing_target else 'added'
+    if event.category == EFFECT_CATEGORY_CALL:
+        return f"{prefix}_call_anchor"
+    if event.category == EFFECT_CATEGORY_RETURN:
+        return f"{prefix}_return_anchor"
+    return f"{prefix}_write_anchor"
+
+
+def _build_hard_fail(
+    category: str,
+    source_layer: IRLayer,
+    target_layer: IRLayer,
+    explanation: str,
+    source_location: SourceLocation,
+    source_op: Optional[SemanticOperation] = None,
+    target_op: Optional[SemanticOperation] = None,
+) -> ComparisonResult:
+    return ComparisonResult(
+        status = ComparisonStatus.DIFFERENT,
+        source_layer = source_layer,
+        target_layer = target_layer,
+        source_op = source_op,
+        target_op = target_op,
+        explanation = f"HARD_FAIL: {category}: {explanation}",
+        source_location = source_location,
+    )
+
+
+def validate_hard_fail_semantics(
+    source_ops: List[SemanticOperation],
+    target_ops: List[SemanticOperation],
+    source_layer: IRLayer,
+    target_layer: IRLayer,
+) -> List[ComparisonResult]:
+    violations: List[ComparisonResult] = []
+
+    source_events = build_effect_event_sequence(source_ops)
+    target_events = build_effect_event_sequence(target_ops)
+    matched_events, unmatched_source_indices, unmatched_target_indices = _match_effect_events(
+        source_events, target_events
+    )
+
+    for source_index in unmatched_source_indices:
+        event = source_events[source_index]
+        violations.append(_build_hard_fail(
+            _hard_fail_category_for_event(event, missing_target = True),
+            source_layer,
+            target_layer,
+            f"Missing target effect {event.signature}",
+            event.source_location,
+        ))
+
+    for target_index in unmatched_target_indices:
+        event = target_events[target_index]
+        violations.append(_build_hard_fail(
+            _hard_fail_category_for_event(event, missing_target = False),
+            source_layer,
+            target_layer,
+            f"Added target effect {event.signature}",
+            event.source_location,
+        ))
+
+    for match_index in range(1, len(matched_events)):
+        previous_match = matched_events[match_index - 1]
+        current_match = matched_events[match_index]
+        previous_source_event = source_events[previous_match.source_index]
+        current_source_event = source_events[current_match.source_index]
+        if previous_source_event.category != current_source_event.category:
+            continue
+        if previous_match.target_index < current_match.target_index:
+            continue
+        violations.append(_build_hard_fail(
+            'local_order_violation',
+            source_layer,
+            target_layer,
+            (
+                f"Critical effect order reversed for {previous_source_event.category}: "
+                f"{previous_source_event.signature} before {current_source_event.signature}"
+            ),
+            previous_source_event.source_location,
+        ))
+
+    source_conditions = [op for op in source_ops if op.operator in CRITICAL_BRANCH_OPERATORS]
+    target_conditions = [op for op in target_ops if op.operator in CRITICAL_BRANCH_OPERATORS]
+    for source_index, target_index in _match_condition_operations(source_conditions, target_conditions):
+        source_condition = source_conditions[source_index]
+        target_condition = target_conditions[target_index]
+        if not _is_condition_semantically_equivalent(source_condition, target_condition):
+            violations.append(_build_hard_fail(
+                'control_reachability_change',
+                source_layer,
+                target_layer,
+                f"Control condition mismatch: {source_condition.operator} vs {target_condition.operator}",
+                source_condition.source_location,
+                source_op = source_condition,
+                target_op = target_condition,
+            ))
+
+    return violations
+
+
+def _extract_hard_fail_category(explanation: str) -> str:
+    prefix = 'HARD_FAIL: '
+    if not explanation.startswith(prefix):
+        return 'unknown'
+    remainder = explanation[len(prefix):]
+    return remainder.split(':', 1)[0].strip()
+
+
+def _compute_quality_metrics(
+    source_ops: List[SemanticOperation],
+    target_ops: List[SemanticOperation],
+    hard_fail_violations: List[ComparisonResult],
+) -> Dict[str, Union[int, float, Dict[str, int]]]:
+    source_atoms = extract_semantic_atoms(source_ops)
+    target_atoms = extract_semantic_atoms(target_ops)
+    critical_source_atoms = [atom for atom in source_atoms if atom.critical]
+    matched_pairs, provenance_match_count, fallback_match_count = _match_atoms_provenance_first(
+        source_atoms, target_atoms
+    )
+
+    source_with_provenance = sum(1 for atom in source_atoms if atom.provenance_mlil_indices)
+    provenance_coverage = 100.0 * source_with_provenance / len(source_atoms) if source_atoms else 100.0
+
+    matched_source_indices = {source_idx for source_idx, _ in matched_pairs}
+    matched_critical = sum(
+        1
+        for source_idx, source_atom in enumerate(source_atoms)
+        if source_atom.critical and source_idx in matched_source_indices
+    )
+    critical_match_rate = (
+        100.0 * matched_critical / len(critical_source_atoms) if critical_source_atoms else 100.0
+    )
+    unmatched_critical = len(critical_source_atoms) - matched_critical
+
+    hard_fail_counts: Dict[str, int] = {}
+    for violation in hard_fail_violations:
+        key = _extract_hard_fail_category(violation.explanation)
+        hard_fail_counts[key] = hard_fail_counts.get(key, 0) + 1
+
+    return {
+        "provenance_coverage": round(provenance_coverage, 1),
+        "critical_atom_match_rate": round(critical_match_rate, 1),
+        "unmatched_critical": unmatched_critical,
+        "provenance_matched_atoms": provenance_match_count,
+        "fallback_matched_atoms": fallback_match_count,
+        "hard_fail_counts": hard_fail_counts,
+    }
+
+
+# =============================================================================
+# Section 10: Side-Effect Validation
 # =============================================================================
 
 SIDE_EFFECT_OPS = {OperationKind.CALL, OperationKind.ASSIGN}
@@ -2546,6 +3265,8 @@ class IRLayerComparator:
         target_layer: IRLayer,
         transform_rules: List[TransformationRule],
         var_mapping: Dict[str, str],
+        min_provenance_coverage: float = 0.0,
+        max_unmatched_critical: int = -1,
     ):
         self.source_cfg = source_cfg
         self.target_cfg = target_cfg
@@ -2553,6 +3274,8 @@ class IRLayerComparator:
         self.target_layer = target_layer
         self.transform_rules = transform_rules
         self.var_mapping = var_mapping
+        self.min_provenance_coverage = min_provenance_coverage
+        self.max_unmatched_critical = max_unmatched_critical
 
     def compare(self) -> ComparisonReport:
         """Run full CFG-based comparison and return a ComparisonReport."""
@@ -2730,8 +3453,48 @@ class IRLayerComparator:
             all_source_ops, all_target_ops, self.source_layer, self.target_layer
         )
 
+        report.hard_fail_violations = validate_hard_fail_semantics(
+            all_source_ops, all_target_ops, self.source_layer, self.target_layer
+        )
+        report.quality_metrics = _compute_quality_metrics(
+            all_source_ops, all_target_ops, report.hard_fail_violations
+        )
+
+        provenance_coverage = float(report.quality_metrics.get("provenance_coverage", 0.0))
+        unmatched_critical = int(report.quality_metrics.get("unmatched_critical", 0))
+        if provenance_coverage < self.min_provenance_coverage:
+            report.soft_signal_warnings.append(ComparisonResult(
+                status = ComparisonStatus.TRANSFORMED,
+                source_layer = self.source_layer,
+                target_layer = self.target_layer,
+                explanation = (
+                    f"SOFT_SIGNAL: Provenance coverage {provenance_coverage:.1f}% below "
+                    f"threshold {self.min_provenance_coverage:.1f}%"
+                ),
+            ))
+
+        if self.max_unmatched_critical >= 0 and unmatched_critical > self.max_unmatched_critical:
+            report.hard_fail_violations.append(ComparisonResult(
+                status = ComparisonStatus.DIFFERENT,
+                source_layer = self.source_layer,
+                target_layer = self.target_layer,
+                explanation = (
+                    f"HARD_FAIL: unmatched critical atoms {unmatched_critical} exceeds "
+                    f"threshold {self.max_unmatched_critical}"
+                ),
+            ))
+
         # Set pass/fail
-        report.passed = (stats.different == 0 and len(report.side_effect_violations) == 0)
+        stats.hard_fail += len(report.hard_fail_violations)
+        stats.soft_signal += len(report.soft_signal_warnings)
+        allow_structural_drift = (
+            self.source_layer == IRLayer.MLIL and self.target_layer == IRLayer.HLIL
+        )
+        report.passed = (
+            (allow_structural_drift or stats.different == 0)
+            and len(report.side_effect_violations) == 0
+            and len(report.hard_fail_violations) == 0
+        )
 
         return report
 
@@ -2764,7 +3527,11 @@ def _build_mlil_hlil_var_mapping(mlil_func: MediumLevelILFunction) -> Dict[str, 
 
 
 def compare_llil_mlil(
-    llil_func: LowLevelILFunction, mlil_func: MediumLevelILFunction, func_name: str = ""
+    llil_func: LowLevelILFunction,
+    mlil_func: MediumLevelILFunction,
+    func_name: str = "",
+    min_provenance_coverage: float = 0.0,
+    max_unmatched_critical: int = -1,
 ) -> ComparisonReport:
     """Convenience: compare LLIL and MLIL layers using CFG matching"""
     llil_cfg = build_cfg_from_llil(llil_func)
@@ -2778,6 +3545,8 @@ def compare_llil_mlil(
         target_layer=IRLayer.MLIL,
         transform_rules=LLIL_MLIL_TRANSFORMATIONS,
         var_mapping=var_mapping,
+        min_provenance_coverage=min_provenance_coverage,
+        max_unmatched_critical=max_unmatched_critical,
     )
     report = comparator.compare()
     report.function_name = func_name
@@ -2785,7 +3554,11 @@ def compare_llil_mlil(
 
 
 def compare_mlil_hlil(
-    mlil_func: MediumLevelILFunction, hlil_func: HighLevelILFunction, func_name: str = ""
+    mlil_func: MediumLevelILFunction,
+    hlil_func: HighLevelILFunction,
+    func_name: str = "",
+    min_provenance_coverage: float = 0.0,
+    max_unmatched_critical: int = -1,
 ) -> ComparisonReport:
     """Convenience: compare MLIL and HLIL layers using CFG matching"""
     mlil_cfg = build_cfg_from_mlil(mlil_func)
@@ -2799,6 +3572,8 @@ def compare_mlil_hlil(
         target_layer=IRLayer.HLIL,
         transform_rules=MLIL_HLIL_TRANSFORMATIONS,
         var_mapping=var_mapping,
+        min_provenance_coverage=min_provenance_coverage,
+        max_unmatched_critical=max_unmatched_critical,
     )
     report = comparator.compare()
     report.function_name = func_name
@@ -2904,6 +3679,31 @@ class Formatter:
                 lines.append(f"  {self.red}! {v.explanation}{self.reset}")
             lines.append("")
 
+        if report.hard_fail_violations:
+            lines.append(f"{self.red}Hard-Fail Violations:{self.reset}")
+            for violation in report.hard_fail_violations:
+                lines.append(f"  {self.red}! {violation.explanation}{self.reset}")
+            lines.append("")
+
+        if report.soft_signal_warnings:
+            lines.append(f"{self.yellow}Soft Signals:{self.reset}")
+            for warning in report.soft_signal_warnings:
+                lines.append(f"  {self.yellow}~ {warning.explanation}{self.reset}")
+            lines.append("")
+
+        if report.quality_metrics:
+            lines.append("Quality Metrics:")
+            lines.append(
+                f"  provenance_coverage:   {report.quality_metrics.get('provenance_coverage', 0.0)}%"
+            )
+            lines.append(
+                f"  critical_match_rate:   {report.quality_metrics.get('critical_atom_match_rate', 0.0)}%"
+            )
+            lines.append(
+                f"  unmatched_critical:    {report.quality_metrics.get('unmatched_critical', 0)}"
+            )
+            lines.append("")
+
         return "\n".join(lines)
 
     def match_statistics(self, stats: MatchStatistics) -> str:
@@ -2928,6 +3728,8 @@ class Formatter:
         lines.append(f"  {self.red}! Different:    {stats.different:4d} ({pcts['DIFFERENT']:5.1f}%){self.reset}")
         lines.append(f"  {self.dim}o Eliminated:   {stats.eliminated:4d} ({pcts['ELIMINATED']:5.1f}%){self.reset}")
         lines.append(f"  {self.cyan}> Inlined:      {stats.inlined:4d} ({pcts['INLINED']:5.1f}%){self.reset}")
+        lines.append(f"  {self.red}! Hard-Fail:    {stats.hard_fail:4d}{self.reset}")
+        lines.append(f"  {self.yellow}~ Soft-Signal:  {stats.soft_signal:4d}{self.reset}")
 
         return "\n".join(lines)
 
@@ -2992,14 +3794,17 @@ class Formatter:
                     "total": s.total_source_ops,
                     "percentage": round(s.op_coverage, 1),
                 },
-                "status_counts": {
-                    "equivalent": s.equivalent,
-                    "transformed": s.transformed,
-                    "different": s.different,
-                    "eliminated": s.eliminated,
-                    "inlined": s.inlined,
+                    "status_counts": {
+                        "equivalent": s.equivalent,
+                        "transformed": s.transformed,
+                        "different": s.different,
+                        "eliminated": s.eliminated,
+                        "inlined": s.inlined,
+                        "hard_fail": s.hard_fail,
+                        "soft_signal": s.soft_signal,
+                    },
                 },
-            },
+                "quality_metrics": report.quality_metrics,
             "block_results": [
                 {
                     "source_block": br.source_block_id,
@@ -3023,6 +3828,8 @@ class Formatter:
             "unmatched_source_blocks": report.unmatched_source_blocks,
             "unmatched_target_blocks": report.unmatched_target_blocks,
             "side_effect_violations": len(report.side_effect_violations),
+            "hard_fail_violations": len(report.hard_fail_violations),
+            "soft_signal_warnings": len(report.soft_signal_warnings),
         }
 
     @classmethod
@@ -3049,12 +3856,16 @@ class Validator:
         progress: Progress,
         stream: TextIO = sys.stdout,
         as_json: bool = False,
+        min_provenance_coverage: float = 0.0,
+        max_unmatched_critical: int = -1,
     ):
         self.pipeline = pipeline
         self.fmt = formatter
         self.progress = progress
         self.stream = stream
         self.as_json = as_json
+        self.min_provenance_coverage = min_provenance_coverage
+        self.max_unmatched_critical = max_unmatched_critical
 
     def _print(self, text: str) -> None:
         print(text, file=self.stream, flush=True)
@@ -3074,12 +3885,24 @@ class Validator:
             if layer1 == "llil" and layer2 == "mlil":
                 if not self.pipeline.can_compare_llil_mlil(func_name):
                     continue
-                report = compare_llil_mlil(llil, mlil, func_name)
+                report = compare_llil_mlil(
+                    llil,
+                    mlil,
+                    func_name,
+                    min_provenance_coverage = self.min_provenance_coverage,
+                    max_unmatched_critical = self.max_unmatched_critical,
+                )
 
             elif layer1 == "mlil" and layer2 == "hlil":
                 if not self.pipeline.can_compare_mlil_hlil(func_name):
                     continue
-                report = compare_mlil_hlil(mlil, hlil, func_name)
+                report = compare_mlil_hlil(
+                    mlil,
+                    hlil,
+                    func_name,
+                    min_provenance_coverage = self.min_provenance_coverage,
+                    max_unmatched_critical = self.max_unmatched_critical,
+                )
 
             else:
                 print(f"Unsupported layer pair: {layer1} -> {layer2}", file=sys.stderr)
@@ -3119,10 +3942,22 @@ class Validator:
             func_report = FunctionReport(function_name=func_name)
 
             if self.pipeline.can_compare_llil_mlil(func_name):
-                func_report.llil_mlil = compare_llil_mlil(llil, mlil, func_name)
+                func_report.llil_mlil = compare_llil_mlil(
+                    llil,
+                    mlil,
+                    func_name,
+                    min_provenance_coverage = self.min_provenance_coverage,
+                    max_unmatched_critical = self.max_unmatched_critical,
+                )
 
             if self.pipeline.can_compare_mlil_hlil(func_name):
-                func_report.mlil_hlil = compare_mlil_hlil(mlil, hlil, func_name)
+                func_report.mlil_hlil = compare_mlil_hlil(
+                    mlil,
+                    hlil,
+                    func_name,
+                    min_provenance_coverage = self.min_provenance_coverage,
+                    max_unmatched_critical = self.max_unmatched_critical,
+                )
 
             llil_ok = func_report.llil_mlil.passed if func_report.llil_mlil else True
             hlil_ok = func_report.mlil_hlil.passed if func_report.mlil_hlil else True
@@ -3171,13 +4006,29 @@ class Validator:
 
         llil_mlil_file = out_path / f"{scp_name}_llil_mlil.txt"
         with open(llil_mlil_file, 'w', encoding='utf-8') as f:
-            file_validator = Validator(self.pipeline, no_color_fmt, self.progress, f, self.as_json)
+            file_validator = Validator(
+                self.pipeline,
+                no_color_fmt,
+                self.progress,
+                f,
+                self.as_json,
+                min_provenance_coverage = self.min_provenance_coverage,
+                max_unmatched_critical = self.max_unmatched_critical,
+            )
             file_validator.compare("llil", "mlil")
         print(f"LLIL->MLIL: {llil_mlil_file}", file=sys.stderr)
 
         mlil_hlil_file = out_path / f"{scp_name}_mlil_hlil.txt"
         with open(mlil_hlil_file, 'w', encoding='utf-8') as f:
-            file_validator = Validator(self.pipeline, no_color_fmt, self.progress, f, self.as_json)
+            file_validator = Validator(
+                self.pipeline,
+                no_color_fmt,
+                self.progress,
+                f,
+                self.as_json,
+                min_provenance_coverage = self.min_provenance_coverage,
+                max_unmatched_critical = self.max_unmatched_critical,
+            )
             file_validator.compare("mlil", "hlil")
         print(f"MLIL->HLIL: {mlil_hlil_file}", file=sys.stderr)
 
@@ -3206,6 +4057,18 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--export-regression", metavar="FILE", help="Export regression baseline")
     parser.add_argument("--compare-regression", metavar="FILE", help="Compare against regression baseline")
     parser.add_argument("--output-dir", metavar="DIR", help="Write results to separate files per layer pair")
+    parser.add_argument(
+        "--min-provenance-coverage",
+        type=float,
+        default=0.0,
+        help="Fail quality gate if provenance coverage falls below this percentage (0-100)"
+    )
+    parser.add_argument(
+        "--max-unmatched-critical",
+        type=int,
+        default=-1,
+        help="Fail quality gate if unmatched critical atom count exceeds this value (-1 disables)"
+    )
 
     return parser
 
@@ -3274,6 +4137,15 @@ class RegressionTester:
         regressions = []
         improvements = []
 
+        def extract_gate_count(result: Dict[str, Any], layer_key: str) -> int:
+            layer = result.get(layer_key, {})
+            stats = layer.get("statistics", {})
+            status_counts = stats.get("status_counts", {})
+            if "hard_fail" in status_counts:
+                return int(status_counts.get("hard_fail", 0))
+            # Backward-compatible baseline fallback
+            return int(status_counts.get("different", 0))
+
         for func_name, current in current_results.items():
             if func_name not in baseline_results:
                 continue
@@ -3282,8 +4154,8 @@ class RegressionTester:
 
             for layer_key in ("llil_mlil", "mlil_hlil"):
                 if layer_key in current and layer_key in base:
-                    cur_diff = current[layer_key]["statistics"]["status_counts"]["different"]
-                    base_diff = base[layer_key]["statistics"]["status_counts"]["different"]
+                    cur_diff = extract_gate_count(current, layer_key)
+                    base_diff = extract_gate_count(base, layer_key)
                     layer_label = layer_key.upper().replace("_", "-")
 
                     if cur_diff > base_diff:
@@ -3357,7 +4229,14 @@ def main() -> int:
     use_color = not args.no_color and not args.output_dir
     formatter = Formatter(use_color)
     progress = Progress()
-    validator = Validator(pipeline, formatter, progress, as_json=args.json)
+    validator = Validator(
+        pipeline,
+        formatter,
+        progress,
+        as_json = args.json,
+        min_provenance_coverage = args.min_provenance_coverage,
+        max_unmatched_critical = args.max_unmatched_critical,
+    )
 
     # Dispatch
     if args.output_dir:
