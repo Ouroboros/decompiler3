@@ -620,37 +620,71 @@ class ControlFlowOptimizationPass(Pass):
     def _try_convert_to_switch(self, if_stmt: HLILIf) -> Optional[HLILSwitch]:
         MIN_CASES = 3
         cases = []
+        seen_case_values = set()
         scrutinee = None
         default_body = None
         current_if = if_stmt
 
         while current_if:
             if not isinstance(current_if.condition, HLILBinaryOp):
+                return None
+
+            if current_if.condition.op == BinaryOp.EQ:
+                if len(cases) < MIN_CASES or scrutinee is None:
+                    return None
+
+                var_expr = current_if.condition.lhs
+                const_expr = current_if.condition.rhs
+
+                if not isinstance(const_expr, HLILConst):
+                    return None
+
+                if not isinstance(var_expr, HLILVar):
+                    return None
+
+                if scrutinee.var != var_expr.var:
+                    return None
+
+                case_value = const_expr.value
+                if case_value in seen_case_values:
+                    return None
+
+                case_body = current_if.true_block
+                seen_case_values.add(case_value)
+                cases.append((case_value, case_body))
+
+                if current_if.false_block and current_if.false_block.statements:
+                    default_body = current_if.false_block
+
                 break
 
             if current_if.condition.op != BinaryOp.NE:
-                break
+                return None
 
             var_expr = current_if.condition.lhs
             const_expr = current_if.condition.rhs
 
             if not isinstance(const_expr, HLILConst):
-                break
+                return None
 
             if not isinstance(var_expr, HLILVar):
-                break
+                return None
 
             if scrutinee is None:
                 scrutinee = var_expr
 
             else:
                 if scrutinee.var != var_expr.var:
-                    break
+                    return None
 
             case_value = const_expr.value
+            if case_value in seen_case_values:
+                return None
+
             case_body = current_if.false_block
 
             if case_body:
+                seen_case_values.add(case_value)
                 cases.append((case_value, case_body))
 
             if current_if.true_block:
@@ -664,13 +698,18 @@ class ControlFlowOptimizationPass(Pass):
                 if len(real_stmts) == 1:
                     next_stmt = real_stmts[0]
                     if isinstance(next_stmt, HLILSwitch):
-                        if isinstance(next_stmt.scrutinee, HLILVar) and scrutinee and next_stmt.scrutinee.var == scrutinee.var:
+                        if isinstance(next_stmt.scrutinee, HLILVar) and next_stmt.scrutinee.var == scrutinee.var:
                             for nested_case in next_stmt.cases:
                                 if nested_case.is_default():
                                     default_body = nested_case.body
 
                                 else:
-                                    cases.append((nested_case.value.value, nested_case.body))
+                                    case_value = nested_case.value.value
+                                    if case_value in seen_case_values:
+                                        return None
+
+                                    seen_case_values.add(case_value)
+                                    cases.append((case_value, nested_case.body))
                             break
 
             default_body = current_if.true_block
