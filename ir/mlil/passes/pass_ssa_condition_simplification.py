@@ -56,7 +56,7 @@ class ConditionSimplificationPass(Pass):
                             new_condition = condition.lhs
 
                 if new_condition is not None:
-                    block.instructions[i] = MLILIf(new_condition, inst.true_target, inst.false_target, address = inst.address)
+                    block.instructions[i] = MLILIf(new_condition, inst.true_target, inst.false_target, address = inst.address).copy_metadata_from(inst)
 
         return func
 

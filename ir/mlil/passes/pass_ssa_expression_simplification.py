@@ -63,18 +63,18 @@ class ExpressionSimplificationPass(Pass):
         if isinstance(inst, MLILSetVarSSA):
             new_value = self._simplify_expr(inst.value)
             if new_value is not inst.value:
-                return MLILSetVarSSA(inst.var, new_value, address = inst.address)
+                return MLILSetVarSSA(inst.var, new_value, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, MLILIf):
             new_condition = self._simplify_expr(inst.condition)
             if new_condition is not inst.condition:
-                return MLILIf(new_condition, inst.true_target, inst.false_target, address = inst.address)
+                return MLILIf(new_condition, inst.true_target, inst.false_target, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, MLILRet):
             if inst.value is not None:
                 new_value = self._simplify_expr(inst.value)
                 if new_value is not inst.value:
-                    return MLILRet(new_value, address = inst.address)
+                    return MLILRet(new_value, address = inst.address).copy_metadata_from(inst)
 
         return inst
 

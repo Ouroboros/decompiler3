@@ -390,7 +390,7 @@ class SSAConstructor:
             new_ver = self._new_version(inst.var)
             pushed.append(inst.var)
 
-            return MLILSetVarSSA(MLILVariableSSA(inst.var, new_ver), new_value, address = inst.address)
+            return MLILSetVarSSA(MLILVariableSSA(inst.var, new_ver), new_value, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
             # Find variables passed via AddressOf (output parameters)
@@ -414,7 +414,7 @@ class SSAConstructor:
 
                 # Pseudo-definition: var#new = <undef> (call modified the variable)
                 new_ssa_var = MLILVariableSSA(var, new_ver)
-                pseudo_def = MLILSetVarSSA(new_ssa_var, MLILUndef(), address = inst.address)
+                pseudo_def = MLILSetVarSSA(new_ssa_var, MLILUndef(), address = inst.address).copy_metadata_from(inst)
                 result.append(pseudo_def)
 
             return result
@@ -470,37 +470,37 @@ class SSAConstructor:
             new_cond = self._rename_expr(stmt.condition)
 
             if new_cond is not stmt.condition:
-                return MLILIf(new_cond, stmt.true_target, stmt.false_target, address = stmt.address)
+                return MLILIf(new_cond, stmt.true_target, stmt.false_target, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, MLILRet):
             if stmt.value is not None:
                 new_value = self._rename_expr(stmt.value)
 
                 if new_value is not stmt.value:
-                    return MLILRet(new_value, address = stmt.address)
+                    return MLILRet(new_value, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
             new_args = [self._rename_expr(arg) for arg in stmt.args]
 
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
-                    return MLILCall(stmt.target, new_args, address = stmt.address)
+                    return MLILCall(stmt.target, new_args, address = stmt.address).copy_metadata_from(stmt)
 
                 elif isinstance(stmt, MLILSyscall):
-                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address)
+                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address).copy_metadata_from(stmt)
 
                 elif isinstance(stmt, MLILCallScript):
-                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address)
+                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._rename_expr(stmt.value)
 
             if new_value is not stmt.value:
                 if isinstance(stmt, MLILStoreGlobal):
-                    return MLILStoreGlobal(stmt.index, new_value, address = stmt.address)
+                    return MLILStoreGlobal(stmt.index, new_value, address = stmt.address).copy_metadata_from(stmt)
 
                 else:
-                    return MLILStoreReg(stmt.index, new_value, address = stmt.address)
+                    return MLILStoreReg(stmt.index, new_value, address = stmt.address).copy_metadata_from(stmt)
 
         return stmt
 
@@ -848,7 +848,7 @@ class SSADeconstructor:
             if isinstance(inst.value, MLILUndef):
                 return None
 
-            return MLILSetVar(new_var, new_value, address = inst.address)
+            return MLILSetVar(new_var, new_value, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, MLILPhi):
             raise RuntimeError('Phi node not eliminated')
@@ -885,34 +885,34 @@ class SSADeconstructor:
         if isinstance(stmt, MLILIf):
             new_cond = self._apply_mapping_to_expr(stmt.condition)
             if new_cond is not stmt.condition:
-                return MLILIf(new_cond, stmt.true_target, stmt.false_target, address = stmt.address)
+                return MLILIf(new_cond, stmt.true_target, stmt.false_target, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, MLILRet):
             if stmt.value:
                 new_value = self._apply_mapping_to_expr(stmt.value)
                 if new_value is not stmt.value:
-                    return MLILRet(new_value, address = stmt.address)
+                    return MLILRet(new_value, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
             new_args = [self._apply_mapping_to_expr(arg) for arg in stmt.args]
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
-                    return MLILCall(stmt.target, new_args, address = stmt.address)
+                    return MLILCall(stmt.target, new_args, address = stmt.address).copy_metadata_from(stmt)
 
                 elif isinstance(stmt, MLILSyscall):
-                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address)
+                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address).copy_metadata_from(stmt)
 
                 elif isinstance(stmt, MLILCallScript):
-                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address)
+                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._apply_mapping_to_expr(stmt.value)
             if new_value is not stmt.value:
                 if isinstance(stmt, MLILStoreGlobal):
-                    return MLILStoreGlobal(stmt.index, new_value, address = stmt.address)
+                    return MLILStoreGlobal(stmt.index, new_value, address = stmt.address).copy_metadata_from(stmt)
 
                 else:
-                    return MLILStoreReg(stmt.index, new_value, address = stmt.address)
+                    return MLILStoreReg(stmt.index, new_value, address = stmt.address).copy_metadata_from(stmt)
 
         return stmt
 

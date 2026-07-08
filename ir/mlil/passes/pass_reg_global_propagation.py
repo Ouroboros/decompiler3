@@ -379,9 +379,7 @@ class RegGlobalValuePropagator:
     def _copy_metadata(self, src: MediumLevelILInstruction,
                        dst: MediumLevelILInstruction) -> None:
         '''Copy metadata from source to destination instruction'''
-        dst.address = src.address
-        dst.inst_index = src.inst_index
-        dst.llil_index = src.llil_index
+        dst.copy_metadata_from(src)
 
     def _rebuild_binary(self, expr: MLILBinaryOp,
                         lhs: MediumLevelILInstruction,
@@ -469,13 +467,13 @@ class RegGlobalValuePropagator:
                       new_args: List[MediumLevelILInstruction]) -> MediumLevelILInstruction:
         '''Rebuild call instruction with new arguments'''
         if isinstance(inst, MLILCall):
-            return MLILCall(inst.target, new_args, address = inst.address)
+            return MLILCall(inst.target, new_args, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, MLILSyscall):
-            return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address)
+            return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, MLILCallScript):
-            return MLILCallScript(inst.module, inst.func, new_args, address = inst.address)
+            return MLILCallScript(inst.module, inst.func, new_args, address = inst.address).copy_metadata_from(inst)
 
         else:
             raise NotImplementedError(f'Unhandled call type: {type(inst).__name__}')

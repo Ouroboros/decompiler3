@@ -3,8 +3,11 @@
 *.png
 *.zip
 
-tests
+# tests
 openspec
 .claude
 .gemini
 .codex
+tests/debug.*
+tests/mp2000_ev.*
+tests/mp3010_01.*

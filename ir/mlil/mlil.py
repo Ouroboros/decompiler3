@@ -126,6 +126,13 @@ class MediumLevelILInstruction(ILInstruction):
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} {self.operation_name}>'
 
+    def copy_metadata_from(self, source: 'MediumLevelILInstruction') -> 'MediumLevelILInstruction':
+        '''Copy source tracking metadata from another MLIL instruction.'''
+        self.address = source.address
+        self.inst_index = source.inst_index
+        self.llil_index = source.llil_index
+        return self
+
 
 # === Instruction Categories ===
 
