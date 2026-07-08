@@ -402,6 +402,7 @@ class IRErrorHandler:
             exception=str(exception) if exception else None
         )
         self.warnings.append(error)
+        self.skipped_functions[func_name] = IRErrorKind.HLIL_CONVERT
         return error
 
     def handle_unknown_operation(
