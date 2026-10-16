@@ -1,20 +1,22 @@
-
 # AGENTS.md
 
-## Role & Scope
+## Scope
 
-You are an AI coding agent working on this repository.
-
-These instructions are **mandatory** and override your default behavior whenever you work in this repo.
-
-Always follow them when:
-
-- Reading, editing, or creating code in this repository
-- Generating diffs / patches
-- Suggesting refactors or new APIs
-- Proposing commit messages
+These instructions are **mandatory** and override your default behavior whenever you work in this repo. Read this file before starting any task to refresh the rules.
 
 If any user request conflicts with this file, you must follow **this file** and, if needed, briefly explain why.
+
+## Workflow
+
+- **Language**: communicate with the user in Chinese. Everything else in English: code, commit messages, tool descriptions, and comments/documentation (Coding Style Guide rule 5).
+- **Git commits**: never auto-commit; create commits only when the user explicitly requests (message format: Coding Style Guide rule 7).
+- **Code modification**: never modify code during discussion; modify code only after the user explicitly confirms the approach.
+
+## Environment
+
+- Python 3.14.0: `D:\Dev\Python\python.exe`
+- Shell: Git Bash (MINGW64) on Windows
+- Codebase: existing IR modules (`ir/llil`, `ir/mlil`, `ir/hlil`) and `falcom/ed9` parser; in-memory analysis with text/JSON report output (003-ir-pass-validation)
 
 ---
 
@@ -51,7 +53,7 @@ size = value * WORD_SIZE
 ```
 
 **Common Constants:**
-- `WORD_SIZE = 4` (defined in `ir/llil.py`)
+- `WORD_SIZE = 4` (defined in `ir/llil/llil.py`)
   - Use for all byte/word conversions
   - Use for all stack offset calculations
   - Use for all size multiplications
@@ -217,6 +219,31 @@ Fix binary operation operand order
 Add disassembler framework
 ```
 
+### 8. Blank Lines Between Conditional Blocks
+
+Add a blank line between `if`/`elif`, `elif`/`elif`, `elif`/`else`, and `if`/`else`.
+
+#### ✅ CORRECT:
+```python
+if cond1:
+    action1()
+
+elif cond2:
+    action2()
+
+else:
+    action3()
+```
+
+### 9. Concise Comments
+
+Keep comments brief and meaningful. Avoid redundant explanations.
+
+- ✅ `# Skip self-assignment (var = var)`
+- ❌ `# This code checks if the variable is equal to itself and if so we skip it`
+- ✅ Use self-explanatory names instead of verbose comments
+- ❌ Don't state the obvious: `x = 5  # Set x to 5`
+
 ## Enforcement
 
 All code must follow these rules.
@@ -225,9 +252,12 @@ All code must follow these rules.
 - [ ] No hardcoded `4` for word size
 - [ ] No hardcoded numeric constants without names
 - [ ] All constants imported from appropriate modules
+- [ ] Imports at module top level
 - [ ] Comments reference constant names, not values
 - [ ] All assignments have spaces: `x = value` (not `x=value`)
 - [ ] All comments are in English (no Chinese or other languages)
+- [ ] Comments are concise (no redundant explanations)
+- [ ] Blank lines between conditional blocks
 - [ ] No `@staticmethod` - use `@classmethod` instead
 - [ ] Commit messages are concise (1-2 sentences)
 - [ ] No Claude Code signatures or tool attributions in commits
