@@ -161,6 +161,31 @@ class TestControlFlowOptimizationSwitchConversion(unittest.TestCase):
         self.assertEqual(len(func.body.statements), EXPECTED_TOP_LEVEL_STATEMENT_COUNT)
         self.assertIsInstance(func.body.statements[0], HLILIf)
 
+    def test_ne_check_without_else_becomes_empty_case(self):
+        # if (x != 1) { ... } without else: x == 1 must skip everything, not reach the default
+        terminal_if = HLILIf(make_condition(BinaryOp.EQ, TERMINAL_CASE_VALUE), make_terminal_body(), HLILBlock())
+        third_if = make_ne_check(THIRD_CASE_VALUE, terminal_if)
+        second_if = make_ne_check(SECOND_CASE_VALUE, third_if)
+        first_if = HLILIf(make_condition(BinaryOp.NE, FIRST_CASE_VALUE), HLILBlock([second_if]), None)
+
+        switch_stmt = self.run_pass(first_if).body.statements[0]
+
+        self.assertIsInstance(switch_stmt, HLILSwitch)
+        first_cases = [case for case in switch_stmt.cases if FIRST_CASE_VALUE in [value.value for value in case.values]]
+        self.assertEqual(len(first_cases), EXPECTED_TERMINAL_CASE_COUNT)
+        self.assertEqual(first_cases[0].body.statements, [])
+
+    def test_identical_bodies_with_different_line_comments_share_one_case(self):
+        labels = (FIRST_CASE_VALUE, SECOND_CASE_VALUE, THIRD_CASE_VALUE)
+        bodies = [
+            HLILBlock([HLILComment(f'line({label})'), HLILExprStmt(HLILCall(TERMINAL_MARKER_CALL, []))])
+            for label in labels
+        ]
+        switch_stmt = self.run_pass(self.make_eq_chain(labels, bodies)).body.statements[0]
+
+        self.assertIsInstance(switch_stmt, HLILSwitch)
+        self.assertEqual([[value.value for value in case.values] for case in switch_stmt.cases], [list(labels)])
+
     def test_nested_switch_non_const_case_value_is_not_silently_ignored(self):
         nested_switch = HLILSwitch(make_var(), [
             HLILSwitchCase(make_var(), make_case_body(NESTED_CASE_VALUE)),

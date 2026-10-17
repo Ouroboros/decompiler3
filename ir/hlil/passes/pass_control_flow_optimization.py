@@ -686,11 +686,10 @@ class ControlFlowOptimizationPass(Pass):
             if case_value in seen_case_values:
                 return None
 
-            case_body = current_if.false_block
-
-            if case_body:
-                seen_case_values.add(case_value)
-                cases.append((case_value, case_body))
+            # if (x != a) { rest } without else: x == a skips the rest, an empty case
+            case_body = current_if.false_block or HLILBlock()
+            seen_case_values.add(case_value)
+            cases.append((case_value, case_body))
 
             if current_if.true_block:
                 real_stmts = [s for s in current_if.true_block.statements if not isinstance(s, HLILComment)]
@@ -788,7 +787,9 @@ class ControlFlowOptimizationPass(Pass):
         switch_cases = []
         by_text = {}
         for case_value, case_body in cases:
-            text = '\n'.join(HLILFormatter.format_block(case_body))
+            # Line comments differ between copies of the same code; the first body's comments are kept
+            code = HLILBlock([stmt for stmt in case_body.statements if not isinstance(stmt, HLILComment)])
+            text = '\n'.join(HLILFormatter.format_block(code))
             if text in by_text:
                 by_text[text].extra_values.append(HLILConst(case_value))
                 continue
@@ -828,8 +829,9 @@ class ControlFlowOptimizationPass(Pass):
                 for case in stmt.cases:
                     self._merge_nested_switches(case.body)
 
-                    if len(case.body.statements) == 1:
-                        nested_stmt = case.body.statements[0]
+                    real_stmts = [s for s in case.body.statements if not isinstance(s, HLILComment)]
+                    if len(real_stmts) == 1:
+                        nested_stmt = real_stmts[0]
                         if isinstance(nested_stmt, HLILSwitch):
                             if isinstance(nested_stmt.scrutinee, HLILVar) and isinstance(stmt.scrutinee, HLILVar):
                                 if nested_stmt.scrutinee.var == stmt.scrutinee.var:

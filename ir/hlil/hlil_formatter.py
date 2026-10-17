@@ -221,11 +221,10 @@ class HLILFormatter:
                     lines.append(f'{indent_str}{case_indent}{labels}')
                 lines.extend(cls._format_block(case.body, indent + 2))
 
-                # Add break if case doesn't end with return/break/continue
-                if case.body.statements:
-                    last_stmt = case.body.statements[-1]
-                    if not isinstance(last_stmt, (HLILReturn, HLILBreak, HLILContinue)):
-                        lines.append(f'{indent_str}{case_body_indent}break;')
+                # Cases never fall through, empty ones included
+                last_stmt = case.body.statements[-1] if case.body.statements else None
+                if not isinstance(last_stmt, (HLILReturn, HLILBreak, HLILContinue)):
+                    lines.append(f'{indent_str}{case_body_indent}break;')
 
             lines.append(f'{indent_str}}}')
 

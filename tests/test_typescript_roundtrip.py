@@ -88,10 +88,23 @@ class TestRoundTrip(unittest.TestCase):
             self.assert_same_behavior(func, (value, 0))
 
 
+    def test_empty_case_does_not_fall_through(self):
+        cases = [
+            HLILSwitchCase(HLILConst(0), HLILBlock()),
+            HLILSwitchCase(HLILConst(1), HLILBlock([HLILReturn(HLILConst(TRUE_RESULT))])),
+        ]
+        func = make_function(HLILSwitch(arg(1), cases), HLILReturn(HLILConst(FALSE_RESULT)))
+        self.assert_same_behavior(func, (0, 0))
+
+
 class TestParser(unittest.TestCase):
     def test_undeclared_names_are_rejected(self):
         with self.assertRaises(TSParseError):
             parse_typescript('function f(): void {\n    x = 1;\n}')
+
+    def test_case_falling_through_is_rejected(self):
+        with self.assertRaises(TSParseError):
+            parse_typescript('function f(arg1: number): void {\n    switch (arg1) {\n        case 0: {\n        }\n    }\n}')
 
 
 if __name__ == '__main__':

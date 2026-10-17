@@ -567,11 +567,11 @@ class TypeScriptGenerator:
                     lines.append(f'{indent_str}{case_indent}{labels} {{')
                 lines.extend(cls._generate_block(case.body, indent + 2))
 
-                # Add break if case doesn't end with return/break/continue
-                if case.body.statements:
-                    last_stmt = case.body.statements[-1]
-                    if not isinstance(last_stmt, (HLILReturn, HLILBreak, HLILContinue)):
-                        lines.append(f'{indent_str}{case_body_indent}break;')
+                # Cases never fall through: add break unless the case ends with return/break/continue,
+                # including empty cases (case a: {} would fall into the next case in JavaScript)
+                last_stmt = case.body.statements[-1] if case.body.statements else None
+                if not isinstance(last_stmt, (HLILReturn, HLILBreak, HLILContinue)):
+                    lines.append(f'{indent_str}{case_body_indent}break;')
 
                 lines.append(f'{indent_str}{case_indent}}}')
 

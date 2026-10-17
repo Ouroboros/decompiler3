@@ -289,7 +289,7 @@ class TypeScriptParser:
         while not self._accept('}'):
             if self._accept('default'):
                 self._expect(':')
-                cases.append(HLILSwitchCase(None, self._parse_block()))
+                cases.append(HLILSwitchCase(None, self._parse_case_body()))
                 continue
 
             # case a: case b: { ... } shares one body
@@ -301,9 +301,19 @@ class TypeScriptParser:
             if not values:
                 raise TSParseError(f'expected case or default at {self._peek().position}')
 
-            cases.append(HLILSwitchCase(values[0], self._parse_block(), values[1:]))
+            cases.append(HLILSwitchCase(values[0], self._parse_case_body(), values[1:]))
 
         return HLILSwitch(scrutinee, cases)
+
+    def _parse_case_body(self) -> HLILBlock:
+        '''A case body must end the case; JavaScript would fall through into the next one otherwise'''
+        position = self._peek().position
+        body = self._parse_block()
+        last = body.statements[-1] if body.statements else None
+        if not isinstance(last, (HLILBreak, HLILContinue, HLILReturn)):
+            raise TSParseError(f'case at {position} falls through')
+
+        return body
 
     # -------------------------------------------------------- expressions --
 
