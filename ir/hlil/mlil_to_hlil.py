@@ -672,6 +672,10 @@ class MLILToHLILConverter:
         # Active loops, innermost last (for break/continue generation)
         self.loop_stack: List[LoopStackEntry] = []
 
+        # Nonzero while re-emitting code that another path already emitted
+        self.copying_shared_code: int = 0
+        self.copied_blocks: Set[int] = set()
+
         # Structural analyzer for accurate merge point detection
         self.structural_analyzer: Optional[StructuralAnalyzer] = None
 
@@ -1237,12 +1241,39 @@ class MLILToHLILConverter:
                     target_block.add_statement(stmt)
                     return None
 
-            # Skip already processed blocks
-            if block_idx in self.visited_blocks or block_idx in self.globally_processed:
-                if block_idx in self.loop_headers and block_idx in self.globally_processed:
+            # Blocks already on this path, and merge points handled by an enclosing scope, end the path.
+            # While copying shared code, blocks a sibling path emitted are copied too; pending merge
+            # points (visited but never emitted) still end the copy.
+            if self.copying_shared_code:
+                if block_idx in self.copied_blocks:
+                    return None
+
+                if block_idx in self.visited_blocks and block_idx not in self.globally_processed:
+                    return None
+
+            elif block_idx in self.visited_blocks:
+                return None
+
+            if block_idx in self.globally_processed and (self.copying_shared_code == 0 or block_idx in self.loop_headers):
+                if block_idx in self.loop_headers:
                     block_label = self.mlil_func.basic_blocks[block_idx].label
                     print(f'[loop] jump into inactive loop header {block_label} in {self.mlil_func.name} (possible lost path)', file = sys.stderr)
-                return None
+                    return None
+
+                if stop_at is not None and block_idx == stop_at:
+                    return None
+
+                # Code already emitted on another path (e.g. a switch case falling into the next case)
+                # also runs on this path: emit a copy instead of dropping it
+                self.copying_shared_code += 1
+                saved_copied = self.copied_blocks
+                self.copied_blocks = set()
+                try:
+                    return self._reconstruct_control_flow(block_idx, target_block, stop_at, jump_source, force_plain)
+
+                finally:
+                    self.copied_blocks = saved_copied
+                    self.copying_shared_code -= 1
 
             if stop_at is not None and block_idx == stop_at:
                 # Reached the merge point - stop here, don't process this block
@@ -1257,6 +1288,8 @@ class MLILToHLILConverter:
             force_plain = False
             self.visited_blocks.add(block_idx)
             self.globally_processed.add(block_idx)
+            if self.copying_shared_code:
+                self.copied_blocks.add(block_idx)
 
             self.current_block_idx = block_idx
             mlil_block = self.mlil_func.basic_blocks[block_idx]
