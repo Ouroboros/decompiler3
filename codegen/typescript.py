@@ -197,11 +197,10 @@ class TypeScriptGenerator:
         if child_prec < parent_prec:
             return True
 
-        # For same precedence, only right operand needs parentheses for non-associative ops
+        # Operators group left to right, so a right operand of the same precedence keeps its parentheses:
+        # no VM operator is associative (float32 rounds every step, integer division truncates)
         if child_prec == parent_prec and not is_left:
-            # Non-associative: -, /, %
-            if parent_op in {'-', '/', '%'}:
-                return True
+            return True
 
         return False
 

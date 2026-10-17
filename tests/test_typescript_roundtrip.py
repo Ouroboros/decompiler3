@@ -72,6 +72,12 @@ class TestRoundTrip(unittest.TestCase):
         self.assert_same_behavior(func, (SUB_LHS, SUB_RHS))
 
 
+    def test_right_operand_of_same_precedence_keeps_parentheses(self):
+        # arg1 * (arg2 / 3) truncates before multiplying; (arg1 * arg2) / 3 does not
+        product = HLILBinaryOp(BinaryOp.MUL, arg(1), HLILBinaryOp(BinaryOp.DIV, arg(2), HLILConst(SUB_RHS)))
+        func = make_function(HLILReturn(product))
+        self.assert_same_behavior(func, (SUB_RHS, SUB_RHS + 1))
+
     def test_shared_case_labels(self):
         cases = [
             HLILSwitchCase(HLILConst(0), HLILBlock([HLILReturn(HLILConst(TRUE_RESULT))]), [HLILConst(SCALE)]),
