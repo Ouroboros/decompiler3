@@ -13,12 +13,14 @@ Runtime semantics of the Kuro no Kiseki script interpreter, reverse engineered f
 Everything below is taken from these functions unless marked *convention* (observed in compiled scripts,
 not enforced by the VM). "Halt" means `flags = 0`: the thread stops and is treated as finished.
 
-The spec was written from the Hex-Rays pseudocode of these functions. The low-level details were then
-checked against the disassembly: sign extension (`shl 2` / `sar 2`), tag stores (`bts 1Eh` / `bts 1Fh`),
-float stores (`shr 2`), integer-to-float conversion (`cvtdq2ps`), float comparisons (`comiss` with
-`setnbe` / `setnb`, `ucomiss` with `jp`), division (`cdq; idiv` without a zero check), branch tests
-(`test 3FFFFFFFh`) and the `PUSH` instruction length. Float results assume the default MXCSR (round to
-nearest, no flush-to-zero), which cannot be confirmed statically.
+The spec was first written from the Hex-Rays pseudocode of these functions; afterwards every opcode
+handler of `VMContext::execute` (all 41 jump table cases, the run loop and the default case) and the four
+helpers were checked instruction by instruction against the disassembly, which is authoritative: sign
+extension (`shl 2` / `sar 2`), tag stores (`bts 1Eh` / `bts 1Fh`), float stores (`shr 2`), integer-to-float
+conversion (`cvtdq2ps`), float comparisons (`comiss` with `setnbe` / `setnb`, `ucomiss` with `jp`),
+division (`cdq; idiv` without a zero check), branch tests (`test 3FFFFFFFh`), type checks
+(`and 0C0000000h; cmp 40000000h`), bounds checks and operand lengths. Float results assume the default
+MXCSR (round to nearest, no flush-to-zero), which cannot be confirmed statically.
 
 ## 1. Execution Context
 
@@ -32,8 +34,10 @@ nearest, no flush-to-zero), which cannot be confirmed statically.
 | `lineno` | Set by `DEBUG_SET_LINENO` |
 | `flags` | See 1.1 |
 | `syscall_cmd1/2/3` | Operands of the last `SYSCALL` |
+| `ctx+0x7C` | `dt` argument of the last `execute` call |
+| `ctx+0x80` | 1 while the syscall handler runs (first call and every re-call), else 0 |
 | vtable slot 4 | Syscall handler `(ctx, cmd1, cmd2)` |
-| vtable slot 5 | Module call `(ctx, module_name, func_name[, argc])`, returns success |
+| vtable slot 5 | Module call `(ctx, module_name, func_name, argc)`, returns success |
 | vtable slot 6 | Thread finished |
 
 ### 1.1 Flags
@@ -100,7 +104,7 @@ An instruction is an opcode byte followed by little-endian operands. `word` is a
 
 | Op | Mnemonic | Operands | Size | Stack | Effect |
 | --- | --- | --- | --- | --- | --- |
-| `00` | `PUSH` | size:u8, value:word | 6 | → v | Push `value`. `size` is always 4; `pc` advances by 6 regardless |
+| `00` | `PUSH` | size:u8, value:word | 6 | → v | Push `value`. `size` is always 4; `pc` advances by 6 regardless (`memmove` copies `size` bytes from the 4-byte operand) |
 | `01` | `POP` | bytes:u8 | 2 | drop | `stackTop -= bytes` |
 | `02` | `LOAD_STACK` | off:i32 | 5 | → v | Push the word at `stackTop + off` |
 | `03` | `LOAD_STACK_DEREF` | off:i32 | 5 | → v | Push the word a stack address points to (6) |
@@ -128,10 +132,10 @@ An instruction is an opcode byte followed by little-endian operands. `word` is a
 | `22` | `CALL_SCRIPT` | module:word, func:word, argc:u8 | 10 | | Call another script (5.3) |
 | `23` | `CALL_SCRIPT_NO_RETURN` | module:word, func:word, argc:u8 | 10 | | Replace the thread with another script (5.4) |
 | `24` | `SYSCALL` | cmd1:u8, cmd2:u8, argc:u8 | 4 | | Engine call (5.5) |
-| `25` | `PUSH_CALLER_FRAME` | retaddr:u32 | 5 | → frame | Push `funcIndex`, `retaddr`, script pointer (8 bytes), `0xF0000000` |
+| `25` | `PUSH_CALLER_FRAME` | retaddr:u32 | 5 | → frame | Push `funcIndex` and `retaddr` as untagged words, script pointer (8 bytes), `0xF0000000` |
 | `26` | `DEBUG_SET_LINENO` | line:u16 | 3 | | `lineno = line` |
 | `27` | `POPN` | count:u8 | 2 | drop | `stackTop -= 4 * count` |
-| `28` | `DEBUG_LOG` | value:i32 | 5 | | Log `debug : %d` |
+| `28` | `DEBUG_LOG` | value:i32 | 5 | | `debug_log(0, "debug : %d")`; no effect, `debug_log` ignores levels below 2 |
 
 The disassembler shows `PUSH` as `PUSH_INT`, `PUSH_FLOAT`, `PUSH_STR` or `PUSH_RAW` by tag, and as
 `PUSH_CURRENT_FUNC_ID` / `PUSH_RET_ADDR` inside call sequences. These are not separate opcodes.
@@ -168,8 +172,9 @@ w = pop
 if w == 0xF0000000:                   # frame of PUSH_CALLER_FRAME
     script = pop 8 bytes; pc = pop; funcIndex = pop
     funcName = name of funcIndex in the restored script (halt if funcIndex >= function count)
+    # no is_common_func check and no pc bound check on this path
 elif w == 0x0FFFFFFF:                 # bottom of a CALL_SCRIPT_NO_RETURN thread
-    halt; vtable[6](ctx)
+    halt; vtable[6](ctx)              # the run loop then sees flags == 0 and calls vtable[6] again
 else:
     pc = w; halt if w > image size
     f = pop; halt if f >= function count
@@ -195,7 +200,8 @@ Pops `argc` arguments (the first 32 are kept; extras are dropped, and with more 
 past a 32-entry buffer), sets `stackTop = 0`, pushes `0x0FFFFFFF`, pushes the kept arguments back in their
 original order and calls vtable slot 5 with `argc`. All caller frames are discarded: when the target
 returns, `RETURN` finds `0x0FFFFFFF` and the thread ends. On failure the arguments are popped and `RETURN`
-ends the thread.
+ends the thread. Unlike `CALL_SCRIPT` it does not set flag `0x8`; if `stackBottom < 4` the marker is not
+pushed and the thread halts.
 
 ### 5.5 SYSCALL
 
