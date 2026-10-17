@@ -110,14 +110,41 @@ class TestControlFlowOptimizationSwitchConversion(unittest.TestCase):
         self.assertEqual(len(terminal_cases), EXPECTED_TERMINAL_CASE_COUNT)
         self.assertTrue(block_contains_call(terminal_cases[0].body, TERMINAL_MARKER_CALL))
 
-    def test_eq_chain_is_not_converted_to_switch(self):
-        third_if = HLILIf(make_condition(BinaryOp.EQ, THIRD_CASE_VALUE), make_case_body(THIRD_CASE_VALUE), HLILBlock())
-        second_if = HLILIf(make_condition(BinaryOp.EQ, SECOND_CASE_VALUE), make_case_body(SECOND_CASE_VALUE), HLILBlock([third_if]))
-        first_if = HLILIf(make_condition(BinaryOp.EQ, FIRST_CASE_VALUE), make_case_body(FIRST_CASE_VALUE), HLILBlock([second_if]))
+    def make_eq_chain(self, labels, bodies) -> HLILIf:
+        chain = None
+        for label, body in reversed(list(zip(labels, bodies))):
+            chain = HLILIf(make_condition(BinaryOp.EQ, label), body, HLILBlock([chain] if chain else []))
 
-        func = self.run_pass(first_if)
+        return chain
+
+    def test_eq_chain_becomes_switch(self):
+        labels = (FIRST_CASE_VALUE, SECOND_CASE_VALUE, THIRD_CASE_VALUE)
+        func = self.run_pass(self.make_eq_chain(labels, [make_case_body(label) for label in labels]))
 
         self.assertEqual(len(func.body.statements), EXPECTED_TOP_LEVEL_STATEMENT_COUNT)
+        switch_stmt = func.body.statements[0]
+        self.assertIsInstance(switch_stmt, HLILSwitch)
+        self.assertEqual([case.value.value for case in switch_stmt.cases], list(labels))
+
+    def test_identical_case_bodies_share_one_case(self):
+        labels = (FIRST_CASE_VALUE, SECOND_CASE_VALUE, THIRD_CASE_VALUE)
+        bodies = [make_case_body(FIRST_CASE_VALUE), make_case_body(THIRD_CASE_VALUE), make_case_body(FIRST_CASE_VALUE)]
+        switch_stmt = self.run_pass(self.make_eq_chain(labels, bodies)).body.statements[0]
+
+        self.assertIsInstance(switch_stmt, HLILSwitch)
+        self.assertEqual(
+            [[value.value for value in case.values] for case in switch_stmt.cases],
+            [[FIRST_CASE_VALUE, THIRD_CASE_VALUE], [SECOND_CASE_VALUE]],
+        )
+
+    def test_labels_equal_under_vm_equality_prevent_conversion(self):
+        labels = (FIRST_CASE_VALUE, float(FIRST_CASE_VALUE), SECOND_CASE_VALUE)
+        func = self.run_pass(self.make_eq_chain(labels, [make_case_body(FIRST_CASE_VALUE)] * len(labels)))
+        self.assertIsInstance(func.body.statements[0], HLILIf)
+
+    def test_string_and_number_labels_prevent_conversion(self):
+        labels = (FIRST_CASE_VALUE, TEST_FUNCTION_NAME, SECOND_CASE_VALUE)
+        func = self.run_pass(self.make_eq_chain(labels, [make_case_body(FIRST_CASE_VALUE)] * len(labels)))
         self.assertIsInstance(func.body.statements[0], HLILIf)
 
     def test_duplicate_case_value_prevents_switch_conversion(self):

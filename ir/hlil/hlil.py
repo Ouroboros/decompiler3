@@ -421,11 +421,19 @@ class HLILFor(HLILStatement):
 
 
 class HLILSwitchCase:
-    '''Switch case: case value: { ... }'''
+    '''Switch case: case value: [case value: ...] { ... }'''
 
-    def __init__(self, value: Optional[HLILExpression], body: 'HLILBlock'):
+    def __init__(self, value: Optional[HLILExpression], body: 'HLILBlock',
+                 extra_values: Optional[List[HLILExpression]] = None):
         self.value = value  # None for default case
+        # Further labels sharing the body (case 0: case 1: { ... })
+        self.extra_values: List[HLILExpression] = list(extra_values or [])
         self.body = body
+
+    @property
+    def values(self) -> List[HLILExpression]:
+        '''All case labels; empty for the default case'''
+        return [] if self.value is None else [self.value] + self.extra_values
 
     def is_default(self) -> bool:
         '''Check if this is the default case'''
@@ -434,7 +442,7 @@ class HLILSwitchCase:
     def __str__(self) -> str:
         if self.is_default():
             return 'default: { ... }'
-        return f'case {self.value}: {{ ... }}'
+        return ' '.join(f'case {value}:' for value in self.values) + ' { ... }'
 
     def __repr__(self) -> str:
         if self.is_default():

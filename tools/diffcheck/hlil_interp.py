@@ -290,7 +290,7 @@ class HLILInterpreter:
         scrutinee = self._eval(stmt.scrutinee)
         chosen = None
         for case in stmt.cases:
-            if not case.is_default() and binary_op(Op.EQ, scrutinee, self._eval(case.value)) == bool_value(True):
+            if any(binary_op(Op.EQ, scrutinee, self._eval(value)) == bool_value(True) for value in case.values):
                 chosen = case
                 break
 

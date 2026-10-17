@@ -126,6 +126,11 @@ class HLILFormatter:
         return lines
 
     @classmethod
+    def format_block(cls, block: HLILBlock) -> List[str]:
+        '''Format the statements of a block without indentation'''
+        return cls._format_block(block)
+
+    @classmethod
     def _format_block(cls, block: HLILBlock, indent: int = 0) -> List[str]:
         '''Format a block of statements'''
         lines = []
@@ -212,8 +217,8 @@ class HLILFormatter:
                 if case.is_default():
                     lines.append(f'{indent_str}{case_indent}default:')
                 else:
-                    case_val_str = cls._format_expr(case.value)
-                    lines.append(f'{indent_str}{case_indent}case {case_val_str}:')
+                    labels = ' '.join(f'case {cls._format_expr(value)}:' for value in case.values)
+                    lines.append(f'{indent_str}{case_indent}{labels}')
                 lines.extend(cls._format_block(case.body, indent + 2))
 
                 # Add break if case doesn't end with return/break/continue

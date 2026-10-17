@@ -288,14 +288,20 @@ class TypeScriptParser:
         cases = []
         while not self._accept('}'):
             if self._accept('default'):
-                value = None
+                self._expect(':')
+                cases.append(HLILSwitchCase(None, self._parse_block()))
+                continue
 
-            else:
-                self._expect('case')
-                value = self._parse_expression()
+            # case a: case b: { ... } shares one body
+            values = []
+            while self._accept('case'):
+                values.append(self._parse_expression())
+                self._expect(':')
 
-            self._expect(':')
-            cases.append(HLILSwitchCase(value, self._parse_block()))
+            if not values:
+                raise TSParseError(f'expected case or default at {self._peek().position}')
+
+            cases.append(HLILSwitchCase(values[0], self._parse_block(), values[1:]))
 
         return HLILSwitch(scrutinee, cases)
 

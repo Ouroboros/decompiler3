@@ -32,6 +32,11 @@ from ..hlil import (
     BinaryOp,
     UnaryOp,
 )
+from ..hlil_formatter import HLILFormatter
+
+
+# Fewest distinct labels an if-chain needs before it becomes a switch
+MIN_SWITCH_CASES = 3
 
 
 class ControlFlowOptimizationPass(Pass):
@@ -107,7 +112,7 @@ class ControlFlowOptimizationPass(Pass):
                 self._remove_redundant_else_assign(stmt)
 
                 # Convert nested if-chain to switch
-                switch_stmt = self._try_convert_to_switch(stmt)
+                switch_stmt = self._try_convert_to_switch(stmt) or self._try_convert_eq_chain(stmt)
                 if switch_stmt:
                     optimized.append(switch_stmt)
                     i += 1
@@ -618,7 +623,7 @@ class ControlFlowOptimizationPass(Pass):
             if_stmt.false_block = new_block
 
     def _try_convert_to_switch(self, if_stmt: HLILIf) -> Optional[HLILSwitch]:
-        MIN_CASES = 3
+        MIN_CASES = MIN_SWITCH_CASES
         cases = []
         seen_case_values = set()
         scrutinee = None
@@ -704,12 +709,13 @@ class ControlFlowOptimizationPass(Pass):
                                     default_body = nested_case.body
 
                                 else:
-                                    case_value = nested_case.value.value
-                                    if case_value in seen_case_values:
-                                        return None
+                                    for value in nested_case.values:
+                                        case_value = value.value
+                                        if case_value in seen_case_values:
+                                            return None
 
-                                    seen_case_values.add(case_value)
-                                    cases.append((case_value, nested_case.body))
+                                        seen_case_values.add(case_value)
+                                        cases.append((case_value, nested_case.body))
                             break
 
             default_body = current_if.true_block
@@ -718,6 +724,59 @@ class ControlFlowOptimizationPass(Pass):
         if len(cases) < MIN_CASES or scrutinee is None:
             return None
 
+        return self._build_switch(scrutinee, list(reversed(cases)), default_body)
+
+    def _eq_label(self, condition: HLILExpression) -> Optional[tuple]:
+        '''(variable, constant) of a `variable == constant` condition'''
+        if isinstance(condition, HLILBinaryOp) and condition.op == BinaryOp.EQ:
+            if isinstance(condition.lhs, HLILVar) and isinstance(condition.rhs, HLILConst):
+                return condition.lhs, condition.rhs
+
+        return None
+
+    def _try_convert_eq_chain(self, if_stmt: HLILIf) -> Optional[HLILSwitch]:
+        '''if (x == a) {A} else if (x == b) {B} ... else {D} -> switch (x) when the labels are distinct constants'''
+        cases = []
+        scrutinee = None
+        default_body = None
+        current = if_stmt
+        while True:
+            label = self._eq_label(current.condition)
+            if label is None or (scrutinee is not None and label[0].var != scrutinee.var):
+                return None
+
+            scrutinee = scrutinee or label[0]
+            cases.append((label[1].value, current.true_block))
+            rest = current.false_block.statements if current.false_block else []
+            real = [stmt for stmt in rest if not isinstance(stmt, HLILComment)]
+            next_label = self._eq_label(real[0].condition) if len(real) == 1 and isinstance(real[0], HLILIf) else None
+            if next_label is not None and next_label[0].var == scrutinee.var:
+                # Comments between the comparisons move into the next case
+                comments = [stmt for stmt in rest if isinstance(stmt, HLILComment)]
+                real[0].true_block.statements = comments + real[0].true_block.statements
+                current = real[0]
+                continue
+
+            default_body = current.false_block if real else None
+            break
+
+        if len(cases) < MIN_SWITCH_CASES or not self._distinct_labels([value for value, _ in cases]):
+            return None
+
+        return self._build_switch(scrutinee, cases, default_body)
+
+    @classmethod
+    def _distinct_labels(cls, values: list) -> bool:
+        '''No two labels compare equal under VM equality (an integer equals the same-valued float);
+        strings and numbers are not mixed because a string compares by file offset'''
+        if any(isinstance(value, str) for value in values) and not all(isinstance(value, str) for value in values):
+            return False
+
+        keys = [value if isinstance(value, str) else float(value) for value in values]
+        return len(set(keys)) == len(keys)
+
+    def _build_switch(self, scrutinee: HLILVar, cases: list, default_body: Optional[HLILBlock]) -> Optional[HLILSwitch]:
+        '''Switch from (value, body) pairs in source order; identical bodies share one case'''
         # A bare loop break inside a case would become a switch break after conversion
         for _, case_body in cases:
             if self._contains_bare_break(case_body):
@@ -727,8 +786,16 @@ class ControlFlowOptimizationPass(Pass):
             return None
 
         switch_cases = []
-        for case_value, case_body in reversed(cases):
-            switch_cases.append(HLILSwitchCase(HLILConst(case_value), case_body))
+        by_text = {}
+        for case_value, case_body in cases:
+            text = '\n'.join(HLILFormatter.format_block(case_body))
+            if text in by_text:
+                by_text[text].extra_values.append(HLILConst(case_value))
+                continue
+
+            case = HLILSwitchCase(HLILConst(case_value), case_body)
+            by_text[text] = case
+            switch_cases.append(case)
 
         if default_body and default_body.statements:
             switch_cases.append(HLILSwitchCase(None, default_body))

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from codegen import generate_typescript
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILBinaryOp, HLILBlock, HLILCall, HLILConst, HLILExprStmt, HLILIf, HLILReturn,
-    HLILVar, HLILVariable, VariableKind,
+    HLILSwitch, HLILSwitchCase, HLILVar, HLILVariable, VariableKind,
 )
 from tools.diffcheck.environment import ORIGIN_PARAM, InputPlan
 from tools.diffcheck.hlil_interp import HLILInterpreter
@@ -70,6 +70,16 @@ class TestRoundTrip(unittest.TestCase):
         scaled = HLILBinaryOp(BinaryOp.MUL, HLILBinaryOp(BinaryOp.ADD, arg(1), HLILConst(1)), HLILConst(SCALE))
         func = make_function(HLILExprStmt(HLILCall('use', [nested, scaled])))
         self.assert_same_behavior(func, (SUB_LHS, SUB_RHS))
+
+
+    def test_shared_case_labels(self):
+        cases = [
+            HLILSwitchCase(HLILConst(0), HLILBlock([HLILReturn(HLILConst(TRUE_RESULT))]), [HLILConst(SCALE)]),
+            HLILSwitchCase(None, HLILBlock([HLILReturn(HLILConst(FALSE_RESULT))])),
+        ]
+        func = make_function(HLILSwitch(arg(1), cases))
+        for value in (0, SCALE, SUB_RHS):
+            self.assert_same_behavior(func, (value, 0))
 
 
 class TestParser(unittest.TestCase):
