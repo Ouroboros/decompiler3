@@ -1,10 +1,11 @@
 '''Reference interpreter: executes disassembled ED9 bytecode directly
 
 The decompiler is not consulted. Every stack effect below comes from the VM
-calling convention:
+calling convention, checked against VMContext::execute / VMContext::Return:
 
 - CALL:        caller pushes func id, return address, then arguments with
-               parameter 1 pushed last; the callee pops arguments and frame.
+               parameter 1 pushed last; CALL only jumps, the callee pops its
+               arguments and RETURN pops return address and func id.
 - CALL_SCRIPT: PUSH_CALLER_FRAME pushes func id, return address, script
                pointer (two slots) and script name before the arguments.
 - SYSCALL:     arguments are read in place; the script pops them afterwards.
@@ -24,7 +25,7 @@ from .environment import (
     ORIGIN_CELL, ORIGIN_OUT, ORIGIN_PARAM, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace, WorldState, _RunEnd,
 )
 from .symbolic import Sym, SymInput, make_op
-from .values import COMPARISON_OPS, EQUALITY_OPS, Op, Pointer, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
+from .values import COMPARISON_OPS, EQUALITY_OPS, Op, Pointer, Raw, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
 
 
 CALL_FRAME_SLOTS        = 2     # func id + return address
@@ -77,11 +78,10 @@ BINARY_OPCODES = {
     ED9Opcode.LOGICAL_OR:   Op.LOGICAL_OR,
 }
 
-# NOT is treated as bitwise complement (assumption, verify against the VM)
 UNARY_OPCODES = {
     ED9Opcode.NEG:  Op.NEG,
     ED9Opcode.NOT:  Op.BIT_NOT,
-    ED9Opcode.EZ:   Op.LOGICAL_NOT,
+    ED9Opcode.EZ:   Op.TEST_ZERO,
 }
 
 # Every slot carries the expression deriving its value from run inputs; literals carry None
@@ -284,8 +284,11 @@ class BytecodeInterpreter:
         operands = inst.operands
 
         match opcode:
-            case ED9Opcode.PUSH_INT | ED9Opcode.PUSH_RAW | ED9Opcode.PUSH_FLOAT:
+            case ED9Opcode.PUSH_INT | ED9Opcode.PUSH_FLOAT:
                 self._push(normalize(operands[0].value))
+
+            case ED9Opcode.PUSH_RAW:
+                self._push(normalize(Raw(int(operands[0].value))))
 
             case ED9Opcode.PUSH_STR:
                 self._push(str(operands[0].value))

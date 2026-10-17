@@ -128,13 +128,18 @@ def _event_address(trace: Trace, index: int) -> int:
 
 
 def build_pool(constants: Set[Any]) -> List[Any]:
+    '''Default input candidates: integer constants of the function, their neighbors and a few defaults
+
+    Floats are not drawn by default: call results and flags are integers in practice, and feeding them
+    floats makes the VM's integer-only operators (EZ, NOT, NEG) diverge on impossible inputs. A float
+    becomes a candidate for an input once the function compares that input with a float literal.
+    '''
     values: Set[Any] = set(DEFAULT_POOL)
     for constant in constants:
-        values.add(constant)
         if isinstance(constant, int):
-            values.update({constant - NEIGHBOR_DELTA, constant + NEIGHBOR_DELTA})
+            values.update({constant - NEIGHBOR_DELTA, constant, constant + NEIGHBOR_DELTA})
 
-    pool = sorted(values, key = lambda value: (isinstance(value, float), value))
+    pool = sorted(values)
     if len(pool) > POOL_LIMIT:
         step = len(pool) / POOL_LIMIT
         pool = [pool[int(i * step)] for i in range(POOL_LIMIT)]
@@ -164,7 +169,7 @@ class FunctionChecker:
 
     def _plan(self, run: int, forced: Dict[Origin, Any]) -> InputPlan:
         return InputPlan(f'{self.options.seed}/{run}', self.pool, self.hints, self.global_candidates,
-                         self.param_count, forced)
+                         self.param_count, forced, len(self.parser.global_vars))
 
     def _reference(self, plan: InputPlan):
         return BytecodeInterpreter(self.parser, self.func, plan, param_order = self.options.param_order,

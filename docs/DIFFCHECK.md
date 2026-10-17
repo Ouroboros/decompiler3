@@ -41,6 +41,9 @@ Global writes between two calls may be reordered freely; only their state at the
 **Inputs.** Parameters, initial `GLOBALS`, every call's return value, values written through pointer
 arguments, and random `GLOBALS` mutations after calls are derived from `(seed, origin)`, so both sides see
 the same world. Mutating `GLOBALS` after calls exposes passes that reuse a global value across a call.
+Inputs are integers by default; an input becomes a float only when the function compares it with a float
+literal. Feeding floats to call results that are integers in practice would make the VM's integer-only
+operators (`EZ`, `NOT`, `NEG`) diverge from the decompiled `== 0` on impossible inputs.
 
 ## Reference Interpreter (bytecode)
 
@@ -50,25 +53,38 @@ Executes disassembled instructions directly; the lifter is not involved.
   parameter slot, i.e. parameter 1 is pushed last. Evidence: `chr_set_talk_event(Value32, str)` is called
   as `PUSH_STR`, `PUSH_INT`, `CALL`; `item_add` declares a default of 1 for its second parameter, and
   callers push that count first.
-- `CALL` frames hold func id and return address below the arguments; the callee pops both.
-  `CALL_SCRIPT` frames hold five slots (func id, return address, two-slot script pointer, script name).
-  `SYSCALL` reads its arguments in place. Every external call leaves its result in `REGS[0]`.
+- `CALL` only jumps; the callee pops its arguments and `RETURN` pops return address and func id.
+  `CALL_SCRIPT` frames hold five slots (func id, return address, two-slot script pointer, script name
+  marker `0xF0000000`). `SYSCALL` reads its arguments in place. Every external call leaves its result in
+  `REGS[0]`.
 - Binary operators compute `below OP top`.
 - `LOAD_STACK_DEREF` / `POP_TO_DEREF` on a slot holding a parameter treat that parameter as a pointer into
   caller memory: reads come from the input plan, writes are reported in the `return` event.
 
-Assumptions still to verify against the VM implementation (all in `values.py` / `bytecode_interp.py`):
+## VM Value Semantics
 
-- integers wrap to signed 32 bits, division truncates toward zero;
-- floats round to IEEE single precision;
-- `NOT` is a bitwise complement, `EZ` is a logical not;
-- `LOAD_STACK_DEREF` / `POP_TO_DEREF` dereference a pointer stored in the addressed slot.
+`values.py` implements the value semantics of [falcom/ed9/spec/vm_spec.md](../falcom/ed9/spec/vm_spec.md)
+(30-bit integers, floats with two dropped bits, type-tagged operators, payload-based branches), pinned by
+`tests/test_diffcheck_values.py`. Checker-specific choices:
+
+- Raw words are kept as a separate type; traces observe them by payload, because script output cannot
+  tell them from integers. Floats are observed by bit pattern.
+- `LOAD_GLOBAL` beyond the script's global table reads integer 0 and `SET_GLOBAL` there is ignored, on both
+  sides.
+- Integer division or remainder by zero is reported as a `div_by_zero` fault (the game crashes).
+
+Not modeled: string offsets (arithmetic or ordering on strings faults on both sides), arithmetic on stack
+addresses, global references through `*_DEREF` (the VM's bounds check halts before reaching that path),
+raw-tagged return values from callees, and the `CALL_SCRIPT` failure path that leaves `REGS[0]` unchanged.
 
 ## HLIL Interpreter
 
-Uses the semantics of the generated TypeScript: `&&`/`||` short-circuit and yield 1/0, call arguments are
+Evaluates operators with the VM value semantics of the opcodes they were lifted from, and control flow as
+the generated TypeScript does: `if`/`while` conditions and `!` test the 30-bit payload like `POP_JMP_ZERO`,
+`&&`/`||` short-circuit, test operands like `LOGICAL_AND`/`LOGICAL_OR` and yield 1/0, call arguments are
 evaluated left to right, switch cases never fall through and an unlabeled `break` inside a case leaves
 the switch, labeled `break`/`continue` target the labeled loop, `return` without a value returns `REGS[0]`.
+The generated TypeScript text itself is not executed.
 
 ## Search and Reporting
 

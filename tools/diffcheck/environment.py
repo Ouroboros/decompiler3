@@ -31,6 +31,7 @@ DEFAULT_POOL            = (0, 1, -1, 2)
 HINT_PROBABILITY        = 0.75
 MUTATION_PROBABILITY    = 0.25
 ENTRY_REG_VALUE         = 0
+MISSING_GLOBAL_VALUE    = 0
 
 MAX_EVENTS              = 1024
 MAX_STEPS               = 2_000_000
@@ -52,14 +53,20 @@ class InputPlan:
     '''Deterministic inputs for one run'''
 
     def __init__(self, seed: Any, pool: Iterable[Any], hints: Dict[Origin, List[Any]],
-                 global_candidates: Iterable[int], param_count: int, forced: Optional[Dict[Origin, Any]] = None):
+                 global_candidates: Iterable[int], param_count: int, forced: Optional[Dict[Origin, Any]] = None,
+                 global_count: Optional[int] = None):
         self.seed = seed
         self.pool = list(pool) or list(DEFAULT_POOL)
         self.hints = hints
-        self.global_candidates = sorted(set(global_candidates))
+        self.global_count = global_count
+        self.global_candidates = sorted(index for index in set(global_candidates) if self.global_exists(index))
         self.param_count = param_count
         self.forced = dict(forced or {})
         self._values: Dict[Origin, Any] = {}
+
+    def global_exists(self, index: int) -> bool:
+        '''The VM reads integer 0 from and ignores writes to indices beyond the script's global table'''
+        return self.global_count is None or index < self.global_count
 
     @property
     def values(self) -> Dict[Origin, Any]:
@@ -159,6 +166,9 @@ class WorldState:
         self.call_index = 0
 
     def load_global(self, index: int) -> Any:
+        if not self.plan.global_exists(index):
+            return MISSING_GLOBAL_VALUE
+
         if index not in self.globals:
             self.globals[index] = self.plan.initial_global(index)
             self.global_origins[index] = (ORIGIN_GLOBAL, index)
@@ -166,6 +176,9 @@ class WorldState:
         return self.globals[index]
 
     def store_global(self, index: int, value: Any, origin: Any = None):
+        if not self.plan.global_exists(index):
+            return
+
         self.globals[index] = value
         self.global_origins[index] = origin
         self.written_globals.add(index)

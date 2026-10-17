@@ -1,6 +1,8 @@
-'''HLIL interpreter with the semantics of the generated TypeScript
+'''HLIL interpreter: control flow of the generated TypeScript, values with VM semantics
 
-- && and || short-circuit and yield 1/0
+- operators evaluate as the VM opcodes they were lifted from (values.py)
+- conditions of if/while and ! test the 30-bit payload, like POP_JMP_ZERO
+- && and || short-circuit, test each operand like LOGICAL_AND / LOGICAL_OR and yield 1/0
 - call arguments are evaluated left to right
 - switch cases do not fall through; an unlabeled break inside a case leaves the switch
 - labeled break/continue target the loop carrying that label
@@ -22,7 +24,7 @@ from ir.mlil.mlil import mlil_arg_var_name
 from .environment import (
     EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd,
 )
-from .values import Op, Pointer, UNDEF, VMFault, binary_op, bool_value, is_zero, normalize, unary_op
+from .values import Op, Pointer, UNDEF, VMFault, binary_op, bool_value, is_zero, logical_truth, normalize, unary_op
 
 
 SPACE_LOCAL     = 'local'
@@ -315,10 +317,10 @@ class HLILInterpreter:
 
         if isinstance(expr, HLILBinaryOp):
             if expr.op == BinaryOp.AND:
-                return bool_value(not is_zero(self._eval(expr.lhs)) and not is_zero(self._eval(expr.rhs)))
+                return bool_value(logical_truth(self._eval(expr.lhs)) and logical_truth(self._eval(expr.rhs)))
 
             if expr.op == BinaryOp.OR:
-                return bool_value(not is_zero(self._eval(expr.lhs)) or not is_zero(self._eval(expr.rhs)))
+                return bool_value(logical_truth(self._eval(expr.lhs)) or logical_truth(self._eval(expr.rhs)))
 
             lhs = self._eval(expr.lhs)
             rhs = self._eval(expr.rhs)
