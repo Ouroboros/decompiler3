@@ -15,7 +15,7 @@ from ..mlil import (
     MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr,
     MLILLogicalAnd, MLILLogicalOr, MLILLogicalNot,
     MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe,
-    MLILNeg, MLILBitwiseNot, MLILTestZero, MLILAddressOf
+    MLILNeg, MLILBitwiseNot, MLILTestZero, MLILAddressOf, MLILDeref
 )
 
 
@@ -459,6 +459,9 @@ class RegGlobalValuePropagator:
 
         elif isinstance(expr, MLILAddressOf):
             return MLILAddressOf(operand)
+
+        elif isinstance(expr, MLILDeref):
+            return MLILDeref(operand)
 
         else:
             raise NotImplementedError(f'Unhandled unary op: {type(expr).__name__}')

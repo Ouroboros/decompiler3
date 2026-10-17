@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterator, List, Optional, Union, TYPE_CHECKING
+from typing import Any, Dict, Iterator, List, Optional, Set, Union, TYPE_CHECKING
 
 from common import *
 from ir.core import *
@@ -72,6 +72,10 @@ class MediumLevelILOperation(IntEnum2):
     MLIL_TEST_ZERO          = 61
     MLIL_ADDRESS_OF         = 62    # Address of variable (&var)
     MLIL_BITWISE_NOT        = 63    # Bitwise NOT (~x)
+    MLIL_DEREF              = 64    # Load through a pointer (*ptr)
+
+    # Memory through pointers
+    MLIL_STORE_DEREF        = 65    # Store through a pointer (*ptr = value)
 
     # Control flow
     MLIL_GOTO               = 70    # Unconditional jump
@@ -413,6 +417,28 @@ class MLILAddressOf(MLILUnaryOp):
         return f'&{self.operand}'
 
 
+class MLILDeref(MLILUnaryOp):
+    '''Load the value a pointer refers to (*ptr)'''
+
+    def __init__(self, operand: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_DEREF, operand, **kwargs)
+
+    def __str__(self) -> str:
+        return f'*({self.operand})'
+
+
+class MLILStoreDeref(MediumLevelILStatement):
+    '''Store through a pointer (*ptr = value)'''
+
+    def __init__(self, pointer: MediumLevelILInstruction, value: MediumLevelILInstruction, **kwargs):
+        super().__init__(MediumLevelILOperation.MLIL_STORE_DEREF, **kwargs)
+        self.pointer = pointer
+        self.value = value
+
+    def __str__(self) -> str:
+        return f'*({self.pointer}) = {self.value}'
+
+
 # === Control Flow ===
 
 class MLILGoto(MediumLevelILStatement, Terminal):
@@ -636,6 +662,8 @@ class MediumLevelILFunction:
         self._inst_block_map: Dict[int, MediumLevelILBasicBlock] = {}
         self.var_types: Dict[str, 'MLILType'] = {}  # Variable name -> inferred type
         self.is_common_func = is_common_func
+        # Names of variables whose address escapes to a callee (written by calls through pointers)
+        self.address_taken: Set[str] = set()
 
     @property
     def num_params(self) -> int:

@@ -427,6 +427,10 @@ class RegisterResolver:
             elif isinstance(expr, MLILStoreGlobal):
                 visit(expr.value)
 
+            elif isinstance(expr, MLILStoreDeref):
+                visit(expr.pointer)
+                visit(expr.value)
+
             elif isinstance(expr, MLILIf):
                 visit(expr.condition)
 
@@ -483,6 +487,10 @@ class RegisterResolver:
                 visit(expr.value)
 
             elif isinstance(expr, MLILStoreGlobal):
+                visit(expr.value)
+
+            elif isinstance(expr, MLILStoreDeref):
+                visit(expr.pointer)
                 visit(expr.value)
 
             elif isinstance(expr, MLILIf):
@@ -743,6 +751,9 @@ class MLILToHLILConverter:
                     collect_read_vars(inst.value)
                 elif isinstance(inst, MLILStoreReg):
                     collect_read_vars(inst.value)
+                elif isinstance(inst, MLILStoreDeref):
+                    collect_read_vars(inst.pointer)
+                    collect_read_vars(inst.value)
 
         used_vars = defined_vars & read_vars
 
@@ -924,7 +935,7 @@ class MLILToHLILConverter:
 
         loop_body_start = None
         exit_block_idx = None
-        condition = None
+        negate_condition = False
         header_if_into_body = False
 
         if isinstance(last_instr, MLILIf):
@@ -936,16 +947,14 @@ class MLILToHLILConverter:
             if true_in_body and not false_in_body:
                 loop_body_start = true_target
                 exit_block_idx = false_target
-                condition = self._convert_expr(last_instr.condition)
 
             elif false_in_body and not true_in_body:
                 loop_body_start = false_target
                 exit_block_idx = true_target
-                condition = _negate_condition(self._convert_expr(last_instr.condition))
+                negate_condition = True
 
             elif true_in_body and false_in_body:
                 # Loop condition is not at the header: while(1) with the if inside the body
-                condition = HLILConst(1)
                 header_if_into_body = True
 
             else:
@@ -954,7 +963,6 @@ class MLILToHLILConverter:
 
         elif isinstance(last_instr, MLILGoto) and last_instr.target is not None and last_instr.target.index in loop_info.body:
             loop_body_start = last_instr.target.index
-            condition = HLILConst(1)
 
         else:
             print(f'[loop] cannot decide loop body at header {header_label} in {self.mlil_func.name} (treated as non-loop)', file = sys.stderr)
@@ -968,24 +976,36 @@ class MLILToHLILConverter:
 
         loop_body = HLILBlock()
 
-        # Header instructions before the terminator: outside the loop normally,
-        # inside the body when the header condition itself moves into the body
+        # Header instructions run on every iteration, so real ones go inside the loop body;
+        # comment-only headers stay in front of the loop
         self.current_block_idx = header_idx
-        header_stmt_target = loop_body if header_if_into_body else target_block
-        has_real_header_instr = False
+        header_instrs = mlil_block.instructions[:-1]
+        has_real_header_instr = any(not is_nop_instr(instr) for instr in header_instrs)
+        header_stmt_target = loop_body if header_if_into_body or has_real_header_instr else target_block
 
-        for instr_idx, instr in enumerate(mlil_block.instructions[:-1]):
+        for instr_idx, instr in enumerate(header_instrs):
             self.current_instr_idx = instr_idx
-
-            if not is_nop_instr(instr):
-                has_real_header_instr = True
-
             stmts = self._convert_instruction(instr, header_idx, instr_idx)
             for stmt in stmts:
                 header_stmt_target.add_statement(stmt)
 
-        if has_real_header_instr and not header_if_into_body:
-            print(f'[loop] header {header_label} in {self.mlil_func.name} has non-comment instructions (emitted outside the loop)', file = sys.stderr)
+        condition = HLILConst(1)
+        if exit_block_idx is not None:
+            self.current_instr_idx = len(mlil_block.instructions) - 1
+            loop_condition = self._convert_expr(last_instr.condition)
+            if negate_condition:
+                loop_condition = _negate_condition(loop_condition)
+
+            if has_real_header_instr:
+                # while (1) { header; if (!cond) break; body }
+                exit_break = HLILBreak()
+                self._set_hlil_source_info(exit_break, last_instr, last_instr.inst_index)
+                exit_check = HLILIf(_negate_condition(loop_condition), HLILBlock([exit_break]))
+                self._set_hlil_source_info(exit_check, last_instr, last_instr.inst_index)
+                loop_body.add_statement(exit_check)
+
+            else:
+                condition = loop_condition
 
         if header_if_into_body:
             self._process_if_statement(last_instr, header_idx, loop_body, stop_at = header_idx)
@@ -1355,6 +1375,11 @@ class MLILToHLILConverter:
             self._set_hlil_source_info(stmt, instr, mlil_index)
             result.append(stmt)
 
+        elif isinstance(instr, MLILStoreDeref):
+            stmt = HLILAssign(HLILDeref(self._convert_expr(instr.pointer)), self._convert_expr(instr.value))
+            self._set_hlil_source_info(stmt, instr, mlil_index)
+            result.append(stmt)
+
         elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
             # Call implicitly writes to REG[0]
             call_expr = self._convert_expr(instr)
@@ -1412,6 +1437,9 @@ class MLILToHLILConverter:
         elif isinstance(expr, MLILAddressOf):
             operand = self._convert_expr(expr.operand)
             return HLILAddressOf(operand)
+
+        elif isinstance(expr, MLILDeref):
+            return HLILDeref(self._convert_expr(expr.operand))
 
         elif isinstance(expr, MLILUnaryOp):
             if expr.operation in (MediumLevelILOperation.MLIL_LOGICAL_NOT, MediumLevelILOperation.MLIL_TEST_ZERO):

@@ -222,6 +222,14 @@ class MLILBuilder:
         '''Create ADDRESS_OF operation (&var)'''
         return MLILAddressOf(operand)
 
+    def deref(self, pointer: MediumLevelILInstruction) -> MLILDeref:
+        '''Create DEREF operation (*ptr)'''
+        return MLILDeref(pointer)
+
+    def store_deref(self, pointer: MediumLevelILInstruction, value: MediumLevelILInstruction):
+        '''Store through a pointer (*ptr = value)'''
+        self.add_instruction(MLILStoreDeref(pointer, value))
+
     # === Control Flow ===
 
     def goto(self, target: MediumLevelILBasicBlock):

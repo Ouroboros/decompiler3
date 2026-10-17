@@ -33,6 +33,12 @@ from ..mlil import (
     MLILCall,
     MLILSyscall,
     MLILCallScript,
+    MLILBinaryOp,
+    MLILUnaryOp,
+    MLILAddressOf,
+    MLILStoreGlobal,
+    MLILStoreReg,
+    MLILStoreDeref,
 )
 from ..mlil_ssa import (
     MLILVariableSSA,
@@ -78,6 +84,11 @@ class CopyPropagationPass(Pass):
         for ssa_var, defn in self.ssa_defs.items():
             if isinstance(defn, MLILSetVarSSA):
                 if isinstance(defn.value, MLILVarSSA):
+                    # An address-taken variable is one storage after SSA deconstruction: reading it
+                    # after a call or a reassignment no longer yields the copied value
+                    if defn.value.var.base_var.name in func.address_taken and not self._uses_precede_rewrite(func, ssa_var):
+                        continue
+
                     copies[ssa_var] = defn.value.var
 
         if not copies:
@@ -98,6 +109,61 @@ class CopyPropagationPass(Pass):
             block.instructions = new_instructions
 
         return changed
+
+    def _count_uses(self, node: MediumLevelILInstruction, var: MLILVariableSSA) -> int:
+        '''Number of reads of an SSA variable in an instruction'''
+        if isinstance(node, MLILVarSSA):
+            return 1 if node.var == var else 0
+
+        if isinstance(node, MLILBinaryOp):
+            return self._count_uses(node.lhs, var) + self._count_uses(node.rhs, var)
+
+        if isinstance(node, (MLILUnaryOp, MLILAddressOf)):
+            return self._count_uses(node.operand, var)
+
+        if isinstance(node, (MLILCall, MLILSyscall, MLILCallScript)):
+            return sum(self._count_uses(arg, var) for arg in node.args)
+
+        if isinstance(node, (MLILSetVarSSA, MLILStoreGlobal, MLILStoreReg)):
+            return self._count_uses(node.value, var)
+
+        if isinstance(node, MLILStoreDeref):
+            return self._count_uses(node.pointer, var) + self._count_uses(node.value, var)
+
+        if isinstance(node, MLILIf):
+            return self._count_uses(node.condition, var)
+
+        if isinstance(node, MLILRet):
+            return self._count_uses(node.value, var) if node.value is not None else 0
+
+        if isinstance(node, MLILPhi):
+            return sum(1 for source, _ in node.sources if source == var)
+
+        return 0
+
+    def _uses_precede_rewrite(self, func: MediumLevelILFunction, copy_var: MLILVariableSSA) -> bool:
+        '''True when every use of a copy follows it in the same block, before any call or reassignment of its source'''
+        defn = self.ssa_defs.get(copy_var)
+        source_name = defn.value.var.base_var.name
+        total = sum(self._count_uses(inst, copy_var) for block in func.basic_blocks for inst in block.instructions)
+        for block in func.basic_blocks:
+            for idx, inst in enumerate(block.instructions):
+                if not (isinstance(inst, MLILSetVarSSA) and inst.var == copy_var):
+                    continue
+
+                local = 0
+                for later in block.instructions[idx + 1:]:
+                    # Operands are read before the instruction writes anything
+                    local += self._count_uses(later, copy_var)
+                    if isinstance(later, (MLILCall, MLILSyscall, MLILCallScript, MLILStoreDeref)):
+                        break
+
+                    if isinstance(later, MLILSetVarSSA) and later.var.base_var.name == source_name:
+                        break
+
+                return local == total
+
+        return False
 
     def _replace_in_inst(self, inst: MediumLevelILInstruction,
                          copies: Dict[MLILVariableSSA, MLILVariableSSA]) -> MediumLevelILInstruction:

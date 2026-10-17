@@ -99,6 +99,11 @@ __all__ = [
     'MLILLogicalNot',
     'MLILBitwiseNot',
     'MLILTestZero',
+    'MLILAddressOf',
+
+    # Pointers
+    'MLILDeref',
+    'MLILStoreDeref',
 
     # Control flow
     'MLILGoto',

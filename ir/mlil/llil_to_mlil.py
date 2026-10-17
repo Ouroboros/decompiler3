@@ -54,6 +54,11 @@ class LLILToMLILTranslator:
         elif isinstance(llil_inst, LowLevelILFrameStore):
             self._translate_frame_store(llil_inst)
 
+        # Store through a pointer
+        elif isinstance(llil_inst, LowLevelILDerefStore):
+            pointer = self._translate_expr(llil_inst.pointer)
+            self.builder.store_deref(pointer, self._translate_expr(llil_inst.value))
+
         # Control flow
         elif isinstance(llil_inst, LowLevelILJmp):
             target = self.block_map[llil_inst.target]
@@ -133,6 +138,9 @@ class LLILToMLILTranslator:
             var_name = mlil_arg_var_name(param_index)
             var = self.builder.get_or_create_parameter(param_index, var_name)
             return self.builder.var(var)
+
+        elif isinstance(llil_expr, LowLevelILDerefLoad):
+            return self.builder.deref(self._translate_expr(llil_expr.pointer))
 
         elif isinstance(llil_expr, LowLevelILStackAddr):
             # Stack address → address of local variable (&var)

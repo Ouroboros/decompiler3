@@ -324,26 +324,30 @@ class LowLevelILBuilder:
         frame_val = self.frame_load(offset)
         self.stack_push(frame_val)
 
+    def stack_slot_expr(self, offset: int) -> LowLevelILExpr:
+        '''Expression reading the slot at sp + offset (parameter slots are frame-relative)'''
+        word_offset = offset // WORD_SIZE
+        absolute_pos = self.sp_get() + word_offset
+
+        # New scheme: fp = 0, parameters at STACK[0..num_params-1]
+        if absolute_pos >= 0 and absolute_pos < self.function.num_params:
+            # absolute_pos = fp + fp_offset, and fp = 0, so fp_offset = absolute_pos
+            return self.frame_load(absolute_pos * WORD_SIZE)
+
+        return self.stack_load(offset, slot_index = absolute_pos)
+
     def load_stack(self, offset: int):
         '''Load from sp + offset and push to stack'''
-        # Calculate word offset
-        word_offset = offset // WORD_SIZE
-        # Calculate absolute stack position
-        sp = self.sp_get()
-        absolute_pos = sp + word_offset
+        self.stack_push(self.stack_slot_expr(offset))
 
-        # Check if accessing parameter area
-        # New scheme: fp = 0, parameters at STACK[0..num_params-1]
-        num_params = self.function.num_params
-        if absolute_pos >= 0 and absolute_pos < num_params:
-            # Accessing parameters - use fp-relative
-            # absolute_pos = fp + fp_offset, and fp = 0, so fp_offset = absolute_pos
-            fp_offset = absolute_pos * WORD_SIZE  # Convert to bytes
-            self.load_frame(fp_offset)
-        else:
-            # Accessing within current stack frame (temporaries/locals) - use sp-relative
-            stack_val = self.stack_load(offset, slot_index = absolute_pos)
-            self.stack_push(stack_val)
+    def load_stack_deref(self, offset: int):
+        '''Push the value pointed to by the pointer held at sp + offset'''
+        self.stack_push(LowLevelILDerefLoad(self.stack_slot_expr(offset)))
+
+    def pop_to_deref(self, offset: int):
+        '''Pop a value and store it through the pointer held at sp + offset (offset relative to sp after the pop)'''
+        value = self.pop(hidden_for_formatter = True)
+        self.add_instruction(LowLevelILDerefStore(self.stack_slot_expr(offset), value))
 
     def push_stack_addr(self, offset: int):
         '''Push the address of stack location (sp + offset)'''

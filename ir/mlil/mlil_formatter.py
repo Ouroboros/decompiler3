@@ -171,6 +171,10 @@ class MLILFormatter:
         elif isinstance(inst, MLILStoreGlobal):
             return f'GLOBAL[{inst.index}] = {inst.value}'
 
+        # Pointers
+        elif isinstance(inst, (MLILDeref, MLILStoreDeref)):
+            return str(inst)
+
         # Registers
         elif isinstance(inst, MLILLoadReg):
             return str(inst)

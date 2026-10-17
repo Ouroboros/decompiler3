@@ -319,6 +319,10 @@ class TypeScriptGenerator:
             return f'{lhs_str} {op_str} {rhs_str}'
 
         elif isinstance(expr, HLILUnaryOp):
+            # TypeScript has no pointers: reads through a pointer use an intrinsic
+            if expr.op == UnaryOp.DEREF:
+                return f'deref({cls._format_expr(expr.operand)})'
+
             # Simplify !(x == 0) -> x and !(x != 0) -> !x
             if expr.op == UnaryOp.NOT and isinstance(expr.operand, HLILBinaryOp):
                 inner = expr.operand
@@ -577,8 +581,15 @@ class TypeScriptGenerator:
                 lines.append(f'{indent_str}return;')
 
         elif isinstance(stmt, HLILAssign):
-            dest_str = cls._format_expr(stmt.dest)
             src_str = cls._format_expr(stmt.src)
+
+            # Writes through a pointer use an intrinsic
+            if isinstance(stmt.dest, HLILDeref):
+                pointer_str = cls._format_expr(stmt.dest.operand)
+                lines.append(f'{indent_str}deref_set({pointer_str}, {src_str});')
+                return lines
+
+            dest_str = cls._format_expr(stmt.dest)
 
             # Wrap boolean expr with int() when assigning to number variable
             if cls._is_boolean_expr(stmt.src) and cls._is_number_var(stmt.dest):
@@ -612,6 +623,10 @@ const REGS: any[] = new Array(16);
 
 // Intrinsic function: address-of operator (for output parameters)
 function addr_of<T>(value: T): T { return value; }
+
+// Intrinsic functions: read / write the variable a pointer parameter refers to
+function deref<T>(pointer: T): T { return pointer; }
+function deref_set<T>(pointer: T, value: T): void { }
 
 // Intrinsic function: boolean/number to int conversion
 function int(b: number | boolean): number { return +b; }

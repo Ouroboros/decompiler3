@@ -66,6 +66,8 @@ class LowLevelILOperation(IntEnum2):
     LLIL_SYSCALL            = 60    # system call
     LLIL_DEBUG              = 61    # debug info
     LLIL_STACK_ADDR         = 62    # address of stack location (sp + offset)
+    LLIL_DEREF_LOAD         = 63    # load through a pointer value
+    LLIL_DEREF_STORE        = 64    # store through a pointer value
 
     # Falcom VM specific (user-defined extensions)
     LLIL_PUSH_CALLER_FRAME  = 1000  # Falcom VM: push caller frame (4 values)
@@ -221,6 +223,29 @@ class LowLevelILStackAddr(LowLevelILExpr):
 
     def __str__(self) -> str:
         return f'&STACK[{self.slot_index}]'
+
+
+class LowLevelILDerefLoad(LowLevelILExpr):
+    '''Load the value a pointer refers to: *pointer'''
+
+    def __init__(self, pointer: 'LowLevelILExpr'):
+        super().__init__(LowLevelILOperation.LLIL_DEREF_LOAD)
+        self.pointer = pointer
+
+    def __str__(self) -> str:
+        return f'*({self.pointer})'
+
+
+class LowLevelILDerefStore(LowLevelILStatement):
+    '''*pointer = value'''
+
+    def __init__(self, pointer: 'LowLevelILExpr', value: 'LowLevelILExpr'):
+        super().__init__(LowLevelILOperation.LLIL_DEREF_STORE)
+        self.pointer = pointer
+        self.value = value
+
+    def __str__(self) -> str:
+        return f'*({self.pointer}) = {self.value}'
 
 
 # Alias for compatibility

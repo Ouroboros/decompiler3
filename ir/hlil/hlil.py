@@ -49,6 +49,7 @@ class UnaryOp(IntEnum2):
     NEG     = auto()
     NOT     = auto()
     BIT_NOT = auto()
+    DEREF   = auto()
 
 
 class HLILOperation(IntEnum2):
@@ -219,6 +220,7 @@ UNARY_OP_STR = {
     UnaryOp.NEG         : '-',
     UnaryOp.NOT         : '!',
     UnaryOp.BIT_NOT     : '~',
+    UnaryOp.DEREF       : '*',
 }
 
 
@@ -251,6 +253,16 @@ class HLILUnaryOp(HLILExpression):
 
     def __repr__(self) -> str:
         return f'HLILUnaryOp({self.op.name})'
+
+
+class HLILDeref(HLILUnaryOp):
+    '''Read through a pointer: *pointer (also an assignment target for writes)'''
+
+    def __init__(self, pointer: HLILExpression):
+        super().__init__(UnaryOp.DEREF, pointer)
+
+    def __repr__(self) -> str:
+        return f'HLILDeref({self.operand})'
 
 
 class HLILAddressOf(HLILExpression):

@@ -244,6 +244,12 @@ class SSAConstructor:
         self.var_versions: Dict[MLILVariable, int] = {}
         self.var_stack: Dict[MLILVariable, List[int]] = defaultdict(list)
 
+        # Variables whose address each variable may hold (flow-insensitive, only used to place Phi nodes)
+        self.pointer_targets: Dict[MLILVariable, Set[MLILVariable]] = defaultdict(set)
+
+        # Variables whose address each SSA version holds (exact, filled while renaming)
+        self.ssa_pointer_targets: Dict[MLILVariableSSA, Set[MLILVariable]] = {}
+
     def construct(self) -> MediumLevelILFunction:
         '''Convert function to SSA form (modifies in-place)'''
         # Step 1: Dominance analysis
@@ -255,7 +261,8 @@ class SSAConstructor:
             self.function.basic_blocks = [b for b in self.function.basic_blocks if b in reachable_set]
             self.function.renumber_blocks()
 
-        # Step 2: Collect variable definitions
+        # Step 2: Find address-taken variables, then collect variable definitions
+        self._collect_address_taken()
         self._collect_defs()
 
         # Step 3: Insert Phi nodes
@@ -266,12 +273,106 @@ class SSAConstructor:
 
         return self.function
 
+    @classmethod
+    def _sub_expressions(cls, inst: MediumLevelILInstruction):
+        '''Yield every expression nested in an instruction'''
+        pending = [inst]
+        while pending:
+            node = pending.pop()
+            yield node
+            if isinstance(node, MLILBinaryOp):
+                pending.extend((node.lhs, node.rhs))
+
+            elif isinstance(node, (MLILUnaryOp, MLILAddressOf)):
+                pending.append(node.operand)
+
+            elif isinstance(node, (MLILCall, MLILSyscall, MLILCallScript)):
+                pending.extend(node.args)
+
+            elif isinstance(node, (MLILSetVar, MLILStoreGlobal, MLILStoreReg)):
+                pending.append(node.value)
+
+            elif isinstance(node, MLILStoreDeref):
+                pending.extend((node.pointer, node.value))
+
+            elif isinstance(node, MLILIf):
+                pending.append(node.condition)
+
+            elif isinstance(node, MLILRet) and node.value is not None:
+                pending.append(node.value)
+
+    def _collect_address_taken(self):
+        '''Find variables whose address escapes, following pointer copies between variables'''
+        copies: List[Tuple[MLILVariable, MLILVariable]] = []
+        for block in self.function.basic_blocks:
+            for inst in block.instructions:
+                for expr in self._sub_expressions(inst):
+                    if isinstance(expr, MLILAddressOf) and isinstance(expr.operand, MLILVar):
+                        self.function.address_taken.add(expr.operand.var.name)
+
+                if isinstance(inst, MLILSetVar):
+                    if isinstance(inst.value, MLILAddressOf) and isinstance(inst.value.operand, MLILVar):
+                        self.pointer_targets[inst.var].add(inst.value.operand.var)
+
+                    elif isinstance(inst.value, MLILVar):
+                        copies.append((inst.var, inst.value.var))
+
+        changed = True
+        while changed:
+            changed = False
+            for dest, source in copies:
+                missing = self.pointer_targets.get(source, set()) - self.pointer_targets[dest]
+                if missing:
+                    self.pointer_targets[dest] |= missing
+                    changed = True
+
+    def _pointer_targets_of(self, pointers) -> List[MLILVariable]:
+        '''Local variables the given pointer expressions may refer to
+
+        Before renaming, variables resolve flow-insensitively; SSA versions resolve exactly.
+        '''
+        found: Dict[str, MLILVariable] = {}
+        for pointer in pointers:
+            if isinstance(pointer, MLILAddressOf) and isinstance(pointer.operand, (MLILVar, MLILVarSSA)):
+                target = pointer.operand.var if isinstance(pointer.operand, MLILVar) else pointer.operand.var.base_var
+                found.setdefault(target.name, target)
+
+            elif isinstance(pointer, MLILVarSSA):
+                for target in self.ssa_pointer_targets.get(pointer.var, ()):
+                    found.setdefault(target.name, target)
+
+            elif isinstance(pointer, MLILVar):
+                for target in self.pointer_targets.get(pointer.var, ()):
+                    found.setdefault(target.name, target)
+
+        return [found[name] for name in sorted(found)]
+
+    def _written_through_pointers(self, inst: MediumLevelILInstruction) -> List[MLILVariable]:
+        '''Variables a call (through pointer arguments) or a pointer store may write'''
+        if isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            return self._pointer_targets_of(inst.args)
+
+        if isinstance(inst, MLILStoreDeref):
+            return self._pointer_targets_of([inst.pointer])
+
+        return []
+
+    def _record_pointer_value(self, dest: MLILVariableSSA, value: MediumLevelILInstruction):
+        '''Remember which variable's address an SSA version holds'''
+        targets = set(self._pointer_targets_of([value])) if isinstance(value, (MLILAddressOf, MLILVarSSA)) else set()
+        if targets:
+            self.ssa_pointer_targets[dest] = targets
+
     def _collect_defs(self):
-        '''Collect blocks where each variable is defined'''
+        '''Collect blocks where each variable is defined, including writes by calls through pointers'''
         for block in self.function.basic_blocks:
             for inst in block.instructions:
                 if isinstance(inst, MLILSetVar):
                     self.var_defs[inst.var].add(block)
+
+                else:
+                    for var in self._written_through_pointers(inst):
+                        self.var_defs[var].add(block)
 
     def _insert_phi_nodes(self):
         '''Insert Phi nodes at dominance frontiers (worklist algorithm)'''
@@ -390,17 +491,17 @@ class SSAConstructor:
             new_ver = self._new_version(inst.var)
             pushed.append(inst.var)
 
-            return MLILSetVarSSA(MLILVariableSSA(inst.var, new_ver), new_value, address = inst.address).copy_metadata_from(inst)
+            dest = MLILVariableSSA(inst.var, new_ver)
+            self._record_pointer_value(dest, new_value)
+            return MLILSetVarSSA(dest, new_value, address = inst.address).copy_metadata_from(inst)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
-            # Find variables passed via AddressOf (output parameters)
-            addr_vars = []
-            for arg in inst.args:
-                if isinstance(arg, MLILAddressOf) and isinstance(arg.operand, MLILVar):
-                    addr_vars.append(arg.operand.var)
-
+        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript, MLILStoreDeref)):
             # Rename the call (uses current SSA versions)
             renamed = self._rename_stmt(inst)
+
+            # Variables written through pointers (call output parameters or a pointer store),
+            # resolved from the exact SSA versions passed
+            addr_vars = self._written_through_pointers(renamed)
 
             if not addr_vars:
                 return renamed
@@ -502,6 +603,13 @@ class SSAConstructor:
                 else:
                     return MLILStoreReg(stmt.index, new_value, address = stmt.address).copy_metadata_from(stmt)
 
+        elif isinstance(stmt, MLILStoreDeref):
+            new_pointer = self._rename_expr(stmt.pointer)
+            new_value = self._rename_expr(stmt.value)
+
+            if new_pointer is not stmt.pointer or new_value is not stmt.value:
+                return MLILStoreDeref(new_pointer, new_value, address = stmt.address).copy_metadata_from(stmt)
+
         return stmt
 
     def _rebuild_binary_op(self, expr: MLILBinaryOp, lhs, rhs) -> MediumLevelILInstruction:
@@ -579,6 +687,9 @@ class SSAConstructor:
 
         elif isinstance(expr, MLILAddressOf):
             return MLILAddressOf(operand)
+
+        elif isinstance(expr, MLILDeref):
+            return MLILDeref(operand)
 
         else:
             raise NotImplementedError(f'Unknown unary op: {type(expr).__name__}')
@@ -678,6 +789,10 @@ class SSADeconstructor:
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             self._collect_uses_in_expr(stmt.value, block, inst_idx)
 
+        elif isinstance(stmt, MLILStoreDeref):
+            self._collect_uses_in_expr(stmt.pointer, block, inst_idx)
+            self._collect_uses_in_expr(stmt.value, block, inst_idx)
+
     def _compute_liveness(self):
         '''Compute live-in and live-out sets for each block using dataflow analysis'''
         # Initialize
@@ -752,6 +867,10 @@ class SSADeconstructor:
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             result |= self._get_vars_in_expr(stmt.value)
 
+        elif isinstance(stmt, MLILStoreDeref):
+            result |= self._get_vars_in_expr(stmt.pointer)
+            result |= self._get_vars_in_expr(stmt.value)
+
         return result
 
     def _build_interference_graph(self):
@@ -792,6 +911,11 @@ class SSADeconstructor:
             # Sort by version for deterministic output (version 0 gets base name priority)
             ssa_vars.sort(key = lambda v: v.version)
             base_var = ssa_vars[0].base_var
+
+            # Address-taken variables are memory shared with callees: every version is the same storage
+            if base_name in self.function.address_taken:
+                self.var_mapping.update({ssa_var: base_var for ssa_var in ssa_vars})
+                continue
 
             # Find connected components of non-interfering variables
             # Variables in the same component can share the base name
@@ -913,6 +1037,12 @@ class SSADeconstructor:
 
                 else:
                     return MLILStoreReg(stmt.index, new_value, address = stmt.address).copy_metadata_from(stmt)
+
+        elif isinstance(stmt, MLILStoreDeref):
+            new_pointer = self._apply_mapping_to_expr(stmt.pointer)
+            new_value = self._apply_mapping_to_expr(stmt.value)
+            if new_pointer is not stmt.pointer or new_value is not stmt.value:
+                return MLILStoreDeref(new_pointer, new_value, address = stmt.address).copy_metadata_from(stmt)
 
         return stmt
 
