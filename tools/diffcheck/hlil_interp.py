@@ -124,7 +124,7 @@ class HLILInterpreter:
             return self.world.load_global(pointer.key)
 
         if pointer.space == SPACE_REG:
-            return self.world.regs.get(pointer.key, UNDEF)
+            return self.world.load_reg(pointer.key)
 
         return self.locals.get(pointer.key, UNDEF)
 
@@ -133,7 +133,7 @@ class HLILInterpreter:
             self.world.store_global(pointer.key, value)
 
         elif pointer.space == SPACE_REG:
-            self.world.regs[pointer.key] = value
+            self.world.store_reg(pointer.key, value)
 
         else:
             self.locals[pointer.key] = value
@@ -144,7 +144,7 @@ class HLILInterpreter:
             return self.world.load_global(var.index)
 
         if var.kind == VariableKind.REG:
-            return self.world.regs.get(var.index, UNDEF)
+            return self.world.load_reg(var.index)
 
         return self.locals.get(var.name, UNDEF)
 
@@ -191,7 +191,7 @@ class HLILInterpreter:
             self.world.store_global(var.index, value)
 
         elif var.kind == VariableKind.REG:
-            self.world.regs[var.index] = value
+            self.world.store_reg(var.index, value)
 
         else:
             self.locals[var.name] = value

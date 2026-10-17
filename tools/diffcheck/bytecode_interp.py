@@ -22,7 +22,8 @@ from ir.llil import WORD_SIZE
 
 from .environment import (
     EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS,
-    ORIGIN_CELL, ORIGIN_OUT, ORIGIN_PARAM, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace, WorldState, _RunEnd,
+    ORIGIN_CELL, ORIGIN_OUT, ORIGIN_PARAM, ORIGIN_REG, ORIGIN_REG_MUTATION, ORIGIN_RETURN, InputPlan, Origin, RunStatus,
+    Trace, WorldState, _RunEnd,
 )
 from .symbolic import Sym, SymInput, make_op
 
@@ -125,6 +126,17 @@ def collect_constants(blocks: Dict[int, BasicBlock]) -> Set[Any]:
                 constants.add(normalize(inst.operands[0].value))
 
     return constants
+
+
+def collect_reg_indices(blocks: Dict[int, BasicBlock]) -> Set[int]:
+    '''Registers other than REGS[0] that the function reads'''
+    indices: Set[int] = set()
+    for block in blocks.values():
+        for inst in block.instructions:
+            if inst.opcode == ED9Opcode.GET_REG and int(inst.operands[0].value) != 0:
+                indices.add(int(inst.operands[0].value))
+
+    return indices
 
 
 def collect_global_indices(blocks: Dict[int, BasicBlock]) -> Set[int]:
@@ -337,12 +349,15 @@ class BytecodeInterpreter:
 
             case ED9Opcode.GET_REG:
                 index = int(operands[0].value)
-                self._push(self.world.regs.get(index, UNDEF), self.reg_origins.get(index))
+                if index not in self.world.regs:
+                    self.reg_origins[index] = SymInput((ORIGIN_REG, index))
+
+                self._push(self.world.load_reg(index), self.reg_origins.get(index))
 
             case ED9Opcode.SET_REG:
                 index = int(operands[0].value)
                 value, sym = self._pop()
-                self.world.regs[index] = value
+                self.world.store_reg(index, value)
                 self.reg_origins[index] = sym
 
             case ED9Opcode.LOAD_GLOBAL:
@@ -438,6 +453,9 @@ class BytecodeInterpreter:
             pointer = args[pos]
             if pointer.space == STACK_SPACE and pointer.key < len(self.stack):
                 self.stack[pointer.key] = (value, SymInput((ORIGIN_OUT, outcome.call_index, pos)))
+
+        for index in outcome.reg_writes:
+            self.reg_origins[index] = SymInput((ORIGIN_REG_MUTATION, outcome.call_index, index))
 
         self.reg_origins[0] = SymInput((ORIGIN_RETURN, outcome.call_index))
 

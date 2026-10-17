@@ -21,6 +21,8 @@ ORIGIN_RETURN           = 'ret'
 ORIGIN_GLOBAL           = 'global'
 ORIGIN_OUT              = 'out'
 ORIGIN_GLOBAL_MUTATION  = 'mutation'
+ORIGIN_REG              = 'reg'
+ORIGIN_REG_MUTATION     = 'reg_mutation'
 ORIGIN_CELL             = 'cell'
 
 EVENT_CALL              = 'call'
@@ -49,6 +51,7 @@ class CallOutcome:
     return_value: Any
     out_values: Dict[int, Any]
     global_writes: Dict[int, Any]
+    reg_writes: Dict[int, Any] = field(default_factory = dict)
 
 
 class InputPlan:
@@ -56,8 +59,10 @@ class InputPlan:
 
     def __init__(self, seed: Any, pool: Iterable[Any], hints: Dict[Origin, List[Any]],
                  global_candidates: Iterable[int], param_count: int, forced: Optional[Dict[Origin, Any]] = None,
-                 global_count: Optional[int] = None):
+                 global_count: Optional[int] = None, reg_candidates: Iterable[int] = ()):
         self.seed = seed
+        # Registers the function reads; a callee may leave any value in them (the VM never clears REGS)
+        self.reg_candidates = sorted(set(reg_candidates))
         self.pool = list(pool) or list(DEFAULT_POOL)
         self.hints = hints
         self.global_count = global_count
@@ -102,6 +107,9 @@ class InputPlan:
     def initial_global(self, index: int) -> Any:
         return self.value_for((ORIGIN_GLOBAL, index))
 
+    def initial_reg(self, index: int) -> Any:
+        return self.value_for((ORIGIN_REG, index))
+
     def call_outcome(self, call_index: int, pointer_positions: Iterable[int]) -> CallOutcome:
         out_values = {pos: self.value_for((ORIGIN_OUT, call_index, pos)) for pos in pointer_positions}
         global_writes: Dict[int, Any] = {}
@@ -110,7 +118,13 @@ class InputPlan:
             index = rng.choice(self.global_candidates)
             global_writes[index] = self.value_for((ORIGIN_GLOBAL_MUTATION, call_index, index))
 
-        return CallOutcome(call_index, self.value_for((ORIGIN_RETURN, call_index)), out_values, global_writes)
+        reg_writes: Dict[int, Any] = {}
+        rng = self._rng(ORIGIN_REG_MUTATION, call_index)
+        if self.reg_candidates and rng.random() < MUTATION_PROBABILITY:
+            index = rng.choice(self.reg_candidates)
+            reg_writes[index] = self.value_for((ORIGIN_REG_MUTATION, call_index, index))
+
+        return CallOutcome(call_index, self.value_for((ORIGIN_RETURN, call_index)), out_values, global_writes, reg_writes)
 
     def describe(self) -> Dict[str, Any]:
         return {str(origin): value for origin, value in sorted(self._values.items(), key = lambda item: str(item[0]))}
@@ -185,6 +199,16 @@ class WorldState:
         self.global_origins[index] = origin
         self.written_globals.add(index)
 
+    def load_reg(self, index: int) -> Any:
+        '''REGS survive calls, so a register read before any write holds the caller's value: an input'''
+        if index not in self.regs:
+            self.regs[index] = self.plan.initial_reg(index)
+
+        return self.regs[index]
+
+    def store_reg(self, index: int, value: Any):
+        self.regs[index] = value
+
     def load_cell(self, param_number: int) -> Any:
         '''Caller memory addressed by a pointer parameter'''
         if param_number not in self.cells:
@@ -208,6 +232,9 @@ class WorldState:
         self.call_index += 1
         for index, value in outcome.global_writes.items():
             self.store_global(index, value, (ORIGIN_GLOBAL_MUTATION, outcome.call_index, index))
+
+        for index, value in outcome.reg_writes.items():
+            self.store_reg(index, value)
 
         self.regs[0] = outcome.return_value
         return outcome

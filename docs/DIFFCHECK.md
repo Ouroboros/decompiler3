@@ -38,9 +38,11 @@ callee may read or write.
 `REGS` contents are not compared. Arguments that are pointers are compared by the value they point to.
 Global writes between two calls may be reordered freely; only their state at the next call or return matters.
 
-**Inputs.** Parameters, initial `GLOBALS`, every call's return value, values written through pointer
-arguments, and random `GLOBALS` mutations after calls are derived from `(seed, origin)`, so both sides see
-the same world. Mutating `GLOBALS` after calls exposes passes that reuse a global value across a call.
+**Inputs.** Parameters, initial `GLOBALS`, initial `REGS[1..15]` (the VM never clears registers, so a read
+before any write sees the caller's value), every call's return value, values written through pointer
+arguments, and random `GLOBALS` / `REGS` mutations after calls are derived from `(seed, origin)`, so both
+sides see the same world. Mutating them after calls exposes passes that reuse a global or register value
+across a call; only registers the function reads are mutated.
 Inputs are integers by default; an input becomes a float only when the function compares it with a float
 literal. When a run reaches a logged VM type error (`EZ` / `NOT` / `NEG` / `MOD` / `BITWISE_AND` /
 `BITWISE_OR` on unsupported operands), the bytecode side records a `type_error` fault and only the events

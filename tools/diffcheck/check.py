@@ -18,7 +18,7 @@ from ir.hlil import (
 )
 
 from .bytecode_interp import (
-    BytecodeInterpreter, collect_blocks, collect_constants, collect_global_indices,
+    BytecodeInterpreter, collect_blocks, collect_constants, collect_global_indices, collect_reg_indices,
 )
 from .environment import DEFAULT_POOL, EVENT_FAULT, MAX_EVENTS, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace
 from .hlil_interp import HLILInterpreter
@@ -172,13 +172,14 @@ class FunctionChecker:
         self.blocks = collect_blocks(func.entry_block)
         self.pool = build_pool(collect_constants(self.blocks))
         self.global_candidates = collect_global_indices(self.blocks)
+        self.reg_candidates = collect_reg_indices(self.blocks)
         self.param_count = len(func.params)
         self.hints: Dict[Origin, List[Any]] = {}
         self.event_cap = MAX_EVENTS
 
     def _plan(self, run: int, forced: Dict[Origin, Any]) -> InputPlan:
         return InputPlan(f'{self.options.seed}/{run}', self.pool, self.hints, self.global_candidates,
-                         self.param_count, forced, len(self.parser.global_vars))
+                         self.param_count, forced, len(self.parser.global_vars), self.reg_candidates)
 
     def _reference(self, plan: InputPlan):
         return BytecodeInterpreter(self.parser, self.func, plan, blocks = self.blocks, max_events = self.event_cap).run()
