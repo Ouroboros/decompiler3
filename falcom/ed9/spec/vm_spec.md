@@ -155,7 +155,11 @@ unless the function entry has `is_common_func` set, updates `funcIndex` / `funcN
 Inside the callee parameter `k` (1-based) is the word at `entry stackTop - 4 * k`. *Convention*: the
 callee pops its locals and parameters before `RETURN`, leaving the return address on top, and passes its
 result in `regs[0]` (`SET_REG 0`). The parameter order was confirmed on 404 game scripts: with parameter 1
-pushed last, the declared parameter types match all 1,265,302 typed call-site arguments.
+pushed last, the declared parameter types match all 1,265,302 typed call-site arguments. On the 88 `scena`
+scripts alone: 1,175,108 typed arguments match with 0 conflicts (pushing parameter 1 first would give
+73,662 conflicts at 34,448 call sites), and 262,802 call sites match their per-call debug info only with
+parameter 1 pushed last against 71 only the other way (all of them default zero values). The decompiler
+names frame slot `s` of an `n`-parameter function `arg{n - s}`.
 
 ### 5.2 RETURN
 

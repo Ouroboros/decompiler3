@@ -18,7 +18,7 @@ from ir.hlil import (
 )
 
 from .bytecode_interp import (
-    BytecodeInterpreter, ParamOrder, collect_blocks, collect_constants, collect_global_indices,
+    BytecodeInterpreter, collect_blocks, collect_constants, collect_global_indices,
 )
 from .environment import DEFAULT_POOL, EVENT_FAULT, MAX_EVENTS, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace
 from .hlil_interp import HLILInterpreter
@@ -68,7 +68,6 @@ class Verdict(Enum):
 class CheckOptions:
     seed: int = 0
     max_runs: int = MAX_RUNS
-    param_order: ParamOrder = ParamOrder.VM
     localize: bool = True
     max_mismatches: int = DEFAULT_MAX_MISMATCHES
 
@@ -182,8 +181,7 @@ class FunctionChecker:
                          self.param_count, forced, len(self.parser.global_vars))
 
     def _reference(self, plan: InputPlan):
-        return BytecodeInterpreter(self.parser, self.func, plan, param_order = self.options.param_order,
-                                   blocks = self.blocks, max_events = self.event_cap).run()
+        return BytecodeInterpreter(self.parser, self.func, plan, blocks = self.blocks, max_events = self.event_cap).run()
 
     def _candidate(self, hlil_func, plan: InputPlan) -> Trace:
         return HLILInterpreter(hlil_func, self.param_count, plan, max_events = self.event_cap).run()

@@ -13,7 +13,6 @@ calling convention, checked against VMContext::execute / VMContext::Return:
 '''
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from falcom.ed9.disasm import BasicBlock, ED9Opcode, Instruction
@@ -36,12 +35,6 @@ NEIGHBOR_DELTA          = 1
 
 # Recorded branch conditions per run, first occurrence of each branch direction only
 MAX_BRANCH_RECORDS      = 512
-
-
-class ParamOrder(Enum):
-    '''How parameter numbers map to stack slots of the callee frame'''
-    VM      = 'vm'      # parameter 1 is the last pushed slot (VM calling convention)
-    LIFTER  = 'lifter'  # parameter 1 is the deepest slot (current lifter naming)
 
 
 class FrameMarker:
@@ -147,13 +140,12 @@ def collect_global_indices(blocks: Dict[int, BasicBlock]) -> Set[int]:
 class BytecodeInterpreter:
     '''Executes one script function against an InputPlan'''
 
-    def __init__(self, parser, func, plan: InputPlan, *, param_order: ParamOrder = ParamOrder.VM,
+    def __init__(self, parser, func, plan: InputPlan, *,
                  blocks: Optional[Dict[int, BasicBlock]] = None,
                  max_events: int = MAX_EVENTS, max_steps: int = MAX_STEPS):
         self.parser = parser
         self.func = func
         self.plan = plan
-        self.param_order = param_order
         self.max_steps = max_steps
         self.blocks = blocks if blocks is not None else collect_blocks(func.entry_block)
         self.run_result = BytecodeRun(Trace(max_events = max_events))
@@ -205,7 +197,8 @@ class BytecodeInterpreter:
         self.stack.append((FrameMarker(MARKER_RET_ADDR), None))
         count = len(self.func.params)
         for slot in range(count):
-            number = count - slot if self.param_order == ParamOrder.VM else slot + 1
+            # Parameter 1 is pushed last
+            number = count - slot
             self.stack.append((self.plan.param(number), SymInput((ORIGIN_PARAM, number))))
 
     def _fallthrough(self, block: BasicBlock) -> BasicBlock:

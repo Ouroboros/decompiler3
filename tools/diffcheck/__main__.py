@@ -14,7 +14,6 @@ from ml import fileio
 from common.config import default_encoding
 from falcom.ed9.parser.scp import ScpParser
 
-from .bytecode_interp import ParamOrder
 from .check import DEFAULT_MAX_MISMATCHES, MAX_RUNS, CheckOptions, FunctionReport, Verdict, check_functions
 
 
@@ -64,8 +63,6 @@ def main(argv = None) -> int:
     arg_parser.add_argument('--function', action = 'append', default = [], help = 'check only this function (repeatable)')
     arg_parser.add_argument('--seed', type = int, default = 0)
     arg_parser.add_argument('--max-runs', type = int, default = MAX_RUNS)
-    arg_parser.add_argument('--param-order', choices = [order.value for order in ParamOrder], default = ParamOrder.VM.value,
-                            help = 'vm: parameter 1 is the last pushed slot; lifter: current lifter naming')
     arg_parser.add_argument('--max-mismatches', type = int, default = DEFAULT_MAX_MISMATCHES,
                             help = 'distinct divergence sites to collect per function before stopping')
     arg_parser.add_argument('--no-localize', action = 'store_true', help = 'skip per-pass localization of failures')
@@ -76,7 +73,6 @@ def main(argv = None) -> int:
     options = CheckOptions(
         seed = args.seed,
         max_runs = args.max_runs,
-        param_order = ParamOrder(args.param_order),
         localize = not args.no_localize,
         max_mismatches = args.max_mismatches,
     )

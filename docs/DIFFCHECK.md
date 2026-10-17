@@ -108,5 +108,3 @@ The generated TypeScript text itself is not executed.
   `--no-localize`, the first HLIL stage whose output already diverges (`MLILToHLIL (or MLIL)` when the
   divergence predates the HLIL passes). `--max-mismatches N` keeps searching until N distinct sites are found.
 - `ERROR` means the function could not be decompiled or the reference interpreter cannot model it.
-- `--param-order lifter` binds parameters the way the current lifter names them. Use it to look past the
-  parameter numbering defect while other defects are investigated.
