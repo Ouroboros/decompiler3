@@ -16,6 +16,8 @@ CONSTANT_COMPARISONS = {
     BinaryOp.GE:    operator.ge,
 }
 
+STRING_ESCAPES = {'\\': '\\\\', '"': '\\"', '\n': '\\n', '\r': '\\r', '\t': '\\t', '\0': '\\0'}
+
 # Script integers are 30-bit; constants outside this range wrap in the VM
 INT_PAYLOAD_BITS    = 30
 INT_PAYLOAD_MIN     = -(1 << (INT_PAYLOAD_BITS - 1))
@@ -63,11 +65,15 @@ class TypeScriptGenerator:
         return 'any'
 
     @classmethod
+    def _format_string(cls, value: str) -> str:
+        '''Double-quoted TypeScript string literal'''
+        return '"' + ''.join(STRING_ESCAPES.get(char, char) for char in value) + '"'
+
+    @classmethod
     def _format_default_value(cls, value) -> str:
         '''Format default value as TypeScript literal'''
         if isinstance(value, str):
-            escaped = value.replace('\\', '\\\\').replace('"', '\\"')
-            return f'"{escaped}"'
+            return cls._format_string(value)
 
         elif isinstance(value, float):
             return format_float(value)
@@ -273,7 +279,7 @@ class TypeScriptGenerator:
         elif isinstance(expr, HLILConst):
             # Handle different constant types
             if isinstance(expr.value, str):
-                return f'"{expr.value}"'
+                return cls._format_string(expr.value)
 
             elif isinstance(expr.value, bool):
                 return 'true' if expr.value else 'false'
@@ -470,10 +476,8 @@ class TypeScriptGenerator:
         '''Format negated condition as string'''
         if isinstance(cond, HLILBinaryOp):
             if cond.op in cls.NEGATION_MAP:
-                lhs = cls._format_expr(cond.lhs)
-                rhs = cls._format_expr(cond.rhs)
-                negated_op = BINARY_OP_STR[cls.NEGATION_MAP[cond.op]]
-                return f'{lhs} {negated_op} {rhs}'
+                # Formatted as a node so operands get the same parentheses as any other comparison
+                return cls._format_expr(HLILBinaryOp(cls.NEGATION_MAP[cond.op], cond.lhs, cond.rhs))
 
         # Fallback: wrap original in !()
         return f'!({cls._format_expr(cond)})'

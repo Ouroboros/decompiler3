@@ -88,7 +88,16 @@ the generated TypeScript does: `if`/`while` conditions and `!` test the 30-bit p
 `&&`/`||` short-circuit, test operands like `LOGICAL_AND`/`LOGICAL_OR` and yield 1/0, call arguments are
 evaluated left to right, switch cases never fall through and an unlabeled `break` inside a case leaves
 the switch, labeled `break`/`continue` target the labeled loop, `return` without a value returns `REGS[0]`.
-The generated TypeScript text itself is not executed.
+
+## TypeScript Check
+
+The TypeScript emitted for the HLIL is parsed back into HLIL (`ts_parse.py`, which accepts only the subset
+the generator writes and rejects undeclared names) and executed by the same interpreter on every run. A run
+whose HLIL matches the bytecode but whose TypeScript does not fails with stage `TypeScript`; text that does
+not parse is an `ERROR`. This covers what the generator adds on top of the HLIL: operator precedence and
+parentheses, condition negation, boolean rewrites, constant folding, literals and statement layout. The
+text is read with VM value semantics, so JavaScript's own number model (doubles, `/` on integers,
+pass-by-value `addr_of`) is not part of the check (`falcom/ed9/spec/vm_spec.md` section 10).
 
 ## Search and Reporting
 

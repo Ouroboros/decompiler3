@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
 from falcom.ed9.lifters.vm_lifter import ED9VMLifter
 from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
+from codegen import generate_typescript
 from falcom.ed9.vm_values import TYPE_ERROR
 from ir.hlil import (
     CommonReturnExtractionPass, ControlFlowOptimizationPass, DeadCodeEliminationPass,
@@ -23,6 +24,7 @@ from .bytecode_interp import (
 from .environment import DEFAULT_POOL, EVENT_FAULT, MAX_EVENTS, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace
 from .hlil_interp import HLILInterpreter
 from .symbolic import flip
+from .ts_parse import parse_typescript
 
 
 MIN_RUNS                = 8
@@ -56,6 +58,9 @@ HLIL_STAGES = (
     ('CommonReturnExtraction', CommonReturnExtractionPass),
     ('DeadCodeElimination', DeadCodeEliminationPass),
 )
+
+# Stage reported when the HLIL matches the bytecode but the TypeScript emitted from it does not
+TYPESCRIPT_STAGE        = 'TypeScript'
 
 
 class Verdict(Enum):
@@ -243,6 +248,15 @@ class FunctionChecker:
             report.error = f'decompile: {type(e).__name__}: {e}'
             return report
 
+        try:
+            # The emitted text, parsed back and executed with the same semantics as the HLIL
+            ts_func = parse_typescript(generate_typescript(hlil_func), hlil_func.start_addr)
+
+        except Exception as e:
+            report.verdict = Verdict.ERROR
+            report.error = f'typescript: {type(e).__name__}: {e}'
+            return report
+
         covered_blocks: Set[int] = set()
         covered_edges: Set[Tuple[int, int]] = set()
         queue: deque = deque()
@@ -266,7 +280,13 @@ class FunctionChecker:
             new_blocks = reference.covered_blocks - covered_blocks
             covered_edges |= reference.covered_edges
             covered_blocks |= reference.covered_blocks
+            stage = None
             index = first_divergence(reference.trace, candidate)
+            if index is None:
+                candidate = self._candidate(ts_func, plan)
+                index = first_divergence(reference.trace, candidate)
+                stage = TYPESCRIPT_STAGE
+
             if index is not None:
                 report.verdict = Verdict.FAIL
                 site = (_event_address(reference.trace, index), _event_address(candidate, index))
@@ -276,7 +296,10 @@ class FunctionChecker:
                         run, index, _event_text(reference.trace, index), _event_text(candidate, index),
                         reference.trace.status.value, candidate.status.value, plan.describe(),
                     )
-                    if self.options.localize:
+                    if stage is not None:
+                        mismatch.stage = stage
+
+                    elif self.options.localize:
                         mismatch.stage = self._localize(run, forced, reference.trace)
 
                     mismatch.event_cap = self.event_cap
