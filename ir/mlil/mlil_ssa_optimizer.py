@@ -4,6 +4,7 @@ from .mlil import MediumLevelILFunction
 from .passes import (
     NNFPass,
     SCCP,
+    ConstantFolder,
     ConstantPropagationPass,
     CopyPropagationPass,
     ExpressionSimplificationPass,
@@ -17,13 +18,14 @@ from .passes import (
 class SSAOptimizer:
     '''Orchestrates SSA optimization passes'''
 
-    def __init__(self, function: MediumLevelILFunction):
+    def __init__(self, function: MediumLevelILFunction, folder: type[ConstantFolder] = ConstantFolder):
         self.function = function
+        self.folder = folder
 
     def optimize(self) -> MediumLevelILFunction:
         '''Run all optimization passes'''
         # Run SCCP first for aggressive constant propagation and unreachable code elimination
-        sccp = SCCP(self.function)
+        sccp = SCCP(self.function, folder = self.folder)
         sccp.run()
 
         # Passes to run iteratively until fixpoint

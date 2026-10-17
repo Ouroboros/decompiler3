@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from .values import Pointer, VMFault, normalize, observable
+from falcom.ed9.vm_values import Pointer, VMFault, normalize
+
+from .values import observable
 
 
 ORIGIN_PARAM            = 'param'

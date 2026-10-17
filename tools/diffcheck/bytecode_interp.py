@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from falcom.ed9.disasm import BasicBlock, ED9Opcode, Instruction
 from falcom.ed9.parser.types_scp import ScpValue
+from falcom.ed9.vm_values import COMPARISON_OPS, EQUALITY_OPS, Op, Pointer, Raw, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
 from ir.llil import WORD_SIZE
 
 from .environment import (
@@ -25,7 +26,6 @@ from .environment import (
     ORIGIN_CELL, ORIGIN_OUT, ORIGIN_PARAM, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace, WorldState, _RunEnd,
 )
 from .symbolic import Sym, SymInput, make_op
-from .values import COMPARISON_OPS, EQUALITY_OPS, Op, Pointer, Raw, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
 
 
 CALL_FRAME_SLOTS        = 2     # func id + return address

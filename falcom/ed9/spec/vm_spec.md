@@ -289,6 +289,7 @@ Float `-0.0` (payload `0x20000000`) and every String are nonzero.
 - Raw words behave like Integers except in `NEG`, `EZ`, `NOT` and in `MOD` / `BITWISE_AND` /
   `BITWISE_OR` with two non-Integer operands. Local slots are commonly reserved with `PUSH_RAW 0`.
 - Constant folding must wrap integers to 30 bits, truncate division and remainder toward zero, run float
-  operations in float32 and drop the two lowest bits of every float result.
+  operations in float32 and drop the two lowest bits of every float result. `ED9ConstantFolder`
+  (`falcom/ed9/constant_folder.py`) folds through `falcom/ed9/vm_values.py`.
 - TypeScript numbers are doubles and its integers are not 30-bit, so emitted code only matches the VM
   where values stay in range.

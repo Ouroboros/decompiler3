@@ -63,9 +63,10 @@ Executes disassembled instructions directly; the lifter is not involved.
 
 ## VM Value Semantics
 
-`values.py` implements the value semantics of [falcom/ed9/spec/vm_spec.md](../falcom/ed9/spec/vm_spec.md)
-(30-bit integers, floats with two dropped bits, type-tagged operators, payload-based branches), pinned by
-`tests/test_diffcheck_values.py`. Checker-specific choices:
+[falcom/ed9/vm_values.py](../falcom/ed9/vm_values.py) implements the value semantics of
+[falcom/ed9/spec/vm_spec.md](../falcom/ed9/spec/vm_spec.md) (30-bit integers, floats with two dropped bits,
+type-tagged operators, payload-based branches), pinned by `tests/test_diffcheck_values.py`. The decompiler's
+constant folding uses the same module. Checker-specific choices:
 
 - Raw words are kept as a separate type; traces observe them by payload, because script output cannot
   tell them from integers. Floats are observed by bit pattern.

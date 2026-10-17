@@ -5,6 +5,7 @@ from ir.mlil import *
 from ir.pipeline import *
 from ir.mlil.mlil_passes import *
 from ir.mlil.passes import SSATypeInferencePass
+from .constant_folder import ED9ConstantFolder
 from .mlil_passes import *
 from .type_signatures import ED9TypeSignatures
 
@@ -31,7 +32,7 @@ def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
     # Phase 2: SSA-based optimization (optional)
     if optimize:
         pipeline.add_pass(SSAConversionPass())
-        pipeline.add_pass(SSAOptimizationPass())
+        pipeline.add_pass(SSAOptimizationPass(folder = ED9ConstantFolder))
 
         # Type inference (on SSA form)
         if infer_types:

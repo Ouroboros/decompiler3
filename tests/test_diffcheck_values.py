@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''VM value semantics of the differential checker, as implemented by VMContext::execute.'''
+'''ED9 VM value semantics (falcom/ed9/vm_values.py), as implemented by VMContext::execute.'''
 
 from pathlib import Path
 import math
@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools.diffcheck.values import (
+from falcom.ed9.vm_values import (
     FALSE_VALUE,
     FLOAT_DROPPED_BITS,
     PAYLOAD_SIGN_BIT,
@@ -20,9 +20,9 @@ from tools.diffcheck.values import (
     binary_op,
     is_zero,
     logical_truth,
-    observable,
     unary_op,
 )
+from tools.diffcheck.values import observable
 
 
 INT30_MAX               = PAYLOAD_SIGN_BIT - 1

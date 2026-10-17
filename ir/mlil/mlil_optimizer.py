@@ -4,6 +4,7 @@ from typing import Dict, Optional
 from .mlil import *
 from .mlil_ssa import convert_to_ssa, convert_from_ssa, MLILVariableSSA
 from .mlil_ssa_optimizer import SSAOptimizer
+from .passes import ConstantFolder
 from .mlil_type_inference import infer_types
 from .mlil_types import MLILType, unify_types, FunctionSignatureDB
 
@@ -97,13 +98,14 @@ def _eliminate_dead_code_post_ssa(function: MediumLevelILFunction) -> bool:
 
 def optimize_mlil(function: MediumLevelILFunction,
                   infer_types_enabled: bool = True,
-                  signature_db: Optional[FunctionSignatureDB] = None) -> MediumLevelILFunction:
+                  signature_db: Optional[FunctionSignatureDB] = None,
+                  folder: type[ConstantFolder] = ConstantFolder) -> MediumLevelILFunction:
     '''Optimize MLIL function using SSA-based analysis'''
     # Convert to SSA form
     convert_to_ssa(function)
 
     # Run SSA-based optimizations (includes DCE on SSA variables)
-    ssa_optimizer = SSAOptimizer(function)
+    ssa_optimizer = SSAOptimizer(function, folder = folder)
     function = ssa_optimizer.optimize()
 
     # Infer types (before de-SSA, so we have def-use chains)

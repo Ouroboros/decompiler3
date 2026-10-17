@@ -8,8 +8,9 @@ the smallest change of inputs that sends it the other way.
 import itertools
 from typing import Any, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
+from falcom.ed9.vm_values import Op, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
+
 from .environment import Origin
-from .values import Op, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
 
 
 # Larger expressions keep only their inputs and are not solved

@@ -3,6 +3,7 @@
 from ir.pipeline import Pass
 from ..mlil import MediumLevelILFunction
 from ..mlil_ssa import convert_to_ssa, convert_from_ssa
+from .pass_ssa_sccp import ConstantFolder
 
 
 class SSAConversionPass(Pass):
@@ -15,13 +16,16 @@ class SSAConversionPass(Pass):
 
 
 class SSAOptimizationPass(Pass):
-    '''Run SSA-based optimizations'''
+    '''Run SSA-based optimizations; folder supplies the target's constant folding semantics'''
+
+    def __init__(self, folder: type[ConstantFolder] = ConstantFolder):
+        self.folder = folder
 
     def run(self, mlil_func: MediumLevelILFunction) -> MediumLevelILFunction:
         '''Optimize SSA form'''
         # Delayed import to avoid circular dependency
         from ..mlil_ssa_optimizer import SSAOptimizer
-        optimizer = SSAOptimizer(mlil_func)
+        optimizer = SSAOptimizer(mlil_func, folder = self.folder)
         return optimizer.optimize()
 
 

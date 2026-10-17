@@ -1,6 +1,6 @@
 '''SCCP - Sparse Conditional Constant Propagation Pass'''
 
-from typing import Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 from ir.pipeline import Pass
 from ..mlil import (
     MediumLevelILFunction,
@@ -51,6 +51,31 @@ from ..mlil_ssa import (
 )
 
 
+class NotFoldable(Exception):
+    '''Raised by a ConstantFolder when an operation on constants has no known result'''
+
+
+class ConstantFolder:
+    '''Evaluates operators on constants with the value semantics of the target VM
+
+    The base class knows no target and folds nothing, so SCCP only propagates constants.
+    Operator arguments are MLIL operation classes (MLILAdd, MLILTestZero, ...).
+    '''
+
+    @classmethod
+    def binary(cls, op_type: type, lhs: Any, rhs: Any) -> Any:
+        raise NotFoldable(op_type.__name__)
+
+    @classmethod
+    def unary(cls, op_type: type, operand: Any) -> Any:
+        raise NotFoldable(op_type.__name__)
+
+    @classmethod
+    def is_true(cls, value: Any) -> bool:
+        '''Whether a branch on this constant takes the true edge'''
+        raise NotFoldable('branch')
+
+
 class LatticeValue:
     '''Lattice value for SCCP: TOP → CONSTANT → BOTTOM'''
     TOP = 'top'        # Undefined/unknown
@@ -95,10 +120,15 @@ class LatticeValue:
             return LatticeValue.bottom()
 
         # CONSTANT meet CONSTANT
-        if self.value == other.value:
+        if self.same_value(self.value, other.value):
             return self
 
         return LatticeValue.bottom()
+
+    @classmethod
+    def same_value(cls, lhs: Any, rhs: Any) -> bool:
+        '''Constants are the same value only with the same type: 0, 0.0 and -0.0 all differ'''
+        return type(lhs) is type(rhs) and repr(lhs) == repr(rhs)
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, LatticeValue):
@@ -108,7 +138,7 @@ class LatticeValue:
             return False
 
         if self.is_constant():
-            return self.value == other.value
+            return self.same_value(self.value, other.value)
 
         return True
 
@@ -126,9 +156,11 @@ class LatticeValue:
 class SCCP:
     '''Sparse Conditional Constant Propagation'''
 
-    def __init__(self, function: MediumLevelILFunction, remove_unreachable: bool = False):
+    def __init__(self, function: MediumLevelILFunction, remove_unreachable: bool = False,
+                 folder: type[ConstantFolder] = ConstantFolder):
         self.function = function
         self.remove_unreachable = remove_unreachable
+        self.folder = folder
 
         # Variables replaced with constants (for DCE to skip debug.string)
         self.replaced_vars: Set[MLILVariableSSA] = set()
@@ -331,20 +363,29 @@ class SCCP:
         if not block:
             return
 
-        cond_value = self._evaluate_expr(inst.condition)
+        taken = self._branch_direction(self._evaluate_expr(inst.condition))
 
-        if cond_value.is_constant():
-            # Condition is constant, only one branch is reachable
-            if cond_value.value:
-                self._mark_edge_reachable(block, inst.true_target)
-
-            else:
-                self._mark_edge_reachable(block, inst.false_target)
-
-        else:
+        if taken is None:
             # Condition unknown, both branches reachable
             self._mark_edge_reachable(block, inst.true_target)
             self._mark_edge_reachable(block, inst.false_target)
+
+        elif taken:
+            self._mark_edge_reachable(block, inst.true_target)
+
+        else:
+            self._mark_edge_reachable(block, inst.false_target)
+
+    def _branch_direction(self, cond_value: LatticeValue) -> Optional[bool]:
+        '''Edge taken by a branch on a constant condition, None when unknown'''
+        if not cond_value.is_constant():
+            return None
+
+        try:
+            return self.folder.is_true(cond_value.value)
+
+        except NotFoldable:
+            return None
 
     def _visit_goto(self, inst: MLILGoto):
         '''Evaluate unconditional jump'''
@@ -382,7 +423,7 @@ class SCCP:
                 return LatticeValue.top()
 
             # Both constants, evaluate
-            return self._eval_binary_op(type(expr), lhs.value, rhs.value)
+            return self._fold(self.folder.binary, type(expr), lhs.value, rhs.value)
 
         elif isinstance(expr, MLILUnaryOp):
             operand = self._evaluate_expr(expr.operand)
@@ -393,99 +434,19 @@ class SCCP:
             if operand.is_top():
                 return LatticeValue.top()
 
-            return self._eval_unary_op(type(expr), operand.value)
+            return self._fold(self.folder.unary, type(expr), operand.value)
 
         else:
             # Unknown expression type
             return LatticeValue.bottom()
 
-    def _eval_binary_op(self, op_type, lhs, rhs) -> LatticeValue:
-        '''Evaluate binary operation on constants'''
+    def _fold(self, evaluate, *operands) -> LatticeValue:
+        '''Constant result of evaluate(*operands), BOTTOM when the folder cannot compute it'''
         try:
-            if op_type == MLILAdd:
-                return LatticeValue.constant(lhs + rhs)
+            return LatticeValue.constant(evaluate(*operands))
 
-            elif op_type == MLILSub:
-                return LatticeValue.constant(lhs - rhs)
-
-            elif op_type == MLILMul:
-                return LatticeValue.constant(lhs * rhs)
-
-            elif op_type == MLILDiv:
-                if rhs == 0:
-                    return LatticeValue.bottom()
-
-                return LatticeValue.constant(lhs // rhs)
-
-            elif op_type == MLILMod:
-                if rhs == 0:
-                    return LatticeValue.bottom()
-
-                return LatticeValue.constant(lhs % rhs)
-
-            elif op_type == MLILAnd:
-                return LatticeValue.constant(lhs & rhs)
-
-            elif op_type == MLILOr:
-                return LatticeValue.constant(lhs | rhs)
-
-            elif op_type == MLILXor:
-                return LatticeValue.constant(lhs ^ rhs)
-
-            elif op_type == MLILShl:
-                return LatticeValue.constant(lhs << rhs)
-
-            elif op_type == MLILShr:
-                return LatticeValue.constant(lhs >> rhs)
-
-            elif op_type == MLILLogicalAnd:
-                return LatticeValue.constant(1 if (lhs and rhs) else 0)
-
-            elif op_type == MLILLogicalOr:
-                return LatticeValue.constant(1 if (lhs or rhs) else 0)
-
-            elif op_type == MLILEq:
-                return LatticeValue.constant(1 if lhs == rhs else 0)
-
-            elif op_type == MLILNe:
-                return LatticeValue.constant(1 if lhs != rhs else 0)
-
-            elif op_type == MLILLt:
-                return LatticeValue.constant(1 if lhs < rhs else 0)
-
-            elif op_type == MLILLe:
-                return LatticeValue.constant(1 if lhs <= rhs else 0)
-
-            elif op_type == MLILGt:
-                return LatticeValue.constant(1 if lhs > rhs else 0)
-
-            elif op_type == MLILGe:
-                return LatticeValue.constant(1 if lhs >= rhs else 0)
-
-        except (OverflowError, TypeError):
-            pass
-
-        return LatticeValue.bottom()
-
-    def _eval_unary_op(self, op_type, operand) -> LatticeValue:
-        '''Evaluate unary operation on constant'''
-        try:
-            if op_type == MLILNeg:
-                return LatticeValue.constant(-operand)
-
-            elif op_type == MLILLogicalNot:
-                return LatticeValue.constant(1 if not operand else 0)
-
-            elif op_type == MLILBitwiseNot:
-                return LatticeValue.constant(~operand)
-
-            elif op_type == MLILTestZero:
-                return LatticeValue.constant(1 if operand == 0 else 0)
-
-        except (OverflowError, TypeError):
-            pass
-
-        return LatticeValue.bottom()
+        except NotFoldable:
+            return LatticeValue.bottom()
 
     def _update_var_value(self, var: MLILVariableSSA, new_value: LatticeValue):
         '''Update variable value and add to worklist if changed'''
@@ -702,8 +663,11 @@ class SCCP:
 class SCCPPass(Pass):
     '''SCCP optimization pass'''
 
+    def __init__(self, folder: type[ConstantFolder] = ConstantFolder):
+        self.folder = folder
+
     def run(self, func: MediumLevelILFunction) -> MediumLevelILFunction:
         '''Run SCCP on the function'''
-        sccp = SCCP(func)
+        sccp = SCCP(func, folder = self.folder)
         sccp.run()
         return func

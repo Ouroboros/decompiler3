@@ -1,6 +1,6 @@
 '''HLIL interpreter: control flow of the generated TypeScript, values with VM semantics
 
-- operators evaluate as the VM opcodes they were lifted from (values.py)
+- operators evaluate as the VM opcodes they were lifted from (falcom/ed9/vm_values.py)
 - conditions of if/while and ! test the 30-bit payload, like POP_JMP_ZERO
 - && and || short-circuit, test each operand like LOGICAL_AND / LOGICAL_OR and yield 1/0
 - call arguments are evaluated left to right
@@ -13,6 +13,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from falcom.ed9.vm_values import Op, Pointer, UNDEF, VMFault, binary_op, bool_value, is_zero, logical_truth, normalize, unary_op
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILAddressOf, HLILAssign, HLILBinaryOp, HLILBlock, HLILBreak, HLILCall,
     HLILComment, HLILConst, HLILContinue, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternCall, HLILFor,
@@ -24,7 +25,6 @@ from ir.mlil.mlil import mlil_arg_var_name
 from .environment import (
     EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd,
 )
-from .values import Op, Pointer, UNDEF, VMFault, binary_op, bool_value, is_zero, logical_truth, normalize, unary_op
 
 
 SPACE_LOCAL     = 'local'

@@ -8,7 +8,7 @@ from .pass_ssa import SSAConversionPass, SSAOptimizationPass, SSADeconstructionP
 
 # SSA optimization passes
 from .pass_ssa_nnf import NNFPass
-from .pass_ssa_sccp import SCCPPass, SCCP, LatticeValue
+from .pass_ssa_sccp import SCCPPass, SCCP, LatticeValue, ConstantFolder, NotFoldable
 from .pass_ssa_constant_propagation import ConstantPropagationPass
 from .pass_ssa_copy_propagation import CopyPropagationPass
 from .pass_ssa_expression_simplification import ExpressionSimplificationPass
@@ -40,6 +40,8 @@ __all__ = [
     'SCCPPass',
     'SCCP',
     'LatticeValue',
+    'ConstantFolder',
+    'NotFoldable',
     'ConstantPropagationPass',
     'CopyPropagationPass',
     'ExpressionSimplificationPass',
