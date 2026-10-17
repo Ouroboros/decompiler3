@@ -16,7 +16,8 @@ If any user request conflicts with this file, you must follow **this file** and,
 
 - Python 3.14.0: `D:\Dev\Python\python.exe`
 - Shell: Git Bash (MINGW64) on Windows
-- Codebase: existing IR modules (`ir/llil`, `ir/mlil`, `ir/hlil`) and `falcom/ed9` parser; in-memory analysis with text/JSON report output (003-ir-pass-validation)
+- Codebase: existing IR modules (`ir/llil`, `ir/mlil`, `ir/hlil`) and `falcom/ed9` parser; in-memory analysis with text/JSON report output
+- Equivalence check: `python -m tools.diffcheck tests/debug.dat` (contract in `docs/DIFFCHECK.md`)
 
 ---
 
