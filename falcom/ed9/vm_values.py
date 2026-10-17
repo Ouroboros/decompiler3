@@ -36,6 +36,10 @@ SHIFT_COUNT_MASK    = 31
 TRUE_VALUE          = 1
 FALSE_VALUE         = 0
 
+# Fault kind of the operand type checks that log "script: operating on values of incompatible types"
+# (script_value.cpp) and leave a value on the stack: an error path outside the decompiler's contract
+TYPE_ERROR          = 'type_error'
+
 
 class VMFault(Exception):
     '''Execution fault that terminates a run and is recorded as a trace event'''
@@ -325,10 +329,10 @@ def _arithmetic(op: Op, lhs: Any, rhs: Any) -> Any:
 
 
 def _integer_only(op: Op, lhs: Any, rhs: Any) -> Any:
-    '''MOD / BITWISE_AND / BITWISE_OR: the VM logs an error and keeps the left operand
-    when neither side is an integer; otherwise both payloads are used as integers'''
+    '''MOD / BITWISE_AND / BITWISE_OR: both payloads are used as integers when either side is an integer;
+    otherwise the VM logs a type error and keeps the left operand'''
     if not (_is_integer_tagged(lhs) or _is_integer_tagged(rhs)):
-        return lhs
+        raise VMFault(TYPE_ERROR, op.name)
 
     left, right = _payload(lhs), _payload(rhs)
     match op:
@@ -395,10 +399,10 @@ def unary_op(op: Op, value: Any) -> Any:
     if op == Op.NEG and isinstance(value, float):
         return to_vm_float(-value)
 
-    # NEG / EZ / NOT accept integers only; the VM logs an error and leaves other operands unchanged
+    # NEG (besides floats) / EZ / NOT accept integers only; the VM logs a type error and leaves other operands unchanged
     if not _is_integer_tagged(value):
         if op in (Op.NEG, Op.TEST_ZERO, Op.BIT_NOT):
-            return value
+            raise VMFault(TYPE_ERROR, op.name)
 
         raise VMFault('unsupported_op', op.name)
 

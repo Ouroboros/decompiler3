@@ -42,6 +42,30 @@ from ..mlil import (
 from ..mlil_ssa import MLILSetVarSSA, MLILIf
 
 
+ALL_BITS = 0xFFFFFFFF
+
+# x OP neutral == x for an integer x
+NEUTRAL_OPERANDS = {
+    MLILAdd:    0,
+    MLILSub:    0,
+    MLILMul:    1,
+    MLILDiv:    1,
+    MLILAnd:    ALL_BITS,
+    MLILOr:     0,
+    MLILXor:    0,
+    MLILShl:    0,
+    MLILShr:    0,
+}
+
+COMMUTATIVE_OPS = (MLILAdd, MLILMul, MLILAnd, MLILOr, MLILXor)
+
+# Operators whose result is an integer unless the VM logs a type error
+INTEGER_RESULT_OPS = (
+    MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe, MLILLogicalAnd, MLILLogicalOr, MLILLogicalNot,
+    MLILTestZero, MLILMod, MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr, MLILBitwiseNot,
+)
+
+
 class ExpressionSimplificationPass(Pass):
     '''Apply algebraic simplifications'''
 
@@ -100,79 +124,54 @@ class ExpressionSimplificationPass(Pass):
         return expr
 
     def _apply_algebraic_identity(self, op_type, lhs, rhs) -> Optional[MediumLevelILInstruction]:
-        '''Apply algebraic identity rules'''
-        if op_type == MLILAdd:
-            if isinstance(rhs, MLILConst) and rhs.value == 0:
-                return lhs
+        '''Apply algebraic identity rules that keep the value and its type
 
-            if isinstance(lhs, MLILConst) and lhs.value == 0:
-                return rhs
+        Only integer constants match: 0.0 or 1.0 would turn an integer operand into a float.
+        x & 0 and x | ALL_BITS are integers whatever x is; every other rule needs an integer x,
+        because a float or string x would come back as a different value or type.
+        '''
+        if op_type == MLILAnd and (self._is_int_const(lhs, 0) or self._is_int_const(rhs, 0)):
+            return MLILConst(0, is_hex = False)
 
-        elif op_type == MLILSub:
-            if isinstance(rhs, MLILConst) and rhs.value == 0:
-                return lhs
+        if op_type == MLILOr and (self._is_int_const(lhs, ALL_BITS) or self._is_int_const(rhs, ALL_BITS)):
+            return MLILConst(ALL_BITS, is_hex = True)
 
-        elif op_type == MLILMul:
-            if isinstance(rhs, MLILConst):
-                if rhs.value == 0:
-                    return MLILConst(0, is_hex = False)
+        if op_type == MLILMul and (self._is_int_const(lhs, 0) or self._is_int_const(rhs, 0)):
+            other = rhs if self._is_int_const(lhs, 0) else lhs
+            return MLILConst(0, is_hex = False) if self._is_integer(other) else None
 
-                elif rhs.value == 1:
-                    return lhs
+        neutral = NEUTRAL_OPERANDS.get(op_type)
+        if neutral is None:
+            return None
 
-            if isinstance(lhs, MLILConst):
-                if lhs.value == 0:
-                    return MLILConst(0, is_hex = False)
+        if self._is_int_const(rhs, neutral) and self._is_integer(lhs):
+            return lhs
 
-                elif lhs.value == 1:
-                    return rhs
-
-        elif op_type == MLILDiv:
-            if isinstance(rhs, MLILConst) and rhs.value == 1:
-                return lhs
-
-        elif op_type == MLILAnd:
-            if isinstance(rhs, MLILConst):
-                if rhs.value == 0:
-                    return MLILConst(0, is_hex = False)
-
-                elif rhs.value == 0xFFFFFFFF:
-                    return lhs
-
-            if isinstance(lhs, MLILConst):
-                if lhs.value == 0:
-                    return MLILConst(0, is_hex = False)
-
-                elif lhs.value == 0xFFFFFFFF:
-                    return rhs
-
-        elif op_type == MLILOr:
-            if isinstance(rhs, MLILConst):
-                if rhs.value == 0:
-                    return lhs
-
-                elif rhs.value == 0xFFFFFFFF:
-                    return MLILConst(0xFFFFFFFF, is_hex = True)
-
-            if isinstance(lhs, MLILConst):
-                if lhs.value == 0:
-                    return rhs
-
-                elif lhs.value == 0xFFFFFFFF:
-                    return MLILConst(0xFFFFFFFF, is_hex = True)
-
-        elif op_type == MLILXor:
-            if isinstance(rhs, MLILConst) and rhs.value == 0:
-                return lhs
-
-            if isinstance(lhs, MLILConst) and lhs.value == 0:
-                return rhs
-
-        elif op_type in (MLILShl, MLILShr):
-            if isinstance(rhs, MLILConst) and rhs.value == 0:
-                return lhs
+        if op_type in COMMUTATIVE_OPS and self._is_int_const(lhs, neutral) and self._is_integer(rhs):
+            return rhs
 
         return None
+
+    @classmethod
+    def _is_int_const(cls, expr: MediumLevelILInstruction, value: int) -> bool:
+        return isinstance(expr, MLILConst) and type(expr.value) is int and expr.value == value
+
+    @classmethod
+    def _is_integer(cls, expr: MediumLevelILInstruction) -> bool:
+        '''Whether expr is an integer on every path that does not log a VM type error'''
+        if isinstance(expr, MLILConst):
+            return type(expr.value) is int
+
+        if isinstance(expr, INTEGER_RESULT_OPS):
+            return True
+
+        if isinstance(expr, (MLILAdd, MLILSub, MLILMul, MLILDiv)):
+            return cls._is_integer(expr.lhs) and cls._is_integer(expr.rhs)
+
+        if isinstance(expr, MLILNeg):
+            return cls._is_integer(expr.operand)
+
+        return False
 
     def _reconstruct_binary_op(self, expr: MediumLevelILInstruction,
                                lhs: MediumLevelILInstruction,

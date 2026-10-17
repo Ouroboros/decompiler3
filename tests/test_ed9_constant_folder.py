@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''Constant folding with the ED9 VM value semantics (falcom/ed9/constant_folder.py).'''
+'''Constant folding and algebraic identities under the ED9 VM value semantics.'''
 
 from pathlib import Path
 import sys
@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from falcom.ed9.constant_folder import ED9ConstantFolder
 from falcom.ed9.vm_values import PAYLOAD_SIGN_BIT, TRUE_VALUE
-from ir.mlil import MLILAdd, MLILDiv, MLILEq, MLILLt, MLILMod, MLILSub, MLILTestZero
-from ir.mlil.passes import LatticeValue, NotFoldable
+from ir.mlil import MLILAdd, MLILAnd, MLILConst, MLILDiv, MLILEq, MLILLt, MLILMod, MLILMul, MLILOr, MLILSub, MLILTestZero
+from ir.mlil.passes import ExpressionSimplificationPass, LatticeValue, NotFoldable
 
 
 INT30_MAX               = PAYLOAD_SIGN_BIT - 1
@@ -44,9 +44,8 @@ class TestFolding(unittest.TestCase):
         self.assertEqual(ED9ConstantFolder.binary(MLILDiv, DIVIDEND, DIVISOR), TRUNCATED_QUOTIENT)
         self.assertEqual(ED9ConstantFolder.binary(MLILMod, DIVIDEND, DIVISOR), TRUNCATED_REMAINDER)
 
-    def test_ez_only_tests_integers(self):
+    def test_ez_on_integers(self):
         self.assertEqual(ED9ConstantFolder.unary(MLILTestZero, 0), TRUE_VALUE)
-        self.assertEqual(ED9ConstantFolder.unary(MLILTestZero, FLOAT_VALUE), FLOAT_VALUE)
 
     def test_branches_test_the_payload(self):
         self.assertFalse(ED9ConstantFolder.is_true(0.0))
@@ -62,6 +61,13 @@ class TestNotFolded(unittest.TestCase):
         with self.assertRaises(NotFoldable):
             ED9ConstantFolder.binary(MLILDiv, FLOAT_VALUE, 0.0)
 
+    def test_type_errors(self):
+        with self.assertRaises(NotFoldable):
+            ED9ConstantFolder.unary(MLILTestZero, FLOAT_VALUE)
+
+        with self.assertRaises(NotFoldable):
+            ED9ConstantFolder.binary(MLILMod, FLOAT_VALUE, FLOAT_VALUE)
+
     def test_results_depending_on_string_offsets(self):
         self.assertEqual(ED9ConstantFolder.binary(MLILEq, STRING_VALUE, STRING_VALUE), TRUE_VALUE)
         with self.assertRaises(NotFoldable):
@@ -69,6 +75,26 @@ class TestNotFolded(unittest.TestCase):
 
         with self.assertRaises(NotFoldable):
             ED9ConstantFolder.binary(MLILLt, STRING_VALUE, STRING_VALUE)
+
+
+class TestAlgebraicIdentities(unittest.TestCase):
+    def setUp(self):
+        self.simplify = ExpressionSimplificationPass()._apply_algebraic_identity
+        self.float_operand = MLILConst(FLOAT_VALUE)
+        self.integer_operand = MLILEq(MLILConst(DIVIDEND), MLILConst(DIVISOR))
+
+    def test_float_constants_do_not_act_as_integer_identities(self):
+        self.assertIsNone(self.simplify(MLILMul, self.integer_operand, MLILConst(float(1))))
+        self.assertIsNone(self.simplify(MLILAdd, self.integer_operand, MLILConst(0.0)))
+
+    def test_rules_that_change_a_float_operand_need_an_integer(self):
+        self.assertIsNone(self.simplify(MLILMul, self.float_operand, MLILConst(0)))
+        self.assertIsNone(self.simplify(MLILOr, self.float_operand, MLILConst(0)))
+        self.assertEqual(self.simplify(MLILMul, self.integer_operand, MLILConst(0)).value, 0)
+        self.assertIs(self.simplify(MLILOr, self.integer_operand, MLILConst(0)), self.integer_operand)
+
+    def test_rules_valid_for_any_operand(self):
+        self.assertEqual(self.simplify(MLILAnd, self.float_operand, MLILConst(0)).value, 0)
 
 
 class TestLatticeIdentity(unittest.TestCase):

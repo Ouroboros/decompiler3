@@ -220,7 +220,11 @@ Notation: `a` is the left operand (pushed first), `b` the right operand (top of 
 float32 with `cvtdq2ps` (rounds to nearest), any other word is reinterpreted as float32 bits `word << 2`. `trunc(r)`
 stores a float result with its two lowest bits dropped. `wrap(r)` reduces an integer modulo `2^30`.
 "Logs an error" means the message *script: operating on values of incompatible types*
-(`script_value.cpp`).
+(`script_value.cpp`). The operand check is `and reg, 0C0000000h; cmp reg, 40000000h` (Integer tag);
+on failure the handler calls `debug_log(3, "script_value.cpp", line, ...)` with line `4Fh` (`NEG`), `58h`
+(`EZ`), `61h` (`NOT`), `0A0h` (`MOD`), `0F9h` (`BITWISE_AND`) or `104h` (`BITWISE_OR`; both jump to
+the `MOD` call at `0x1403BDF49`), then stores the kept operand and continues. These logged type errors
+are error paths: decompilation is only required to match the VM where they do not occur (section 10).
 
 ### 7.1 ADD, SUB, MUL, DIV
 
@@ -284,10 +288,15 @@ Float `-0.0` (payload `0x20000000`) and every String are nonzero.
 ## 10. Consequences for Decompilation
 
 - `POP_JMP_ZERO c` is `payload(c) == 0`, which differs from `c == 0` for Float `-0.0`.
-- `EZ c` is `c == 0` only when `c` is an Integer; on a Float, Raw or String it is a no-op. `!f()` on a
-  callee that returns Raw 0 (`PUSH_RAW 0; SET_REG 0`) evaluates to Raw 0, which is false.
-- Raw words behave like Integers except in `NEG`, `EZ`, `NOT` and in `MOD` / `BITWISE_AND` /
-  `BITWISE_OR` with two non-Integer operands. Local slots are commonly reserved with `PUSH_RAW 0`.
+- Logged type errors (section 7) are outside the equivalence contract, like integer division by zero.
+  On every other path `EZ c` is an Integer `c`, so `EZ c` lifts to `c == 0`; `NOT` and `NEG` likewise
+  see Integers (or a Float for `NEG`), and `MOD` / `BITWISE_AND` / `BITWISE_OR` an Integer operand.
+- Raw words behave like Integers except that `NEG`, `EZ`, `NOT` on a Raw word and `MOD` /
+  `BITWISE_AND` / `BITWISE_OR` on two non-Integer operands are type errors. Local slots are commonly
+  reserved with `PUSH_RAW 0`.
+- Algebraic identities must keep the type: `x * 0`, `x | 0`, `x + 0`, ... drop to `x` or `0` only for an
+  Integer `x`, and `0.0` / `1.0` are not identities for an Integer `x` (the result becomes a Float).
+  `x & 0` and `x | 0xFFFFFFFF` are Integers for any `x`.
 - Constant folding must wrap integers to 30 bits, truncate division and remainder toward zero, run float
   operations in float32 and drop the two lowest bits of every float result. `ED9ConstantFolder`
   (`falcom/ed9/constant_folder.py`) folds through `falcom/ed9/vm_values.py`.

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
 from falcom.ed9.lifters.vm_lifter import ED9VMLifter
 from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
+from falcom.ed9.vm_values import TYPE_ERROR
 from ir.hlil import (
     CommonReturnExtractionPass, ControlFlowOptimizationPass, DeadCodeEliminationPass,
     ExpressionSimplificationPass, MLILToHLILPass,
@@ -104,6 +105,15 @@ class FunctionReport:
 
 def first_divergence(reference: Trace, candidate: Trace) -> Optional[int]:
     '''Index of the first differing event, or None when the traces agree'''
+    if reference.status == RunStatus.FAULT and reference.events[-1].key[1] == TYPE_ERROR:
+        # Execution after a logged operand type error is outside the contract; only the prefix is compared
+        prefix = len(reference.events) - 1
+        for index in range(min(prefix, len(candidate.events))):
+            if reference.events[index].key != candidate.events[index].key:
+                return index
+
+        return None if len(candidate.events) >= prefix else len(candidate.events)
+
     common = min(len(reference.events), len(candidate.events))
     for index in range(common):
         if reference.events[index].key != candidate.events[index].key:

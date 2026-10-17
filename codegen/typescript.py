@@ -1,8 +1,25 @@
 '''TypeScript Code Generator - HLIL to production TypeScript'''
 
+import operator
+
 from common import *
 from typing import List, Optional
 from ir.hlil import *
+
+
+CONSTANT_COMPARISONS = {
+    BinaryOp.EQ:    operator.eq,
+    BinaryOp.NE:    operator.ne,
+    BinaryOp.LT:    operator.lt,
+    BinaryOp.LE:    operator.le,
+    BinaryOp.GT:    operator.gt,
+    BinaryOp.GE:    operator.ge,
+}
+
+# Script integers are 30-bit; constants outside this range wrap in the VM
+INT_PAYLOAD_BITS    = 30
+INT_PAYLOAD_MIN     = -(1 << (INT_PAYLOAD_BITS - 1))
+INT_PAYLOAD_MAX     = (1 << (INT_PAYLOAD_BITS - 1)) - 1
 
 
 class TypeScriptGenerator:
@@ -189,6 +206,26 @@ class TypeScriptGenerator:
     }
 
     @classmethod
+    def _fold_constant_comparison(cls, expr: HLILBinaryOp) -> Optional[str]:
+        '''Fold a comparison of two constants where it matches the VM: both Integers (signed payloads)
+        or both Floats. Strings compare by file offset and mixed operands through float32, so those stay.'''
+        if not (isinstance(expr.lhs, HLILConst) and isinstance(expr.rhs, HLILConst)):
+            return None
+
+        lhs, rhs = expr.lhs.value, expr.rhs.value
+        if type(lhs) is not type(rhs) or type(lhs) not in (int, float):
+            return None
+
+        if type(lhs) is int and not all(INT_PAYLOAD_MIN <= value <= INT_PAYLOAD_MAX for value in (lhs, rhs)):
+            return None
+
+        compare = CONSTANT_COMPARISONS.get(expr.op)
+        if compare is None:
+            return None
+
+        return 'true' if compare(lhs, rhs) else 'false'
+
+    @classmethod
     def _is_boolean_expr(cls, expr: HLILExpression) -> bool:
         if isinstance(expr, HLILBinaryOp):
             return expr.op in cls.BOOLEAN_BINARY_OPS
@@ -253,33 +290,9 @@ class TypeScriptGenerator:
                 return str(expr.value)
 
         elif isinstance(expr, HLILBinaryOp):
-            # Constant folding for comparison operators
-            if isinstance(expr.lhs, HLILConst) and isinstance(expr.rhs, HLILConst):
-                lhs_val, rhs_val = expr.lhs.value, expr.rhs.value
-
-                match expr.op:
-                    case BinaryOp.EQ:
-                        result = lhs_val == rhs_val
-
-                    case BinaryOp.NE:
-                        result = lhs_val != rhs_val
-
-                    case BinaryOp.LT:
-                        result = lhs_val < rhs_val
-
-                    case BinaryOp.LE:
-                        result = lhs_val <= rhs_val
-
-                    case BinaryOp.GT:
-                        result = lhs_val > rhs_val
-
-                    case BinaryOp.GE:
-                        result = lhs_val >= rhs_val
-
-                    case _:
-                        raise NotImplementedError(f'Constant folding not implemented for {expr.op}')
-
-                return 'true' if result else 'false'
+            folded = cls._fold_constant_comparison(expr)
+            if folded is not None:
+                return folded
 
             # Simplify boolean comparisons with 0
             # (bool_expr) != 0 -> bool_expr

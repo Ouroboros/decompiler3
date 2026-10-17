@@ -42,8 +42,9 @@ Global writes between two calls may be reordered freely; only their state at the
 arguments, and random `GLOBALS` mutations after calls are derived from `(seed, origin)`, so both sides see
 the same world. Mutating `GLOBALS` after calls exposes passes that reuse a global value across a call.
 Inputs are integers by default; an input becomes a float only when the function compares it with a float
-literal. Feeding floats to call results that are integers in practice would make the VM's integer-only
-operators (`EZ`, `NOT`, `NEG`) diverge from the decompiled `== 0` on impossible inputs.
+literal. When a run reaches a logged VM type error (`EZ` / `NOT` / `NEG` / `MOD` / `BITWISE_AND` /
+`BITWISE_OR` on unsupported operands), the bytecode side records a `type_error` fault and only the events
+before it are compared: the rest is outside the contract (`falcom/ed9/spec/vm_spec.md` section 10).
 
 ## Reference Interpreter (bytecode)
 

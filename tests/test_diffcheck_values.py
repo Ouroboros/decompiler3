@@ -14,6 +14,7 @@ from falcom.ed9.vm_values import (
     FLOAT_DROPPED_BITS,
     PAYLOAD_SIGN_BIT,
     TRUE_VALUE,
+    TYPE_ERROR,
     Op,
     Raw,
     VMFault,
@@ -81,19 +82,29 @@ class TestFloatSemantics(unittest.TestCase):
 
 
 class TestTypeRestrictedOperators(unittest.TestCase):
-    def test_ez_not_and_neg_leave_non_integers_unchanged(self):
-        self.assertIsInstance(unary_op(Op.TEST_ZERO, 0.0), float)
-        self.assertEqual(unary_op(Op.TEST_ZERO, Raw(0)), Raw(0))
-        self.assertEqual(unary_op(Op.BIT_NOT, FLOAT_LHS), FLOAT_LHS)
-        self.assertEqual(unary_op(Op.NEG, Raw(RAW_PAYLOAD)), Raw(RAW_PAYLOAD))
+    def test_ez_not_and_neg_on_other_types_are_type_errors(self):
+        for op, value in ((Op.TEST_ZERO, 0.0), (Op.TEST_ZERO, Raw(0)), (Op.BIT_NOT, FLOAT_LHS), (Op.NEG, Raw(RAW_PAYLOAD))):
+            with self.assertRaises(VMFault) as raised:
+                unary_op(op, value)
+
+            self.assertEqual(raised.exception.kind, TYPE_ERROR)
+
+    def test_neg_on_floats(self):
+        self.assertEqual(unary_op(Op.NEG, FLOAT_LHS), -FLOAT_LHS)
 
     def test_ez_and_not_on_integers(self):
         self.assertEqual(unary_op(Op.TEST_ZERO, 0), TRUE_VALUE)
         self.assertEqual(unary_op(Op.BIT_NOT, 0), -1)
 
-    def test_mod_and_bitwise_keep_left_operand_without_integers(self):
-        self.assertEqual(binary_op(Op.BIT_AND, FLOAT_LHS, FLOAT_RHS), FLOAT_LHS)
-        self.assertEqual(binary_op(Op.MOD, Raw(RAW_PAYLOAD), Raw(DIVISOR)), Raw(RAW_PAYLOAD))
+    def test_mod_and_bitwise_without_integers_are_type_errors(self):
+        for op, lhs, rhs in ((Op.BIT_AND, FLOAT_LHS, FLOAT_RHS), (Op.MOD, Raw(RAW_PAYLOAD), Raw(DIVISOR))):
+            with self.assertRaises(VMFault) as raised:
+                binary_op(op, lhs, rhs)
+
+            self.assertEqual(raised.exception.kind, TYPE_ERROR)
+
+    def test_one_integer_operand_uses_payloads(self):
+        self.assertEqual(binary_op(Op.BIT_AND, FLOAT_LHS, 0), 0)
 
 
 class TestConditions(unittest.TestCase):
