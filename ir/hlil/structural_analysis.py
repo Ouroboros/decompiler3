@@ -76,6 +76,9 @@ class StructuralAnalyzer:
         # Dominator tree (computed once on original graph)
         self.idom: Dict[int, Optional[int]] = {}
 
+        # Immediate post-dominators on the original graph without back edges; None means the function exit
+        self.ipdom: Dict[int, Optional[int]] = {}
+
         # Loop information
         self.loops: Dict[int, LoopInfo] = {}
         self.back_edges: Set[Tuple[int, int]] = set()
@@ -110,6 +113,7 @@ class StructuralAnalyzer:
 
         # Step 2: Identify loops using back edges
         self._identify_loops()
+        self._compute_post_dominators()
 
         # Step 3: Iterative reduction
         self._reduce()
@@ -165,6 +169,72 @@ class StructuralAnalyzer:
                     break
 
             self.idom[node] = idom
+
+    def _compute_post_dominators(self):
+        '''Immediate post-dominators (Cooper-Harvey-Kennedy) on the acyclic graph left after removing
+        back edges; blocks without successors lead to a virtual exit node'''
+        exit_node = self.num_blocks
+        forward: Dict[int, List[int]] = {}
+        reverse: Dict[int, List[int]] = {exit_node: []}
+        for node in range(self.num_blocks):
+            succs = [
+                succ for succ in self.original_successors.get(node, [])
+                if succ < self.num_blocks and (node, succ) not in self.back_edges
+            ]
+            forward[node] = succs or [exit_node]
+            reverse.setdefault(node, [])
+
+        for node, succs in forward.items():
+            for succ in succs:
+                reverse[succ].append(node)
+
+        # Post-order of the reverse graph, rooted at the exit
+        order: List[int] = []
+        seen = {exit_node}
+        stack = [(exit_node, iter(reverse[exit_node]))]
+        while stack:
+            node, children = stack[-1]
+            child = next(children, None)
+            if child is None:
+                stack.pop()
+                order.append(node)
+
+            elif child not in seen:
+                seen.add(child)
+                stack.append((child, iter(reverse[child])))
+
+        number = {node: index for index, node in enumerate(order)}
+        ipdom = {exit_node: exit_node}
+
+        def intersect(a: int, b: int) -> int:
+            while a != b:
+                while number[a] < number[b]:
+                    a = ipdom[a]
+
+                while number[b] < number[a]:
+                    b = ipdom[b]
+
+            return a
+
+        changed = True
+        while changed:
+            changed = False
+            for node in reversed(order):
+                if node == exit_node:
+                    continue
+
+                new_ipdom = None
+                for succ in forward[node]:
+                    if succ in ipdom:
+                        new_ipdom = succ if new_ipdom is None else intersect(succ, new_ipdom)
+
+                if ipdom.get(node) != new_ipdom:
+                    ipdom[node] = new_ipdom
+                    changed = True
+
+        for node in range(self.num_blocks):
+            target = ipdom.get(node)
+            self.ipdom[node] = None if target is None or target == exit_node else target
 
     def dominates(self, a: int, b: int) -> bool:
         '''Check if a dominates b'''
@@ -485,25 +555,24 @@ class StructuralAnalyzer:
 
     def find_merge_point(self, cond_block: int, true_target: int, false_target: int) -> Optional[int]:
         '''
-        Find merge point for if-else.
+        Find merge point for if-else: the immediate post-dominator of the condition block, the first
+        block every path through either branch reaches. Blocks reached from both branches before that
+        point are emitted on each path.
 
-        First checks if a region was identified during structural analysis.
-        Falls back to reachability search on the original graph.
+        When the branches only meet at the function exit (a branch returns or leaves the loop), fall back
+        to the nearest block both branches reach; paths that skip it end in return / break themselves.
         '''
-        # Check if we have a pre-computed region
-        if cond_block in self.regions:
-            region = self.regions[cond_block]
-            if region.type in (RegionType.IF_THEN, RegionType.IF_THEN_ELSE):
-                return region.exit
-
-        # Use reachability on ORIGINAL graph (not the modified one)
-        return self._find_merge_on_original(true_target, false_target)
-
-    def _find_merge_on_original(self, true_target: int, false_target: int) -> Optional[int]:
-        '''Find merge point using original (unmodified) CFG'''
         if true_target == false_target:
             return true_target
 
+        merge = self.ipdom.get(cond_block)
+        if merge is not None:
+            return merge
+
+        return self._find_merge_on_original(true_target, false_target)
+
+    def _find_merge_on_original(self, true_target: int, false_target: int) -> Optional[int]:
+        '''Nearest block reachable from both branches on the original CFG without back edges'''
         # One branch directly targets the other
         if true_target in self.original_successors.get(false_target, []):
             return true_target
@@ -511,7 +580,6 @@ class StructuralAnalyzer:
         if false_target in self.original_successors.get(true_target, []):
             return false_target
 
-        # Forward reachability on original graph
         reach_true = self._forward_reach_original(true_target)
         reach_false = self._forward_reach_original(false_target)
 
@@ -522,7 +590,6 @@ class StructuralAnalyzer:
         if false_target in reach_true:
             return false_target
 
-        # Common reachable blocks
         common = set(reach_true.keys()) & set(reach_false.keys())
         common.discard(true_target)
         common.discard(false_target)
@@ -531,7 +598,7 @@ class StructuralAnalyzer:
             return None
 
         # Return nearest (minimum combined distance)
-        return min(common, key=lambda b: reach_true[b] + reach_false[b])
+        return min(common, key = lambda b: reach_true[b] + reach_false[b])
 
     def _forward_reach_original(self, start: int) -> Dict[int, int]:
         '''Forward reachability on original graph, skipping back edges'''
@@ -547,7 +614,6 @@ class StructuralAnalyzer:
             reach[block] = depth
 
             for succ in self.original_successors.get(block, []):
-                # Skip back edges
                 if (block, succ) in self.back_edges:
                     continue
 
