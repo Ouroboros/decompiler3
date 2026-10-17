@@ -16,7 +16,7 @@ class Config:
     _defaults = {
         'endian': 'little',
         'encoding': 'UTF8',
-        'float_precision_decimals': 10,
+        'float_dropped_bits': 0,
     }
 
     def __new__(cls):
@@ -116,9 +116,9 @@ class Config:
         return self.get('encoding')
 
     @property
-    def float_precision_decimals(self) -> int:
-        '''Get default float precision for decimal rounding'''
-        return int(self.get('float_precision_decimals'))
+    def float_dropped_bits(self) -> int:
+        '''Get the number of low float32 bits the VM drops when storing a float'''
+        return int(self.get('float_dropped_bits'))
 
 
 # Global config instance
@@ -140,9 +140,9 @@ def default_encoding() -> str:
     return _config.encoding
 
 
-def default_float_precision_decimals() -> int:
-    '''Get default decimal places for float rounding'''
-    return _config.float_precision_decimals
+def default_float_dropped_bits() -> int:
+    '''Get the number of low float32 bits dropped by the VM's float storage'''
+    return _config.float_dropped_bits
 
 def default_indent() -> str:
     '''Get default indent'''

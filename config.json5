@@ -6,7 +6,10 @@
   // Values: "little" or "big"
   "endian": "little",
   "encoding": "UTF8",
-  "float_precision_decimals": 3,
+
+  // Low mantissa bits the script VM drops when it stores a float (ED9: 2).
+  // Float constants are printed as the shortest text that encodes to the same stored value.
+  "float_dropped_bits": 2,
 
   // Add more configuration options here as needed
 }

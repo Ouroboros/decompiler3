@@ -9,9 +9,6 @@ from common import *
 from ir.core import *
 
 
-FLOAT_ROUND_REL_TOL = 1e-6
-FLOAT_ROUND_ABS_TOL = 1e-9
-
 if TYPE_CHECKING:
     from ir.llil import LowLevelILBasicBlock, LowLevelILFunction
 
