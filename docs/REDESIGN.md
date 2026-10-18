@@ -1,195 +1,162 @@
-# ED9 Script Toolchain Redesign
+# ED9 脚本工具链重新设计
 
-Status: proposal, not implemented. The current pipeline stays the reference until the new one reaches
-parity (section 9).
+状态：方案阶段，尚未实现。在新管线追平旧管线之前（第 9 节），现有管线仍然是参照标准。
 
-## 1. Goal
+## 1. 目标
 
-A toolchain whose every representation of an ED9 script is complete, so a script can be decompiled, edited
-and compiled back. This document covers decompilation; every interface is designed with its inverse so the
-compiler can be added without changing the representations.
+做一套工具链，让 ED9 脚本的每一层表示都是完整的，从而可以反编译、人工修改、再编译回去。本文只覆盖反编译部分，但每个接口都同时设计了逆方向，以后加入编译器时不必改动各层的表示。
 
-Inputs that stay authoritative: `falcom/ed9/spec/vm_spec.md` (checked against `ed9_crack.exe`),
-`falcom/ed9/vm_values.py`, the bytecode reference interpreter of `tools/diffcheck`, and the 88 `scena`
-scripts plus the 3 test DATs.
+继续作为权威依据的有：`falcom/ed9/spec/vm_spec.md`（已对照 `ed9_crack.exe` 的汇编核对）、`falcom/ed9/vm_values.py`、`tools/diffcheck` 里的字节码参照解释器，以及 `scena` 的 88 个脚本和 3 份测试 DAT。
 
-## 2. Principles
+## 2. 原则
 
-| # | Principle | Consequence |
+| # | 原则 | 带来的要求 |
 | --- | --- | --- |
-| P1 | Every representation is complete with respect to the information contract (section 3) | A backend can be generated from any layer without the parser |
-| P2 | Every transformation has an inverse or a verifier | read/write, decode/encode, lift/lower, structure/flatten |
-| P3 | Each fact is defined once | One binary schema for reading and writing, one opcode table for decoding, encoding and interpretation, one value semantics, one expression node set for flat and structured IR |
-| P4 | No node kind is ignorable | Line markers and debug logs are statements; no pass treats them as no-ops or drops them |
-| P5 | Verification is part of the pipeline | Each stage has a round trip, an audit or an interpreter; a check mode audits after every pass |
-| P6 | Generic and game-specific code are separate | `ir/`-style generic containers, ED9 metadata and semantics in the ED9 package |
+| P1 | 每一层表示，按信息契约（第 3 节）都是完整的 | 任何一层都能单独生成后端，不需要解析器 |
+| P2 | 每一步变换都有逆变换或校验手段 | 读 / 写、解码 / 编码、提升 / 下降、结构化 / 展平 |
+| P3 | 每个事实只定义一次 | 一份二进制 schema 同时负责读和写；一张指令表同时负责解码、编码和解释执行；一套值语义；平坦 IR 和结构化 IR 共用一套表达式节点 |
+| P4 | 不存在可以忽略的节点 | 行号和调试日志都是正式语句；任何 pass 都不能把它们当成空操作或删掉 |
+| P5 | 验证是管线的一部分 | 每一阶段都有往返检查、审计或解释器；检查模式下，每个 pass 跑完都审计一次 |
+| P6 | 通用代码和游戏专用代码分开 | 通用容器放在 `ir/` 一类的位置，ED9 的元数据和语义放在 ED9 包里 |
 
-## 3. Information Contract
+## 3. 信息契约
 
-Information that cannot be regenerated and must be present in every layer:
+下面这些信息无法由编译器重新生成，每一层都必须保存：
 
-| Scope | Item |
+| 范围 | 内容 |
 | --- | --- |
-| File | header field `dword_14`; global table (name, type) |
-| Function table | order, name, `name_hash`, `is_common_func`, `byte06`, raw 32-bit parameter flags, typed default values |
-| Function | call debug records verbatim, including those with zero arguments |
-| Code | behavior; line markers with their bytecode address; `DEBUG_LOG` values; Raw versus Integer tags; exact constant values |
+| 文件 | 文件头字段 `dword_14`；全局变量表（名字、类型） |
+| 函数表 | 顺序、名字、`name_hash`、`is_common_func`、`byte06`、参数标志（32 位原值）、带类型的默认值 |
+| 函数 | 调用调试信息原样保存，包括参数个数为 0 的条目 |
+| 代码 | 行为；行号及其字节码地址；`DEBUG_LOG` 的值；Raw 和整数的区别；常量的精确值 |
 
-Regenerable, not stored above the code layer: code and stack layout (offsets, labels, slots, stack values
-never read), the fixed pushes of call sequences (`PUSH_CURRENT_FUNC_ID`, `PUSH_RET_ADDR`,
-`PUSH_CALLER_FRAME`), string and table placement. Unreachable code is kept by the image and code layers
-only (decision D1).
+可以重新生成、代码层以上不保存的信息：代码和栈的布局（偏移、标签、栈槽、从未被读到的栈上值），调用序列里固定的压栈（`PUSH_CURRENT_FUNC_ID`、`PUSH_RET_ADDR`、`PUSH_CALLER_FRAME`），字符串和各种表的布局。走不到的死代码只在文件镜像层和指令层保存（决定 D1）。
 
-## 4. Layers
+## 4. 分层
 
 ```
-bytes ⇄ L0 Image ⇄ L1 Code ⇄ L2 Flat IR (⇄ SSA) ⇄ L3 Structured IR → backends (TypeScript, ...)
+bytes ⇄ L0 文件镜像 ⇄ L1 指令 ⇄ L2 平坦 IR（⇄ SSA）⇄ L3 结构化 IR → 后端（TypeScript 等）
 ```
 
-All layers hang off one `Module`, which owns the contract metadata of section 3 once; functions carry
-their L1, L2 and L3 forms.
+所有层都挂在同一个 `Module` 下面。`Module` 只保存一份第 3 节的契约元数据，每个函数同时带着它的 L1、L2、L3 三种形式。
 
-### L0 Image
+### L0 文件镜像
 
-`ScriptImage`: header, function records, global records, parameter flags, default values, debug records,
-string pool, per-function code bytes, plus a separate `Layout` (section order, offsets, string placement).
+`ScriptImage` 包括：文件头、函数记录、全局变量记录、参数标志、默认值、调试信息记录、字符串池、每个函数的代码字节，以及单独存放的 `Layout`（各段的顺序、偏移、字符串的位置）。
 
-- One declarative schema per record drives both `read` and `write`.
-- `write(read(b)).bytes == b` with the original layout; `read(write(image, fresh layout)) == image`
-  with a regenerated one.
+- 每种记录只用一份声明式的 schema 描述，同时驱动 `read` 和 `write`。
+- 用原布局写回时，`write(read(b)).bytes == b`；用重新生成的布局写回时，`read(write(image, 新布局)) == image`。
 
-### L1 Code
+### L1 指令
 
-Per function, the instructions of its whole byte range, decoded linearly from the entry to the next
-function, with branch targets turned into labels; the CFG marks unreachable instructions.
+每个函数的全部字节范围，从入口一直线性解码到下一个函数，跳转目标转成标签；CFG 标出走不到的指令。
 
-- One opcode table (operand types, sizes, stack effect, control flow) drives decode, encode, formatting
-  and the reference interpreter.
-- `encode(decode(code)) == code` for every function.
+- 一张指令表（操作数类型、长度、栈效果、控制流）同时驱动解码、编码、格式化和参照解释器。
+- 每个函数都满足 `encode(decode(code)) == code`。
 
-### L2 Flat IR
+### L2 平坦 IR
 
-Stack-free, CFG-based. Statements: `Assign`, `Store` (global, register, through pointer), `Call` (local,
-script, syscall; result and `REGS[0]` effect explicit), `If`, `Goto`, `Return`, `Line`, `Log`.
-Expressions: typed constants (`Raw`, `Int`, `Float`, `Str`, stack address), variables, VM operators.
+没有栈，基于 CFG。语句有：`Assign`、`Store`（全局变量、寄存器、指针）、`Call`（本地、跨脚本、syscall；返回值和对 `REGS[0]` 的影响都是显式的）、`If`、`Goto`、`Return`、`Line`、`Log`。表达式有：带类型的常量（`Raw`、`Int`、`Float`、`Str`、栈地址）、变量、VM 运算符。
 
-- Lifting simulates the stack once and resolves call frames; there is no separate stack IR, because L1
-  already is the exact stack-level form.
-- An SSA form of the same nodes (versioned variables, phi) is used for analysis and leaves through
-  deconstruction.
-- Constant folding, type tests and identities go through `vm_values` only.
-- Lowering L2 → L1 is defined from the start (needed by the compiler, and checked by interpretation).
+- 提升时只模拟一次栈，同时解析调用帧。没有单独的栈级 IR，因为 L1 本身就是精确的栈级表示。
+- 分析时使用同一套节点的 SSA 形式（带版本号的变量、phi），用完再解构回来。
+- 常量折叠、类型判断和代数化简一律通过 `vm_values` 计算。
+- 从一开始就定义 L2 → L1 的下降（编译器需要它，同时用解释执行来校验）。
 
-### L3 Structured IR
+### L3 结构化 IR
 
-A tree of `Block`, `If`, `While`, `DoWhile`, `Switch` (multi-label cases), `Break`, `Continue`, `Return`
-whose leaves are L2 statements and expressions — the same node classes, not copies.
+由 `Block`、`If`、`While`、`DoWhile`、`Switch`（支持多值 case）、`Break`、`Continue`、`Return` 组成的树，叶子就是 L2 的语句和表达式本身，是同一批节点类，不是复制品。
 
-- Structuring uses post-dominators (current `structural_analysis.py` algorithm) and copies shared code
-  explicitly; copied `Line` statements keep their address.
-- Flattening L3 → L2 is defined, so structuring can be verified and compiled back.
-- Readability passes (temporary elimination, naming, condition simplification, switch rebuilding) run here
-  or in L2 and are subject to the same audits.
+- 结构化使用后支配节点（即现有 `structural_analysis.py` 的算法），共享代码显式复制；复制出来的 `Line` 语句保留原来的地址。
+- 定义 L3 → L2 的展平，这样结构化的结果能被校验，以后也能编译回去。
+- 可读性相关的 pass（去掉临时变量、命名、条件化简、switch 还原）在 L3 或 L2 上运行，受同样的审计约束。
 
-### Backends
+### 后端
 
-A backend translates a `Module` at L3 and must state how it represents every contract item. The
-TypeScript backend keeps the parse-back check (`ts_parse.py`): its output parsed back must equal the L3
-it came from in behavior and contract content.
+后端负责翻译 L3 层的 `Module`，并且必须说明每一项契约内容在输出里怎么表示。TypeScript 后端保留回读检查（`ts_parse.py`）：输出解析回来之后，在行为和契约内容上都必须和生成它的 L3 一致。
 
-## 5. Passes
+## 5. Pass
 
 ```
 class Pass:
-    preserves: set of contract items      # audited after the pass in check mode
+    preserves: set of contract items      # 检查模式下，pass 跑完后审计这些项
     def run(self, module) -> module
 ```
 
-- A pass may move or duplicate `Line` and `Log` statements but never removes them; audits compare sets of
-  (address, line) and multisets of logs.
-- Check mode runs the contract audit and, optionally, the interpreter after every pass, so a loss or
-  miscompile is attributed to one pass.
+- pass 可以移动或复制 `Line` 和 `Log` 语句，但不能删除它们。审计时，行号按"(地址, 行号)"集合比较，日志按多重集比较。
+- 检查模式下，每个 pass 跑完都执行契约审计，并可选地执行解释器，所以信息丢失或错误改写能归到具体的某一个 pass。
 
-## 6. Verification
+## 6. 验证
 
-| Check | Scope | Proves |
+| 检查 | 范围 | 证明什么 |
 | --- | --- | --- |
-| V0 image round trip | 88 scripts | L0 is complete; independent field audit against raw bytes (`tmp/dat_audit.py` prototype) |
-| V1 code round trip | every function | L1 is complete, including unreachable bytes |
-| V2 contract audit | L1, L2, L3, backend | No contract item is lost; one extractor serves L2 and L3 because nodes are shared |
-| V3 behavior | every function | bytecode ≡ L2 ≡ L3 ≡ backend under one input plan; the existing bytecode interpreter stays the independent oracle; Raw is compared by tag |
-| V4 per-pass check mode | every pass | Localizes a failure to the pass that introduced it |
-| V5 negative tests | each layer | Deleting a contract item or miscompiling one node is detected and localized |
+| V0 文件镜像往返 | 88 个脚本 | L0 是完整的；同时用独立的字段审计和原始字节比对（原型见 `tmp/dat_audit.py`） |
+| V1 指令往返 | 每个函数 | L1 是完整的，包括走不到的字节 |
+| V2 契约审计 | L1、L2、L3、后端 | 没有丢失任何契约项；L2 和 L3 共用节点，所以只需要一个提取器 |
+| V3 行为 | 每个函数 | 同一组输入下，字节码 ≡ L2 ≡ L3 ≡ 后端；现有的字节码解释器继续作为独立的参照；Raw 按类型标签比较 |
+| V4 逐 pass 检查模式 | 每个 pass | 把失败定位到引入它的那个 pass |
+| V5 负面测试 | 每一层 | 故意删掉一项契约内容，或者错误改写一个节点，都能被检测到并正确定位 |
 
-Incremental runs: each function's forms are hashed per layer; only functions with changed hashes are
-rechecked. Full runs are for checker changes and acceptance.
+增量运行：每个函数的各层形式都计算哈希，只重新检查哈希变化了的函数。全量运行只在修改检查器或做验收时进行。
 
-## 7. Comparison With the Current Design
+## 7. 和现有设计的对比
 
-Measured values are from the current code and the 88 `scena` scripts. Values for the new design are design
-targets until the prototype measures them (section 8).
+现有设计一栏的数据，来自现有代码和 `scena` 的 88 个脚本。新设计一栏是设计目标，要等原型实测（第 8 节）。
 
-| Dimension | Current (measured) | New (target) |
+| 维度 | 现有设计（实测） | 新设计（目标） |
 | --- | --- | --- |
-| Completeness | Global names wrong (5 of 5), 112,461 debug records dropped, Raw tag lost after LLIL, ≥ 572 line markers lost in HLIL, parameter flags lost in HLIL, `DEBUG_LOG` lost in the lifter | Zero contract differences in every layer (V2) |
-| Round trip | No writer, no encoder: 0 of 88 | 88 of 88 byte-identical (V0, V1) |
-| Places that convert between node sets | 6 (model → instructions → LLIL → MLIL ⇄ SSA → HLIL → TypeScript), each a possible loss | 3 (image → code → L2; L2 → L3 shares nodes; L3 → backend) |
-| Node classes | LLIL 50, MLIL 57, HLIL 32 = 139 | One expression set shared by L2/L3; estimate under 60 in total |
-| Behavior verification | bytecode ≡ HLIL ≡ TypeScript; 22,118 of 22,118 PASS, 99.66 % block coverage | bytecode ≡ L2 ≡ L3 ≡ backend, same pass rate and coverage at least |
-| Failure localization | HLIL passes; MLIL and earlier reported as "MLILToHLIL (or MLIL)" | Exact layer and pass (V4) |
-| Value semantics | `vm_values` in SCCP and the checker; other passes reason on Python values | `vm_values` everywhere |
-| Compiler readiness | Read-only; every layer would need an inverse | Inverses defined per layer (P2) |
-| Instruction fidelity | The disassembler appends synthetic size-0 `JMP`s at `offset - 1` when it splits blocks (595 in the three largest scripts), so the instruction list is not the bytecode | L1 holds exactly the decoded bytes; fallthrough is a CFG edge, not an instruction |
-| I/O | `FileStream` on the file seeks for nearly every value, and each seek refills the buffer from `/mnt/d` over 9P | Read the whole file once and decode from memory |
-| Readability (TypeScript) | 58,764 `let`, 54,317 of them register temporaries; 22,719 returns through a temporary | Not worse; temporaries removed in L2 |
-| Speed | section 7.1 | Not slower; parsing from memory |
-| Development cost | Exists | New work until parity — the one dimension the new design loses |
+| 信息完整性 | 全局变量名 5 个全错；跳过 112,461 条调试信息；Raw 标记在 LLIL 之后丢失；HLIL 里至少丢了 572 个行号；参数标志在 HLIL 里丢失；`DEBUG_LOG` 在 lifter 里丢失 | 每一层的契约审计都是零差异（V2） |
+| 往返 | 没有写出器和编码器：0/88 | 88/88 逐字节相同（V0、V1） |
+| 换节点类型的转换次数 | 6 次（模型 → 指令 → LLIL → MLIL ⇄ SSA → HLIL → TypeScript），每一次都可能丢信息 | 3 次（文件镜像 → 指令 → L2；L2 → L3 共用节点；L3 → 后端） |
+| 节点类型数 | LLIL 50、MLIL 57、HLIL 32，共 139 个 | L2 和 L3 共用一套表达式；总数估计少于 60 个 |
+| 行为验证 | 字节码 ≡ HLIL ≡ TypeScript；22,118 / 22,118 通过，块覆盖率 99.66% | 字节码 ≡ L2 ≡ L3 ≡ 后端，通过率和覆盖率至少相同 |
+| 出错定位 | 只到 HLIL 的 pass；MLIL 及更早的问题只能报"MLILToHLIL (or MLIL)" | 能定位到具体的层和 pass（V4） |
+| 值语义 | SCCP 和检查器用 `vm_values`；其他 pass 按 Python 的值推理 | 全部使用 `vm_values` |
+| 为编译器做的准备 | 只能读；每一层都要补逆变换 | 每一层都定义了逆变换（P2） |
+| 指令层是否忠实 | 反汇编器拆分基本块时，会在 `offset - 1` 处插入长度为 0 的伪 `JMP`（最大的 3 个脚本里有 595 条），指令列表不等于字节码 | L1 只包含真实解码出的字节；fallthrough 用 CFG 边表示，不是指令 |
+| I/O | `FileStream` 直接读文件，几乎每读一个值都要 `seek`，而每次 `seek` 都要通过 9P 从 `/mnt/d` 重新填充缓冲 | 整个文件读一次，从内存解码 |
+| 可读性（TypeScript） | `let` 共 58,764 个，其中 54,317 个是寄存器临时变量；22,719 处通过临时变量返回 | 不比现在差；临时变量在 L2 去掉 |
+| 速度 | 见 7.1 节 | 不比现在慢；从内存解析 |
+| 开发成本 | 已经存在 | 追平之前都是新增工作量，这是新设计唯一会输的一项 |
 
-### 7.1 Baseline Measurements
+### 7.1 基线测量
 
-Single process, current code (`b75a696..78b31c6` pipeline), scripts on `/mnt/d`:
+单进程，现有代码（`b75a696..78b31c6` 的管线），脚本放在 `/mnt/d` 上：
 
-| Measurement | Result |
+| 测量项 | 结果 |
 | --- | --- |
-| Decompile to HLIL and TypeScript, file-backed | `c1010` (19,876 B) 1.8 s, `m7200` (28,722 B) 2.2 s, `t3400` (1,590,061 B) 132.9 s |
-| Differential check | `c1010` 1.0 s, `m7200` 1.2 s, `t3400` 230.5 s; all 88 scripts about 9.9 h of CPU |
-| Parse tables of `c0000` (5,539,286 B), file-backed | not finished after 10 min; stack dumps show `ScpValue` reads of debug records |
-| Parse and disassemble `c0000`, file read into memory first | 1 s tables, 4 to 5 s for 964 functions |
-| Linear decode coverage, `c0000` / `c0400` / `c0600` | 2,587 functions, none overlapping the next; 34 functions hold 228 unreachable bytes, all inside their own range and decodable (dead `JMP`, `PUSH`) |
-| Code size | parser 931, disassembler 1,239, lifter 310, other ED9 1,614, `ir/core` 77, LLIL 1,636, MLIL 3,454 + passes 3,357, HLIL 3,139 + passes 1,702, codegen 714, checker 2,224 lines |
+| 反编译到 HLIL 和 TypeScript（直接读文件） | `c1010`（19,876 字节）1.8 秒，`m7200`（28,722 字节）2.2 秒，`t3400`（1,590,061 字节）132.9 秒 |
+| 差分检查 | `c1010` 1.0 秒，`m7200` 1.2 秒，`t3400` 230.5 秒；88 个脚本总共约 9.9 小时 CPU 时间 |
+| 解析 `c0000`（5,539,286 字节）的各种表（直接读文件） | 10 分钟仍未完成；调用栈显示停在读取调试信息的 `ScpValue` 上 |
+| 解析并反汇编 `c0000`（先把文件读进内存） | 解析表 1 秒，反汇编 964 个函数 4 到 5 秒 |
+| 线性解码的覆盖情况（`c0000`、`c0400`、`c0600`） | 共 2,587 个函数，没有一个和下一个函数重叠；34 个函数含有 228 字节走不到的代码，全部在函数自己的范围内，并且都能解码（死掉的 `JMP`、`PUSH`） |
+| 代码量 | 解析器 931 行，反汇编器 1,239 行，lifter 310 行，其他 ED9 代码 1,614 行，`ir/core` 77 行，LLIL 1,636 行，MLIL 3,454 行 + pass 3,357 行，HLIL 3,139 行 + pass 1,702 行，代码生成 714 行，检查器 2,224 行 |
 
-The file-backed versus in-memory difference is an I/O cost of the current parser, independent of the
-pipeline design; the decompile and check timings above include it.
+直接读文件和先读进内存之间的差距，是现有解析器的 I/O 开销，和管线的架构无关；上面的反编译和检查耗时都包含了这部分开销。
 
-## 8. Evaluation Before Rebuilding
+## 8. 推倒重建之前的评估
 
-1. Prototype the whole chain (L0 to TypeScript) on `c1010`, `c1020`, `m7200` (167 functions).
-2. Measure every row of section 7 for both designs on the same functions.
-3. Rebuild only if the new design is not worse on any row except development cost and is better on
-   completeness, round trip and localization. Otherwise fix the current pipeline in place.
+1. 在 `c1010`、`c1020`、`m7200`（共 167 个函数）上，把整条链从 L0 做到 TypeScript，做出原型。
+2. 在同一批函数上，把第 7 节的每一行指标都对新旧两种设计各测一遍。
+3. 只有当新设计除开发成本外每一项都不比旧设计差，并且在完整性、往返和定位能力上明显更好时，才推倒重建；否则就在现有管线上逐处修补。
 
-## 9. Migration
+## 9. 迁移
 
-- New package next to the current one in this repository; the current pipeline, checker and corpus stay
-  usable throughout.
-- Algorithms already validated are ported, not reinvented: post-dominator merge points, shared-code
-  copying, switch rebuilding with multi-label cases, VM constant folding, VM-order parameter numbering.
-- Parity: all 88 `scena` scripts pass V0 to V3 and the 3 test DATs pass; then the current pipeline is
-  removed.
+- 新包放在本仓库里，和现有包并列；整个过程中，现有管线、检查器和测试语料都保持可用。
+- 已经验证过的算法直接移植，不重新发明：后支配汇合点、共享代码复制、带多值 case 的 switch 还原、按 VM 语义的常量折叠、按 VM 顺序的参数编号。
+- 追平的标准：`scena` 的 88 个脚本全部通过 V0 到 V3，3 份测试 DAT 也全部通过；达到之后删除现有管线。
 
-## 10. Open Decisions
+## 10. 待定事项
 
-| # | Question | Default |
+| # | 问题 | 默认做法 |
 | --- | --- | --- |
-| D1 | Keep unreachable code above L1? | No: kept in L0/L1 only (linear decode covers it, section 7.1) |
-| D2 | Package location and name | New directory in this repository |
-| D3 | Contract representation in the TypeScript backend | Deferred until a compiler is planned |
+| D1 | L1 以上要不要保留走不到的代码？ | 不保留，只在 L0 和 L1 保留（线性解码能覆盖它，见 7.1 节） |
+| D2 | 新包的位置和名字 | 本仓库里的一个新目录 |
+| D3 | TypeScript 后端里怎么表示契约内容 | 等计划做编译器时再定 |
 
-## 11. Risks
+## 11. 风险
 
-- The prototype may show that a flat plus structured IR cannot express something the current three-layer
-  pipeline handles; section 8 exists to find that before rebuilding.
-- Unknown semantics of `name_hash` and debug records: stored verbatim, but a compiler will need rules to
-  regenerate them after edits.
-- Comparing Raw by tag may expose new failures in both designs.
-- 0.34 % of blocks are not reached by the checker in either design.
+- 原型可能会发现，"平坦 IR + 结构化 IR"表达不了现有三层管线能处理的某些情况；第 8 节就是为了在推倒之前把这类问题找出来。
+- `name_hash` 和调试信息的语义未知：原样保存能保证完整，但以后编译器在修改之后要重新生成它们，就需要知道生成规则。
+- 改为按类型标签比较 Raw 之后，两种设计都可能冒出新的失败。
+- 两种设计下，都还有 0.34% 的基本块没有被检查器跑到。
