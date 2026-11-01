@@ -88,6 +88,7 @@ class ScpParser(StrictBase):
     functions       : list[Function]
     global_vars     : list[GlobalVar]
     function_map    : dict[str, Function]
+    layout          : ScriptLayout
 
     def __init__(self, fs: fileio.FileStream, name: str = ''):
         # Parsing seeks for nearly every value; on a file-backed stream each seek refills the buffer
@@ -125,8 +126,32 @@ class ScpParser(StrictBase):
         func_entries        = self._read_function_entries(fs)
         self.functions      = self._read_functions(fs, func_entries)
         self.global_vars    = self._read_global_vars(fs)
+        self.layout         = self._read_layout(fs, func_entries)
 
         self.function_map = {func.name: func for func in self.functions}
+
+    def _read_layout(self, fs: fileio.FileStream, func_entries: list[ScpFunctionEntry]) -> ScriptLayout:
+        '''The tables precede the code; the body is everything from the end of the last table'''
+        hdr = self.header
+        table_ends = [
+            ScpHeader.SIZE,
+            hdr.function_entry_offset + ScpFunctionEntry.SIZE * hdr.function_count,
+            hdr.global_var_offset + ScpGlobalVar.SIZE * hdr.global_var_count,
+        ]
+        for entry in func_entries:
+            table_ends.append(entry.param_flags_offset + ScpParamFlags.SIZE * entry.param_count)
+            table_ends.append(entry.default_params_offset + ScpValue.SIZE * entry.default_params_count)
+            table_ends.append(entry.debug_info_offset + ScpFunctionCallDebugInfo.SIZE * entry.debug_info_count)
+
+        for func in self.functions:
+            for info in func.debug_info:
+                table_ends.append(info.info_offset + ScpFunctionCallDebugInfoArg.SIZE * len(info.args))
+
+        with fs.PositionSaver:
+            data = fs.ReadAll()
+
+        body_offset = max(table_ends)
+        return ScriptLayout(len(data), body_offset, data[body_offset:])
 
     def _read_function_entries(self, fs: fileio.FileStream):
         return [ScpFunctionEntry(fs = fs) for _ in range(self.header.function_count)]
@@ -140,10 +165,12 @@ class ScpParser(StrictBase):
             func = Function()
 
             func.is_common_func = entry.is_common_func == 1
+            func.byte06 = entry.byte06
             func.offset = entry.offset
 
             func_name = ScpValue().from_value(entry.name_offset, fs = fs)
             func.name = func_name.value
+            func.layout = FunctionLayout(func_name.offset, entry.default_params_offset, entry.param_flags_offset, entry.debug_info_offset)
 
             fs.Position = entry.param_flags_offset
             param_flags = [ScpParamFlags(fs = fs) for _ in range(entry.param_count)]
@@ -172,13 +199,12 @@ class ScpParser(StrictBase):
             debug_info_list = self.read_debug_info(fs, entry)
 
             for dbg_info in debug_info_list:
-                if dbg_info.arg_count == 0:
-                    continue
-
                 info = FunctionCallDebugInfo()
                 info.call_type = dbg_info.call_type
+                info.func_id = dbg_info.func_id
+                info.info_offset = dbg_info.info_offset
 
-                if dbg_info.func_id != 0xFFFFFFFF:
+                if dbg_info.func_id != FunctionCallDebugInfo.NO_FUNCTION_ID:
                     if dbg_info.func_id >= len(functions):
                         raise ValueError(f'debug info func_id out of range: {dbg_info.func_id} >= {len(functions)}')
 
@@ -218,14 +244,15 @@ class ScpParser(StrictBase):
         global_vars: list[GlobalVar] = []
 
         for i in range(hdr.global_var_count):
+            # The record is the name word followed by the type
             gvar_info = ScpGlobalVar(fs = fs)
-            var_name = ScpValue(fs = fs).value
-            var_type = gvar_info.type
+            var_name = ScpValue().from_value(gvar_info.name_offset, fs = fs)
 
             global_var = GlobalVar(
                 index = i,
-                name = var_name,
-                type = var_type,
+                name = var_name.value,
+                type = gvar_info.type,
+                name_offset = var_name.offset,
             )
 
             global_vars.append(global_var)

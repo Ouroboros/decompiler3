@@ -16,6 +16,7 @@ from ir.hlil import HLILComment
 from ir.llil import LowLevelILDebug
 from ml import fileio
 from falcom.ed9.parser.scp import ScpParser
+from falcom.ed9.parser.writer import write_scp
 from tools.contract.audit import compare_code, compare_tables
 from tools.contract.extract import (
     code_from_hlil, code_from_instructions, code_from_llil, code_from_mlil, code_from_ts, run_pipeline, tables_from_parser,
@@ -80,9 +81,33 @@ class TestTableAudit(unittest.TestCase):
         actual.function_order = None
         self.assertEqual(self.items(actual), {('globals', None), ('dword_14', None), ('function_order', None)})
 
-    def test_parser_matches_except_known_losses(self):
-        found = {item for item, _ in self.items(tables_from_parser(self.parser))}
-        self.assertLessEqual(found, {'function.debug_records', 'function.byte06', 'globals'})
+    def test_parser_matches_the_bytes(self):
+        self.assertEqual(self.items(tables_from_parser(self.parser)), set())
+
+
+class TestWriter(unittest.TestCase):
+    def setUp(self):
+        self.data, self.parser, _ = load()
+
+    def test_round_trip_is_byte_identical(self):
+        self.assertEqual(write_scp(self.parser), self.data)
+
+    @classmethod
+    def target(cls, parser):
+        return next(func for func in parser.functions if func.debug_info and func.params)
+
+    def test_model_changes_change_the_bytes(self):
+        cases = {
+            'global name': lambda parser: setattr(parser.global_vars[0], 'name', parser.global_vars[0].name + 'X'),
+            'debug record': lambda parser: self.target(parser).debug_info.pop(),
+            'byte06': lambda parser: setattr(self.target(parser), 'byte06', SINGLE),
+            'parameter flags': lambda parser: setattr(self.target(parser).params[0].type, 'flags', FOREIGN_VALUE),
+        }
+        for what, mutate in cases.items():
+            with self.subTest(what = what):
+                data, parser, _ = load()
+                mutate(parser)
+                self.assertNotEqual(write_scp(parser), data)
 
 
 class TestCodeAudit(unittest.TestCase):

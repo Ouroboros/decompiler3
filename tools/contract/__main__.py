@@ -14,8 +14,9 @@ from typing import Dict, List
 from ml import fileio
 from common.config import default_encoding
 from falcom.ed9.parser.scp import ScpParser
+from falcom.ed9.parser.writer import write_scp
 
-from .audit import compare_code, compare_tables
+from .audit import compare_bytes, compare_code, compare_tables
 from .extract import (
     code_from_hlil, code_from_instructions, code_from_mlil, code_from_ts, entry_from_hlil, entry_from_params,
     run_pipeline, tables_from_parser,
@@ -25,13 +26,15 @@ from .model import Difference, FunctionEntry, ModuleTables
 
 
 LAYER_PARSER    = 'parser'
+# Parsing and writing back with the original layout must give the original bytes
+LAYER_WRITER    = 'writer'
 LAYER_LLIL      = 'llil'
 LAYER_MLIL      = 'mlil'
 LAYER_HLIL      = 'hlil'
 LAYER_TS        = 'ts'
 LAYER_PIPELINE  = 'pipeline'
 IR_LAYERS       = (LAYER_LLIL, LAYER_MLIL, LAYER_HLIL, LAYER_TS)
-ALL_LAYERS      = (LAYER_PARSER,) + IR_LAYERS
+ALL_LAYERS      = (LAYER_WRITER, LAYER_PARSER) + IR_LAYERS
 # The TypeScript backend's file-level format is deferred (docs/REDESIGN.md section 2): code items only
 TABLE_LAYERS    = (LAYER_PARSER, LAYER_LLIL, LAYER_MLIL, LAYER_HLIL)
 PROGRESS_EVERY  = 100
@@ -48,18 +51,23 @@ def audit_file(path: Path, layers, names) -> List[Difference]:
     data = path.read_bytes()
     reference = read_tables(data)
     script = path.name
+    ir_layers = [layer for layer in layers if layer in IR_LAYERS]
     with fileio.FileStream(data, encoding = default_encoding()) as fs:
         parser = ScpParser(fs, script)
         with contextlib.redirect_stdout(io.StringIO()):
             parser.parse()
-            functions = parser.disasm_all_functions(filter_func = (lambda f: f.name in names) if names else None)
+            selected = [func for func in parser.functions if not names or func.name in names]
+            # Only the IR layers need the disassembly
+            functions = parser.disasm_all_functions(filter_func = lambda f: f in selected) if ir_layers else selected
 
     checked = [func.name for func in functions]
     differences: List[Difference] = []
+    if LAYER_WRITER in layers:
+        differences += compare_bytes(LAYER_WRITER, script, data, write_scp(parser))
+
     if LAYER_PARSER in layers:
         differences += compare_tables(LAYER_PARSER, script, reference, tables_from_parser(parser), checked)
 
-    ir_layers = [layer for layer in layers if layer in IR_LAYERS]
     if not ir_layers:
         return differences
 

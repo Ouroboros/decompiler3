@@ -9,11 +9,13 @@ class GlobalVar:
     index       : int
     name        : str
     type        : ScpGlobalVar.Type
+    name_offset : int
 
-    def __init__(self, index: int, name: str, type: ScpGlobalVar.Type):
+    def __init__(self, index: int, name: str, type: ScpGlobalVar.Type, name_offset: int = None):
         self.index = index
         self.name = name
         self.type = type
+        self.name_offset = name_offset  # File offset of the name string
 
     def __str__(self) -> str:
         return f'global(index = {self.index}, name = {self.name!r}, type = {self.type})'
@@ -31,8 +33,12 @@ class FunctionCallDebugInfo:
             self.value = value
 
     func_name   : str
+    func_id     : int       # Callee function index, NO_FUNCTION_ID for script and system calls
     call_type   : ScpFunctionCallDebugInfo.CallType
     args        : list[ArgInfo]
+    info_offset : int       # File offset of the argument records
+
+    NO_FUNCTION_ID = 0xFFFFFFFF
 
     def __init__(self):
         self.args = []
@@ -64,17 +70,40 @@ class FunctionParam:
 
     __repr__ = __str__
 
+class ScriptLayout:
+    '''File-level layout: everything after the tables (code and the string pool) is kept as bytes'''
+
+    def __init__(self, size: int, body_offset: int, body: bytes):
+        self.size           = size
+        self.body_offset    = body_offset
+        self.body           = body
+
+
+class FunctionLayout:
+    '''File offsets of a function entry's arrays and name, kept to write the script back unchanged'''
+
+    def __init__(self, name_offset: int, defaults_offset: int, param_flags_offset: int, debug_info_offset: int):
+        self.name_offset        = name_offset
+        self.defaults_offset    = defaults_offset
+        self.param_flags_offset = param_flags_offset
+        self.debug_info_offset  = debug_info_offset
+
+
 class Function:
     name            : str
     offset          : int
     params          : list[FunctionParam]
     is_common_func  : bool
+    byte06          : int
     debug_info      : list[FunctionCallDebugInfo]
+    layout          : FunctionLayout
     entry_block     : BasicBlock | None
 
     def __init__(self):
         self.params     = []
         self.debug_info = []
+        self.byte06     = 0
+        self.layout     = None
         self.entry_block = None
 
     def name_hash(self) -> int:

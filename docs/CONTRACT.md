@@ -24,6 +24,7 @@ Exit code is 0 only when no difference is found.
 
 | Layer | Tables | Code items |
 | --- | --- | --- |
+| `writer` | Parsing and writing back with the original layout (`falcom/ed9/parser/writer.py`) must give the original bytes | — |
 | `parser` | Parser model (`ScpParser`) | — |
 | `llil` | Function name, `is_common_func`, parameter types and defaults; module items once a module exists | `LowLevelILDebug` (`line`, `log`) with address |
 | `mlil` | As LLIL, from `source_params` | `MLILDebug` (`line`, `log`) with address |

@@ -21,6 +21,8 @@ class ScpParamType(IntEnum2):
 
 
 class ScpParamFlags:
+    SIZE = 0x04
+
     def __init__(self, typ: object = None, *, fs: fileio.FileStream = None):
         self.flags = 0
         self.defaultValue = None
@@ -82,6 +84,11 @@ class ScpParamFlags:
     __repr__ =  __str__
 
 
+# Payload bits of a tagged word; for strings the payload is the file offset of the string
+VALUE_PAYLOAD_MASK = 0x3FFFFFFF
+VALUE_TAG_SHIFT    = 30
+
+
 class RawInt(int):
     def __repr__(self) -> str:
         return f'RawInt(0x{self:08X})'
@@ -93,6 +100,8 @@ Pointer     = object
 
 
 class ScpValue:
+    SIZE = 0x04
+
     class Type(IntEnum2):
         Raw             = 0
         Integer         = 1
@@ -108,6 +117,8 @@ class ScpValue:
 
     def __init__(self, value: int | float | str | RawInt = None, *, fs: fileio.FileStream = None):
         self.value  = value
+        # File offset of the string data; set when a String value is read
+        self.offset = None
 
         if value is not None:
             self.type = self.ClassMap[type(value)]
@@ -140,8 +151,9 @@ class ScpValue:
                 value = struct.unpack('f', float_bytes)[0]
 
             case ScpValue.Type.String:
+                self.offset = value & VALUE_PAYLOAD_MASK
                 with fs.PositionSaver:
-                    fs.Position = value & 0x3FFFFFFF
+                    fs.Position = self.offset
                     value = fs.ReadMultiByte()
 
         self.value = value
@@ -164,6 +176,13 @@ class ScpValue:
                 v = int.from_bytes(struct.pack('f', self.value), default_endian())
                 v = (v >> 2) | (ScpValue.Type.Float << 30)
                 v = v.to_bytes(4, default_endian())
+
+            case ScpValue.Type.String:
+                # The string data itself is written separately at self.offset
+                if self.offset is None:
+                    raise ValueError(f'string value without offset: {self.value!r}')
+
+                v = (self.offset | (ScpValue.Type.String << VALUE_TAG_SHIFT)).to_bytes(4, default_endian())
 
             case _:
                 raise NotImplementedError(f'unsupported type: {self.value}')
@@ -268,6 +287,8 @@ class ScpFunctionEntry(StrictBase):
 
 
 class ScpFunctionCallDebugInfoArg(StrictBase):
+    SIZE = 0x08     # value word, type word
+
     value : ScpValue
     type  : int
 
@@ -318,6 +339,8 @@ class ScpFunctionCallDebugInfo(StrictBase):
     __repr__ = __str__
 
 class ScpGlobalVar(StrictBase):
+    SIZE = 0x08     # name word, type word
+
     name_offset : int
     type        : Type
 

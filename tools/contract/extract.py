@@ -11,6 +11,7 @@ from falcom.ed9.disasm import ED9Opcode
 from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
 from falcom.ed9.lifters.vm_lifter import ED9VMLifter
 from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
+from falcom.ed9.parser.types_parser import FunctionCallDebugInfo
 from falcom.ed9.parser.types_scp import RawInt, ScpParamType, ScpValue
 from ir.hlil import (
     HighLevelILFunction, HLILBlock, HLILComment, HLILDoWhile, HLILFor, HLILIf, HLILStatement, HLILSwitch, HLILWhile,
@@ -70,11 +71,10 @@ def value_of_python(value: Any) -> Value:
 # ----------------------------------------------------------------- parser --
 
 def tables_from_parser(parser) -> ModuleTables:
-    index_of = {func.name: index for index, func in enumerate(parser.functions)}
     functions: Dict[str, FunctionEntry] = {}
     for func in parser.functions:
         records = tuple(
-            (index_of.get(info.func_name, NO_CALLEE), int(info.call_type),
+            (NO_CALLEE if info.func_id == FunctionCallDebugInfo.NO_FUNCTION_ID else info.func_id, int(info.call_type),
              tuple((value_of_scp(arg.value), arg.type) for arg in info.args))
             for info in func.debug_info
         )
@@ -82,6 +82,7 @@ def tables_from_parser(parser) -> ModuleTables:
             name = func.name,
             name_hash = func.name_hash(),
             is_common = bool(func.is_common_func),
+            byte06 = func.byte06,
             param_flags = tuple(param.type.flags for param in func.params),
             defaults = tuple(value_of_scp(param.default_value) if param.default_value is not None else None for param in func.params),
             debug_records = records,
