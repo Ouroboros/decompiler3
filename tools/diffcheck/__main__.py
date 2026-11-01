@@ -13,6 +13,7 @@ from typing import Optional
 
 from ml import fileio
 from common.config import default_encoding
+from falcom.ed9.module import ED9ModuleDecompiler
 from falcom.ed9.parser.scp import ScpParser
 
 from .check import (
@@ -70,10 +71,11 @@ def check_file(path: Path, names, options: CheckOptions, verbose: bool,
 
     _log(f'{path.name}: {len(functions)} functions disassembled in {time.time() - started:.1f}s')
 
+    decompiler = ED9ModuleDecompiler(parser)
     decompiled = {}
     if dump_dir is not None or baseline_dir is not None:
         for index, func in enumerate(functions, start = 1):
-            decompiled[func.name] = decompile_function(parser, func)
+            decompiled[func.name] = decompile_function(decompiler, func)
             if index % PROGRESS_EVERY == 0:
                 _log(f'{path.name}: decompiled {index}/{len(functions)} ({func.name})')
 
@@ -104,7 +106,7 @@ def check_file(path: Path, names, options: CheckOptions, verbose: bool,
 
     skipped = f', {unchanged} unchanged since baseline skipped' if baseline_dir is not None else ''
     print(f'== {path} ({len(functions)} functions{skipped})', flush = True)
-    return check_functions(parser, functions, options, progress, decompiled)
+    return check_functions(parser, functions, options, progress, decompiled, decompiler)
 
 
 def main(argv = None) -> int:

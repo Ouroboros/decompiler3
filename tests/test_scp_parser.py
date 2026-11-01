@@ -11,10 +11,8 @@ from ml import *
 from io import BytesIO
 from common import *
 from falcom.ed9 import *
-from falcom.ed9.lifters import ED9VMLifter
 from falcom.ed9.llil_builder import FalcomLLILFormatter
-from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
-from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
+from falcom.ed9.module import ED9ModuleDecompiler
 from ir.llil.llil import LowLevelILFunction
 from ir.mlil import *
 from ir.hlil import *
@@ -188,6 +186,8 @@ class TestScpParser(unittest.TestCase):
             hlil_lines = []
             typescript_lines = []
 
+            decompiler = ED9ModuleDecompiler(parser)
+
             # Print formatted functions
             print('\n=== Disassembly ===\n')
             for func in disassembled_functions:
@@ -197,20 +197,19 @@ class TestScpParser(unittest.TestCase):
                 formatted_lines.append('')
 
                 # Generate LLIL
-                lifter = ED9VMLifter(parser = parser)
-                llil_func = lifter.lift_function(func)
+                llil_func = decompiler.lift(func)
                 self.assertIsInstance(llil_func, LowLevelILFunction)
 
                 llil_lines.extend(FalcomLLILFormatter.format_llil_function(llil_func))
                 llil_lines.append('')
 
                 # Generate MLIL from LLIL (with parser for type signatures)
-                mlil_func = convert_falcom_llil_to_mlil(llil_func, parser)
+                mlil_func = decompiler.to_mlil(func)
                 mlil_lines.extend(MLILFormatter.format_function(mlil_func))
                 mlil_lines.append('')
 
                 # Generate HLIL from MLIL with Falcom-specific type information
-                hlil_func = convert_falcom_mlil_to_hlil(mlil_func, func)
+                hlil_func = decompiler.to_hlil(func)
 
                 # Debug output: HLIL text
                 hlil_lines.extend(HLILFormatter.format_function(hlil_func))

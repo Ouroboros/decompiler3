@@ -1,6 +1,7 @@
 '''Contract items as each layer of the pipeline represents them'''
 
 import contextlib
+import dataclasses
 import io
 import re
 from dataclasses import dataclass
@@ -8,14 +9,13 @@ from typing import Any, Dict, Iterator, Optional
 
 from codegen import generate_typescript
 from falcom.ed9.disasm import ED9Opcode
-from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
-from falcom.ed9.lifters.vm_lifter import ED9VMLifter
-from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
+from falcom.ed9.module import ED9ModuleDecompiler
 from falcom.ed9.parser.types_parser import FunctionCallDebugInfo
 from falcom.ed9.parser.types_scp import RawInt, ScpParamType, ScpValue
 from ir.hlil import (
     HighLevelILFunction, HLILBlock, HLILComment, HLILDoWhile, HLILFor, HLILIf, HLILStatement, HLILSwitch, HLILWhile,
 )
+from ir.core import ILModule
 from ir.llil import LowLevelILDebug, LowLevelILFunction
 from ir.mlil import MediumLevelILFunction, MLILDebug
 
@@ -70,14 +70,18 @@ def value_of_python(value: Any) -> Value:
 
 # ----------------------------------------------------------------- parser --
 
+def debug_records(debug_info) -> tuple:
+    return tuple(
+        (NO_CALLEE if info.func_id == FunctionCallDebugInfo.NO_FUNCTION_ID else info.func_id, int(info.call_type),
+         tuple((value_of_scp(arg.value), arg.type) for arg in info.args))
+        for info in debug_info
+    )
+
+
 def tables_from_parser(parser) -> ModuleTables:
     functions: Dict[str, FunctionEntry] = {}
     for func in parser.functions:
-        records = tuple(
-            (NO_CALLEE if info.func_id == FunctionCallDebugInfo.NO_FUNCTION_ID else info.func_id, int(info.call_type),
-             tuple((value_of_scp(arg.value), arg.type) for arg in info.args))
-            for info in func.debug_info
-        )
+        records = debug_records(func.debug_info)
         functions[func.name] = FunctionEntry(
             name = func.name,
             name_hash = func.name_hash(),
@@ -130,17 +134,34 @@ class LayerForms:
     llil_entry: FunctionEntry
 
 
-def run_pipeline(parser, func) -> LayerForms:
+def run_pipeline(decompiler: ED9ModuleDecompiler, func) -> LayerForms:
     '''Lift and decompile one function, extracting LLIL items before later stages can touch the LLIL'''
     with contextlib.redirect_stdout(io.StringIO()):
-        llil = ED9VMLifter(parser = parser).lift_function(func)
+        llil = decompiler.lift(func)
         llil_code = code_from_llil(llil)
         llil_entry = entry_from_params(llil.name, llil.params, llil.is_common_func)
-        mlil = convert_falcom_llil_to_mlil(llil, parser)
-        hlil = convert_falcom_mlil_to_hlil(mlil, func)
+        mlil = decompiler.to_mlil(func)
+        hlil = decompiler.to_hlil(func)
         ts = generate_typescript(hlil)
 
     return LayerForms(llil, mlil, hlil, ts, llil_code, llil_entry)
+
+
+def tables_from_module(module: ILModule, entries: Dict[str, FunctionEntry]) -> ModuleTables:
+    '''File-level items from the module metadata of a layer; function items it keeps are added to entries'''
+    metadata = module.metadata
+    functions = {}
+    for name, entry in entries.items():
+        item = metadata.functions[name]
+        functions[name] = dataclasses.replace(
+            entry, name_hash = item.name_hash, byte06 = item.byte06, debug_records = debug_records(item.debug_info))
+
+    return ModuleTables(
+        dword_14 = metadata.dword_14,
+        globals = tuple((var.name, var.type) for var in metadata.globals),
+        function_order = metadata.function_order,
+        functions = functions,
+    )
 
 
 def entry_from_params(name: str, params, is_common: bool) -> FunctionEntry:

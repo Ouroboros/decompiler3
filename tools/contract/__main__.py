@@ -14,16 +14,17 @@ from typing import Dict, List
 from ml import fileio
 from common.config import default_encoding
 from falcom.ed9.disasm import ED9_INSTRUCTION_TABLE
+from falcom.ed9.module import ED9ModuleDecompiler
 from falcom.ed9.parser.scp import ScpParser
 from falcom.ed9.parser.writer import write_scp
 
 from .audit import compare_bytes, compare_code, compare_tables
 from .extract import (
     code_from_hlil, code_from_instructions, code_from_mlil, code_from_ts, entry_from_hlil, entry_from_params,
-    run_pipeline, tables_from_parser,
+    run_pipeline, tables_from_module, tables_from_parser,
 )
 from .image import read_tables
-from .model import Difference, FunctionEntry, ModuleTables
+from .model import Difference, FunctionEntry
 
 
 LAYER_PARSER    = 'parser'
@@ -79,12 +80,14 @@ def audit_file(path: Path, layers, names) -> List[Difference]:
     if not ir_layers:
         return differences
 
+    decompiler = ED9ModuleDecompiler(parser)
+    modules = {LAYER_LLIL: decompiler.llil, LAYER_MLIL: decompiler.mlil, LAYER_HLIL: decompiler.hlil}
     entries: Dict[str, Dict[str, FunctionEntry]] = defaultdict(dict)
     started = time.time()
     for index, func in enumerate(functions, start = 1):
         function_started = time.time()
         try:
-            forms = run_pipeline(parser, func)
+            forms = run_pipeline(decompiler, func)
 
         except Exception as e:
             differences.append(Difference(LAYER_PIPELINE, script, 'error', func.name, detail = f'{type(e).__name__}: {e}'))
@@ -107,13 +110,15 @@ def audit_file(path: Path, layers, names) -> List[Difference]:
         entries[LAYER_LLIL][func.name] = forms.llil_entry
         entries[LAYER_MLIL][func.name] = entry_from_params(forms.mlil.name, forms.mlil.source_params, forms.mlil.is_common_func)
         entries[LAYER_HLIL][func.name] = entry_from_hlil(forms.hlil)
+        for module in modules.values():
+            module.remove_function(func.name)
+
         if index % PROGRESS_EVERY == 0:
             _log(f'{script}: {index}/{len(functions)} ({func.name}), {time.time() - started:.0f}s')
 
     for layer in ir_layers:
         if layer in TABLE_LAYERS:
-            # Functions are separate objects: no module, so no header, globals or function order yet
-            actual = ModuleTables(functions = entries[layer])
+            actual = tables_from_module(modules[layer], entries[layer])
             differences += compare_tables(layer, script, reference, actual, list(entries[layer]))
 
     return differences

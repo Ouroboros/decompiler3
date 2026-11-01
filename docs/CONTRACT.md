@@ -27,9 +27,9 @@ Exit code is 0 only when no difference is found.
 | `writer` | Parsing and writing back with the original layout (`falcom/ed9/parser/writer.py`) must give the original bytes; the code range is generated only by the instruction encoder | — |
 | `code` | Per function, the instructions decoded linearly from the entry to the next function (the last one to the string pool), dead code included, must re-encode to the original bytes | — |
 | `parser` | Parser model (`ScpParser`) | — |
-| `llil` | Function name, `is_common_func`, parameter types and defaults; module items once a module exists | `LowLevelILDebug` (`line`, `log`) with address |
-| `mlil` | As LLIL, from `source_params` | `MLILDebug` (`line`, `log`) with address |
-| `hlil` | Function name, `is_common_func`, defaults | Line and log statements with address |
+| `llil` | Function name, `is_common_func`, parameter types and defaults; file-level items, `name_hash`, `byte06` and debug records from the LLIL module metadata | `LowLevelILDebug` (`line`, `log`) with address |
+| `mlil` | As LLIL, from `source_params` and the MLIL module | `MLILDebug` (`line`, `log`) with address |
+| `hlil` | Function name, `is_common_func`, defaults; module items as LLIL, from the HLIL module | Line and log statements with address |
 | `ts` | Not audited: the TypeScript file-level format is deferred | `// line(N)` / `// log(N)` comments, values only (no addresses) |
 
 Items a layer does not represent are reported as `missing`. Values are compared with their tag, so a

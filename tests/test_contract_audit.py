@@ -4,6 +4,7 @@
 from pathlib import Path
 import contextlib
 import copy
+import dataclasses
 import io
 import struct
 import sys
@@ -17,11 +18,13 @@ from ir.hlil import HLILComment
 from ir.llil import LowLevelILDebug
 from ml import fileio
 from falcom.ed9.disasm import ED9_INSTRUCTION_TABLE, ED9Opcode
+from falcom.ed9.module import ED9ModuleDecompiler
 from falcom.ed9.parser.scp import ScpParser
 from falcom.ed9.parser.writer import write_scp
 from tools.contract.audit import compare_code, compare_tables
 from tools.contract.extract import (
-    code_from_hlil, code_from_instructions, code_from_llil, code_from_mlil, code_from_ts, run_pipeline, tables_from_parser,
+    code_from_hlil, code_from_instructions, code_from_llil, code_from_mlil, code_from_ts, run_pipeline, tables_from_module,
+    tables_from_parser,
 )
 from tools.contract.image import read_tables
 from tools.contract.model import TAG_INT
@@ -89,6 +92,39 @@ class TestTableAudit(unittest.TestCase):
         self.assertEqual(self.items(tables_from_parser(self.parser)), set())
 
 
+class TestModuleTables(unittest.TestCase):
+    '''File-level items reach every IL layer through the module metadata'''
+
+    @classmethod
+    def setUpClass(cls):
+        data, cls.parser, functions = load()
+        cls.reference = read_tables(data)
+        cls.decompiler = ED9ModuleDecompiler(cls.parser)
+        run_pipeline(cls.decompiler, functions[LINE_FUNCTION])
+        cls.target = next(name for name, entry in cls.reference.functions.items() if entry.debug_records)
+
+    def items(self, module):
+        # Table items the IL functions represent themselves are taken from the reference
+        entries = {name: copy.deepcopy(self.reference.functions[name]) for name in (LINE_FUNCTION, self.target)}
+        actual = tables_from_module(module, entries)
+        return {(d.item, d.function) for d in compare_tables('test', SCRIPT, self.reference, actual, list(entries))}
+
+    def test_every_layer_has_the_file_level_items(self):
+        for module in (self.decompiler.llil, self.decompiler.mlil, self.decompiler.hlil):
+            with self.subTest(layer = type(module[LINE_FUNCTION]).__name__):
+                self.assertEqual(self.items(module), set())
+
+    def test_metadata_losses_are_reported(self):
+        module = self.decompiler.hlil.derive()
+        metadata = module.metadata
+        item = metadata.functions[self.target]
+        functions = dict(metadata.functions)
+        functions[self.target] = dataclasses.replace(item, debug_info = item.debug_info[1:], byte06 = FOREIGN_VALUE)
+        module.metadata = dataclasses.replace(metadata, dword_14 = FOREIGN_VALUE, globals = (), functions = functions)
+        self.assertEqual(self.items(module), {('dword_14', None), ('globals', None), ('function.debug_records', self.target),
+                                              ('function.byte06', self.target)})
+
+
 class TestWriter(unittest.TestCase):
     def setUp(self):
         self.data, self.parser, _ = load()
@@ -143,7 +179,7 @@ class TestCodeAudit(unittest.TestCase):
         self.assertGreater(len(self.expected.lines), SINGLE)
 
     def test_unchanged_layers_have_no_differences(self):
-        forms = run_pipeline(self.parser, self.func)
+        forms = run_pipeline(ED9ModuleDecompiler(self.parser), self.func)
         for layer, items in (('llil', forms.llil_code), ('mlil', code_from_mlil(forms.mlil)), ('hlil', code_from_hlil(forms.hlil))):
             with self.subTest(layer = layer):
                 self.assertEqual(compare_code(layer, SCRIPT, LINE_FUNCTION, self.expected, items), [])
@@ -154,26 +190,26 @@ class TestCodeAudit(unittest.TestCase):
         self.assertEqual([(d.item, d.count) for d in differences], [('code.lines', SINGLE)])
 
     def test_removed_llil_line_is_reported(self):
-        forms = run_pipeline(self.parser, self.func)
+        forms = run_pipeline(ED9ModuleDecompiler(self.parser), self.func)
         block = next(block for block in forms.llil.basic_blocks if any(isinstance(i, LowLevelILDebug) for i in block.instructions))
         block.instructions.remove(next(i for i in block.instructions if isinstance(i, LowLevelILDebug)))
         self.assert_one_line_lost(compare_code('llil', SCRIPT, LINE_FUNCTION, self.expected, code_from_llil(forms.llil)))
 
     def test_removed_hlil_line_is_reported(self):
-        forms = run_pipeline(self.parser, self.func)
+        forms = run_pipeline(ED9ModuleDecompiler(self.parser), self.func)
         body = forms.hlil.body.statements
         body.remove(next(stmt for stmt in body if isinstance(stmt, HLILComment) and stmt.text.startswith('line(')))
         self.assert_one_line_lost(compare_code('hlil', SCRIPT, LINE_FUNCTION, self.expected, code_from_hlil(forms.hlil)))
 
     def test_moved_hlil_line_is_reported(self):
-        forms = run_pipeline(self.parser, self.func)
+        forms = run_pipeline(ED9ModuleDecompiler(self.parser), self.func)
         comment = next(stmt for stmt in forms.hlil.body.statements if isinstance(stmt, HLILComment) and stmt.text.startswith('line('))
         comment.address += SINGLE
         differences = compare_code('hlil', SCRIPT, LINE_FUNCTION, self.expected, code_from_hlil(forms.hlil))
         self.assertEqual([(d.item, d.count) for d in differences], [('code.lines', SINGLE + SINGLE)])
 
     def test_removed_typescript_line_is_reported(self):
-        forms = run_pipeline(self.parser, self.func)
+        forms = run_pipeline(ED9ModuleDecompiler(self.parser), self.func)
         line = next(value for _, value in sorted(self.expected.lines))
         text = forms.ts.replace(f'// line({line})', '', SINGLE)
         self.assert_one_line_lost(compare_code('ts', SCRIPT, LINE_FUNCTION, self.expected, code_from_ts(text), with_addresses = False))

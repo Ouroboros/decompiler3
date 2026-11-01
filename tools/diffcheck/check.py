@@ -8,9 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from falcom.ed9.hlil_converter import convert_falcom_mlil_to_hlil
-from falcom.ed9.lifters.vm_lifter import ED9VMLifter
-from falcom.ed9.mlil_converter import convert_falcom_llil_to_mlil
+from falcom.ed9.module import ED9ModuleDecompiler
 from codegen import generate_typescript
 from falcom.ed9.vm_values import TYPE_ERROR
 from ir.hlil import (
@@ -162,12 +160,10 @@ def build_pool(constants: Set[Any]) -> List[Any]:
     return pool
 
 
-def decompile(parser, func):
+def decompile(decompiler: ED9ModuleDecompiler, func):
     '''Run the production pipeline, silencing its progress output'''
     with contextlib.redirect_stdout(io.StringIO()):
-        llil_func = ED9VMLifter(parser = parser).lift_function(func)
-        mlil_func = convert_falcom_llil_to_mlil(llil_func, parser)
-        return convert_falcom_mlil_to_hlil(mlil_func, func)
+        return decompiler.decompile(func)
 
 
 @dataclass
@@ -186,9 +182,9 @@ class DecompiledFunction:
         return {'hlil': self.hlil_text, 'ts': self.ts_text}
 
 
-def decompile_function(parser, func) -> DecompiledFunction:
+def decompile_function(decompiler: ED9ModuleDecompiler, func) -> DecompiledFunction:
     try:
-        hlil_func = decompile(parser, func)
+        hlil_func = decompile(decompiler, func)
 
     except Exception as e:
         return DecompiledFunction(error = f'decompile: {type(e).__name__}: {e}')
@@ -204,8 +200,9 @@ def decompile_function(parser, func) -> DecompiledFunction:
 
 
 class FunctionChecker:
-    def __init__(self, parser, func, options: CheckOptions):
+    def __init__(self, parser, func, options: CheckOptions, decompiler: Optional[ED9ModuleDecompiler] = None):
         self.parser = parser
+        self.decompiler = decompiler or ED9ModuleDecompiler(parser)
         self.func = func
         self.options = options
         self.blocks = collect_blocks(func.entry_block)
@@ -275,7 +272,7 @@ class FunctionChecker:
 
     def check(self, decompiled: Optional[DecompiledFunction] = None) -> FunctionReport:
         report = FunctionReport(self.func.name, self.func.offset, Verdict.PASS, blocks_total = len(self.blocks))
-        decompiled = decompiled or decompile_function(self.parser, self.func)
+        decompiled = decompiled or decompile_function(self.decompiler, self.func)
         if decompiled.error is not None:
             report.verdict = Verdict.ERROR
             report.error = decompiled.error
@@ -369,8 +366,8 @@ class FunctionChecker:
         '''Name the first HLIL stage whose output already diverges for the failing input'''
         try:
             with contextlib.redirect_stdout(io.StringIO()):
-                llil_func = ED9VMLifter(parser = self.parser).lift_function(self.func)
-                data = convert_falcom_llil_to_mlil(llil_func, self.parser)
+                self.decompiler.lift(self.func)
+                data = self.decompiler.to_mlil(self.func)
                 for stage_name, stage_class in HLIL_STAGES:
                     data = stage_class().run(data)
                     candidate = self._candidate(data, self._plan(run, forced))
@@ -384,12 +381,14 @@ class FunctionChecker:
 
 
 def check_functions(parser, functions, options: CheckOptions, progress = None,
-                    decompiled: Optional[Dict[str, DecompiledFunction]] = None) -> List[FunctionReport]:
+                    decompiled: Optional[Dict[str, DecompiledFunction]] = None,
+                    decompiler: Optional[ED9ModuleDecompiler] = None) -> List[FunctionReport]:
     '''decompiled: outputs already produced for these functions, keyed by name'''
+    decompiler = decompiler or ED9ModuleDecompiler(parser)
     reports = []
     for func in functions:
         try:
-            report = FunctionChecker(parser, func, options).check((decompiled or {}).get(func.name))
+            report = FunctionChecker(parser, func, options, decompiler).check((decompiled or {}).get(func.name))
 
         except Exception as e:
             report = FunctionReport(func.name, func.offset, Verdict.ERROR, error = f'checker: {type(e).__name__}: {e}\n{traceback.format_exc(limit = 3)}')

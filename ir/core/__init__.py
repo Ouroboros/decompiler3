@@ -2,6 +2,7 @@
 
 from .il_base import *
 from .il_options import *
+from .module import ILModule
 
 __all__ = [
     'ILInstruction',
@@ -12,4 +13,5 @@ __all__ = [
     'UnaryOperation',
     'IRParameter',
     'ILOptions',
+    'ILModule',
 ]

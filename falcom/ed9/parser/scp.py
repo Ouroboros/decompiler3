@@ -100,6 +100,7 @@ class ScpParser(StrictBase):
             fs = fileio.FileStream(data, encoding = fs.Encoding)
 
         self.fs = fs
+        self.name = name
 
     def get_func_by_name(self, name: str) -> Function:
         return self.function_map[name]
