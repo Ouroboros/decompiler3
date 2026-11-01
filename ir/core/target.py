@@ -91,6 +91,11 @@ class CallModel:
     '''Calling convention: return_register holds the result of every call (None: no such register)'''
     return_register: Optional[int] = None
 
+    @classmethod
+    def parameter_number(cls, frame_slot: int, param_count: int) -> int:
+        '''1-based parameter held by a frame slot (slot 0 is the lowest); by default parameter 1 is pushed first'''
+        return frame_slot + 1
+
 
 class BackendHints:
     '''How a backend spells target-defined constructs

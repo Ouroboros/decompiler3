@@ -110,9 +110,8 @@ class LLILToMLILTranslator:
         self.builder.set_var(var, value)
 
     def _param_index(self, frame_offset: int) -> int:
-        '''1-based parameter number of a frame slot: callers push parameter 1 last, so it sits in the
-        highest slot (frame slot num_params - 1) and call arguments pop in parameter order'''
-        return self.llil_func.num_params - frame_offset
+        '''1-based parameter number of a frame slot, by the target's calling convention'''
+        return self.llil_func.target.calls.parameter_number(frame_offset, self.llil_func.num_params)
 
     def _translate_call(self, llil_inst: LowLevelILCall):
         '''Translate function call'''

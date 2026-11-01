@@ -36,3 +36,8 @@ class ED9ScriptCall(CallTarget):
 
 class ED9Calls(CallModel):
     return_register = RETURN_REGISTER
+
+    @classmethod
+    def parameter_number(cls, frame_slot: int, param_count: int) -> int:
+        '''Callers push parameter 1 last, so it sits in the highest frame slot and arguments pop in order'''
+        return param_count - frame_slot
