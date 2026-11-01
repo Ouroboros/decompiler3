@@ -45,7 +45,7 @@ def _eliminate_dead_code_post_ssa(function: MediumLevelILFunction) -> bool:
         elif isinstance(expr, MLILUnaryOp):
             count_uses(expr.operand)
 
-        elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(expr, MLILCall):
             for arg in expr.args:
                 count_uses(arg)
 
@@ -62,7 +62,7 @@ def _eliminate_dead_code_post_ssa(function: MediumLevelILFunction) -> bool:
                 if inst.value:
                     count_uses(inst.value)
 
-            elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+            elif isinstance(inst, MLILCall):
                 for arg in inst.args:
                     count_uses(arg)
 

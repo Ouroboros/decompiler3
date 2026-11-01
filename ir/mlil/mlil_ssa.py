@@ -286,7 +286,7 @@ class SSAConstructor:
             elif isinstance(node, (MLILUnaryOp, MLILAddressOf)):
                 pending.append(node.operand)
 
-            elif isinstance(node, (MLILCall, MLILSyscall, MLILCallScript)):
+            elif isinstance(node, MLILCall):
                 pending.extend(node.args)
 
             elif isinstance(node, (MLILSetVar, MLILStoreGlobal, MLILStoreReg)):
@@ -349,7 +349,7 @@ class SSAConstructor:
 
     def _written_through_pointers(self, inst: MediumLevelILInstruction) -> List[MLILVariable]:
         '''Variables a call (through pointer arguments) or a pointer store may write'''
-        if isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        if isinstance(inst, MLILCall):
             return self._pointer_targets_of(inst.args)
 
         if isinstance(inst, MLILStoreDeref):
@@ -495,7 +495,7 @@ class SSAConstructor:
             self._record_pointer_value(dest, new_value)
             return MLILSetVarSSA(dest, new_value, address = inst.address).copy_metadata_from(inst)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript, MLILStoreDeref)):
+        elif isinstance(inst, (MLILCall, MLILStoreDeref)):
             # Rename the call (uses current SSA versions)
             renamed = self._rename_stmt(inst)
 
@@ -580,18 +580,12 @@ class SSAConstructor:
                 if new_value is not stmt.value:
                     return MLILRet(new_value, address = stmt.address).copy_metadata_from(stmt)
 
-        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(stmt, MLILCall):
             new_args = [self._rename_expr(arg) for arg in stmt.args]
 
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
                     return MLILCall(stmt.target, new_args, address = stmt.address).copy_metadata_from(stmt)
-
-                elif isinstance(stmt, MLILSyscall):
-                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address).copy_metadata_from(stmt)
-
-                elif isinstance(stmt, MLILCallScript):
-                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._rename_expr(stmt.value)
@@ -782,7 +776,7 @@ class SSADeconstructor:
             if stmt.value:
                 self._collect_uses_in_expr(stmt.value, block, inst_idx)
 
-        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(stmt, MLILCall):
             for arg in stmt.args:
                 self._collect_uses_in_expr(arg, block, inst_idx)
 
@@ -860,7 +854,7 @@ class SSADeconstructor:
             if stmt.value:
                 result |= self._get_vars_in_expr(stmt.value)
 
-        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(stmt, MLILCall):
             for arg in stmt.args:
                 result |= self._get_vars_in_expr(arg)
 
@@ -1017,17 +1011,11 @@ class SSADeconstructor:
                 if new_value is not stmt.value:
                     return MLILRet(new_value, address = stmt.address).copy_metadata_from(stmt)
 
-        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(stmt, MLILCall):
             new_args = [self._apply_mapping_to_expr(arg) for arg in stmt.args]
             if any(new_args[i] is not stmt.args[i] for i in range(len(stmt.args))):
                 if isinstance(stmt, MLILCall):
                     return MLILCall(stmt.target, new_args, address = stmt.address).copy_metadata_from(stmt)
-
-                elif isinstance(stmt, MLILSyscall):
-                    return MLILSyscall(stmt.subsystem, stmt.cmd, new_args, address = stmt.address).copy_metadata_from(stmt)
-
-                elif isinstance(stmt, MLILCallScript):
-                    return MLILCallScript(stmt.module, stmt.func, new_args, address = stmt.address).copy_metadata_from(stmt)
 
         elif isinstance(stmt, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._apply_mapping_to_expr(stmt.value)

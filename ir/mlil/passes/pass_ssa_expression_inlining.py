@@ -38,8 +38,6 @@ from ..mlil import (
     MLILTestZero,
     MLILRet,
     MLILCall,
-    MLILSyscall,
-    MLILCallScript,
     MLILStoreGlobal,
     MLILStoreReg,
     MLILLoadReg,
@@ -118,7 +116,7 @@ class ExpressionInliningPass(Pass):
             if inst.value is not None:
                 self._collect_uses_in_expr(inst.value)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             for arg in inst.args:
                 self._collect_uses_in_expr(arg)
 
@@ -192,7 +190,7 @@ class ExpressionInliningPass(Pass):
 
     def _has_side_effects(self, expr: MediumLevelILInstruction) -> bool:
         '''Check if expression has side effects'''
-        if isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+        if isinstance(expr, MLILCall):
             return True
 
         if isinstance(expr, MLILBinaryOp):
@@ -254,7 +252,7 @@ class ExpressionInliningPass(Pass):
         if isinstance(inst, MLILRet):
             return inst.value is not None and self._expr_contains(inst.value, target)
 
-        if isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        if isinstance(inst, MLILCall):
             return any(self._expr_contains(arg, target) for arg in inst.args)
 
         return False
@@ -291,17 +289,11 @@ class ExpressionInliningPass(Pass):
                 if new_value is not inst.value:
                     return MLILRet(new_value, address = inst.address).copy_metadata_from(inst)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             new_args = [self._inline_in_expr(arg, inlinable) for arg in inst.args]
             if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
                 if isinstance(inst, MLILCall):
                     return MLILCall(inst.target, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILSyscall):
-                    return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILCallScript):
-                    return MLILCallScript(inst.module, inst.func, new_args, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._inline_in_expr(inst.value, inlinable)

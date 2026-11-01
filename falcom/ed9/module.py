@@ -1,9 +1,9 @@
-'''ED9 script modules: file-level metadata and the module-by-module conversion pipeline'''
+'''ED9 script modules: the module-by-module conversion pipeline (metadata in falcom/ed9/metadata.py)'''
 
-from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from typing import Optional, Tuple
 
 from ir.core import ILModule
+from ir.pipeline import PassObserver
 from ir.hlil import HighLevelILFunction
 from ir.llil import LowLevelILFunction
 from ir.mlil import MediumLevelILFunction
@@ -11,45 +11,8 @@ from ir.mlil import MediumLevelILFunction
 from .hlil_converter import convert_falcom_mlil_to_hlil
 from .lifters.vm_lifter import ED9VMLifter
 from .mlil_converter import convert_falcom_llil_to_mlil
-from .parser.types_parser import Function, FunctionCallDebugInfo
-
-
-@dataclass(frozen = True)
-class ED9GlobalVar:
-    name: str
-    type: int
-
-
-@dataclass(frozen = True)
-class ED9FunctionMetadata:
-    '''Function table items the IL functions do not represent themselves'''
-    index: int
-    name_hash: int
-    byte06: int
-    # Call debug records exactly as stored, including those without arguments
-    debug_info: Tuple[FunctionCallDebugInfo, ...]
-
-
-@dataclass(frozen = True)
-class ED9ModuleMetadata:
-    '''File-level items of a script; shared by the module of every layer'''
-    dword_14: int
-    globals: Tuple[ED9GlobalVar, ...]
-    # Function names in table order (the function index of calls)
-    function_order: Tuple[str, ...]
-    functions: Dict[str, ED9FunctionMetadata] = field(default_factory = dict)
-
-    @classmethod
-    def from_parser(cls, parser) -> 'ED9ModuleMetadata':
-        return cls(
-            dword_14 = parser.header.dword_14,
-            globals = tuple(ED9GlobalVar(var.name, int(var.type)) for var in parser.global_vars),
-            function_order = tuple(func.name for func in parser.functions),
-            functions = {
-                func.name: ED9FunctionMetadata(index, func.name_hash(), func.byte06, tuple(func.debug_info))
-                for index, func in enumerate(parser.functions)
-            },
-        )
+from .metadata import ED9FunctionMetadata, ED9GlobalVar, ED9ModuleMetadata
+from .parser.types_parser import Function
 
 
 class ED9ModuleDecompiler:
@@ -69,16 +32,22 @@ class ED9ModuleDecompiler:
     def lift(self, func: Function) -> LowLevelILFunction:
         return self.llil.add_function(self.lifter.lift_function(func))
 
-    def to_mlil(self, func: Function) -> MediumLevelILFunction:
-        return self.mlil.add_function(convert_falcom_llil_to_mlil(self.llil[func.name], self.parser))
+    def to_mlil(self, func: Function, observer: Optional[PassObserver] = None) -> MediumLevelILFunction:
+        '''observer sees the MLIL after every pass (ir/pipeline.py)'''
+        return self.mlil.add_function(convert_falcom_llil_to_mlil(self.llil[func.name], self.parser, observer = observer))
 
-    def to_hlil(self, func: Function) -> HighLevelILFunction:
-        return self.hlil.add_function(convert_falcom_mlil_to_hlil(self.mlil[func.name], func))
+    def to_hlil(self, func: Function, observer: Optional[PassObserver] = None) -> HighLevelILFunction:
+        '''observer sees the HLIL after every pass (ir/pipeline.py)'''
+        return self.hlil.add_function(convert_falcom_mlil_to_hlil(self.mlil[func.name], func, observer = observer))
 
-    def decompile(self, func: Function) -> HighLevelILFunction:
-        self.lift(func)
-        self.to_mlil(func)
+    def decompile_layers(self, func: Function) -> Tuple[LowLevelILFunction, MediumLevelILFunction, HighLevelILFunction]:
+        '''The function in every layer; the modules keep only the HLIL'''
+        llil = self.lift(func)
+        mlil = self.to_mlil(func)
         hlil = self.to_hlil(func)
         self.llil.remove_function(func.name)
         self.mlil.remove_function(func.name)
-        return hlil
+        return llil, mlil, hlil
+
+    def decompile(self, func: Function) -> HighLevelILFunction:
+        return self.decompile_layers(func)[-1]

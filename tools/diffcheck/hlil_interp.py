@@ -16,21 +16,20 @@ from typing import Any, Dict, List, Optional
 from falcom.ed9.vm_values import Op, Pointer, UNDEF, VMFault, binary_op, bool_value, is_zero, logical_truth, normalize, unary_op
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILAddressOf, HLILAssign, HLILBinaryOp, HLILBlock, HLILBreak, HLILCall,
-    HLILComment, HLILConst, HLILContinue, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternCall, HLILFor,
-    HLILIf, HLILReturn, HLILStatement, HLILSwitch, HLILSyscall, HLILUnaryOp, HLILVar, HLILWhile, UnaryOp,
+    HLILComment, HLILConst, HLILContinue, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternalCall, HLILFor,
+    HLILIf, HLILReturn, HLILStatement, HLILSwitch, HLILUnaryOp, HLILVar, HLILWhile, UnaryOp,
     VariableKind,
 )
 from ir.mlil.mlil import mlil_arg_var_name
 
 from .environment import (
-    EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd,
+    MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd, call_event_key,
 )
 
 
 SPACE_LOCAL     = 'local'
 SPACE_GLOBAL    = 'global'
 SPACE_REG       = 'reg'
-EXTERN_SEPARATOR = ':'
 
 SIGNAL_BREAK    = 'break'
 SIGNAL_CONTINUE = 'continue'
@@ -336,14 +335,10 @@ class HLILInterpreter:
             return self._pointer_to(expr.operand)
 
         if isinstance(expr, HLILCall):
-            return self._call((EVENT_CALL, str(expr.func_name)), expr)
+            return self._call(call_event_key(expr.func_name), expr)
 
-        if isinstance(expr, HLILSyscall):
-            return self._call((EVENT_SYSCALL, int(expr.subsystem), int(expr.cmd)), expr)
-
-        if isinstance(expr, HLILExternCall):
-            module, _, func_name = str(expr.target).partition(EXTERN_SEPARATOR)
-            return self._call((EVENT_EXTERN, module, func_name), expr)
+        if isinstance(expr, HLILExternalCall):
+            return self._call(call_event_key(expr.target), expr)
 
         raise VMFault('unsupported_expression', type(expr).__name__)
 

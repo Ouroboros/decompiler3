@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Union, Optional, List, TYPE_CHECKING
 
+from ir.core import Target
 from .llil import *
 
 if TYPE_CHECKING:
@@ -67,13 +68,14 @@ class LowLevelILBuilder:
 
     # === Function and Block Creation ===
 
-    def create_function(self, name: str, start_addr: int, params: Union[List['IRParameter'], int] = None, *, num_params: int = None, is_common_func: bool = False):
+    def create_function(self, name: str, start_addr: int, params: Union[List['IRParameter'], int] = None, *, num_params: int = None,
+                        is_common_func: bool = False, target: type[Target] = Target):
         '''Create function inside builder
 
         Args:
             params: List of IRParameter, or int for backward compatibility (num_params)
             num_params: Deprecated, use params instead
-            is_common_func: Whether this is a shared/included function (syscall wrapper)
+            is_common_func: Whether this is a shared/included function (a wrapper shared by scripts)
         '''
         if self.function is not None:
             raise RuntimeError('Function already created')
@@ -87,7 +89,7 @@ class LowLevelILBuilder:
             from ir.core import IRParameter
             params = [IRParameter(f'arg{i + 1}') for i in range(params)]
 
-        self.function = LowLevelILFunction(name, start_addr, params, is_common_func=is_common_func)
+        self.function = LowLevelILFunction(name, start_addr, params, is_common_func=is_common_func, target = target)
 
     def create_basic_block(self, start: int, label: str = None) -> LowLevelILBasicBlock:
         '''Create basic block and automatically add to function'''
@@ -305,9 +307,9 @@ class LowLevelILBuilder:
         return LowLevelILStackLoad(offset = offset, slot_index = slot_index)
 
     def stack_store(self, value: Union[LowLevelILExpr, int, str], offset: int):
-        '''STACK[sp + offset] = value (no sp change)'''
+        '''STACK[sp + offset] = value (no sp change); offsets are in stack slots'''
         expr = self._to_expr(value)
-        slot_index = self.sp_get() + offset // WORD_SIZE
+        slot_index = self.sp_get() + offset
         self.add_instruction(LowLevelILStackStore(expr, offset = offset, slot_index = slot_index))
 
     def frame_load(self, offset: int) -> 'LowLevelILFrameLoad':
@@ -326,13 +328,12 @@ class LowLevelILBuilder:
 
     def stack_slot_expr(self, offset: int) -> LowLevelILExpr:
         '''Expression reading the slot at sp + offset (parameter slots are frame-relative)'''
-        word_offset = offset // WORD_SIZE
-        absolute_pos = self.sp_get() + word_offset
+        absolute_pos = self.sp_get() + offset
 
         # New scheme: fp = 0, parameters at STACK[0..num_params-1]
         if absolute_pos >= 0 and absolute_pos < self.function.num_params:
             # absolute_pos = fp + fp_offset, and fp = 0, so fp_offset = absolute_pos
-            return self.frame_load(absolute_pos * WORD_SIZE)
+            return self.frame_load(absolute_pos)
 
         return self.stack_load(offset, slot_index = absolute_pos)
 
@@ -351,10 +352,8 @@ class LowLevelILBuilder:
 
     def push_stack_addr(self, offset: int):
         '''Push the address of stack location (sp + offset)'''
-        # Convert byte offset to word offset
-        word_offset = offset // WORD_SIZE
         # Calculate absolute slot index using current sp
-        slot_index = self.sp_get() + word_offset
+        slot_index = self.sp_get() + offset
         # Create stack address with absolute slot index
         stack_addr = LowLevelILStackAddr(slot_index)
         self.stack_push(stack_addr)
@@ -679,7 +678,7 @@ class LLILFormatter:
         line = str(inst)
 
         if isinstance(inst, LowLevelILStackStore) and inst.offset != 0:
-            line = f'STACK[sp + {inst.offset // WORD_SIZE}] = STACK[sp--] ; {inst.value}'
+            line = f'STACK[sp + {inst.offset}] = STACK[sp--] ; {inst.value}'
             line = f'STACK[{inst.slot_index}] = STACK[--sp] ; {inst.value}'
 
         elif isinstance(inst, (LowLevelILStackStore, LowLevelILStackLoad)):

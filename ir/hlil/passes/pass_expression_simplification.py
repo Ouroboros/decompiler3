@@ -25,6 +25,8 @@ class ExpressionSimplificationPass(Pass):
     '''Simplify call/return expressions'''
 
     def run(self, func: HighLevelILFunction) -> HighLevelILFunction:
+        # Calls leave their result in this register (target calling convention)
+        self.return_register = func.target.calls.return_register
         self._optimize_block(func.body)
         return func
 
@@ -38,7 +40,7 @@ class ExpressionSimplificationPass(Pass):
         while i < len(block.statements):
             stmt = block.statements[i]
 
-            # call(); var = REG[0] -> var = call()
+            # call(); var = ret_reg -> var = call()   (ret_reg: the return register)
             if isinstance(stmt, HLILExprStmt) and isinstance(stmt.expr, HLILCall):
                 if i + 1 < len(block.statements):
                     next_stmt = block.statements[i + 1]
@@ -47,20 +49,20 @@ class ExpressionSimplificationPass(Pass):
                         i += 2
                         continue
 
-            # REGS[0] = call(); var = REGS[0] -> var = call()
+            # ret_reg = call(); var = ret_reg -> var = call()
             # Only for function calls - other assignments may be read in branches
             if isinstance(stmt, HLILAssign) and self._is_reg0_var(stmt.dest):
                 if isinstance(stmt.src, HLILCall):
                     if i + 1 < len(block.statements):
                         next_stmt = block.statements[i + 1]
                         if self._is_reg0_assignment(next_stmt):
-                            # Check no REGS[0] read after this until next call/write
+                            # Check that ret_reg is not read after this until the next call or write
                             if not self._has_reg0_read_before_next_call(block.statements, i + 2):
                                 optimized.append(HLILAssign(next_stmt.dest, stmt.src))
                                 i += 2
                                 continue
 
-            # REG[0] = val; return; -> return val;
+            # ret_reg = val; return; -> return val;
             if isinstance(stmt, HLILAssign) and self._is_reg0_var(stmt.dest):
                 if i + 1 < len(block.statements):
                     next_stmt = block.statements[i + 1]
@@ -92,47 +94,47 @@ class ExpressionSimplificationPass(Pass):
 
         if isinstance(stmt.src, HLILVar):
             var = stmt.src.var
-            return var.kind == VariableKind.REG and var.index == 0
+            return var.kind == VariableKind.REG and var.index == self.return_register
 
         return False
 
     def _is_reg0_var(self, expr: HLILExpression) -> bool:
         if isinstance(expr, HLILVar):
             var = expr.var
-            return var.kind == VariableKind.REG and var.index == 0
+            return var.kind == VariableKind.REG and var.index == self.return_register
 
         return False
 
     def _has_reg0_read_before_next_call(self, statements: list, start_idx: int) -> bool:
-        '''Check if REGS[0] is read before the next function call or REGS[0] write'''
+        '''Check if the return register is read before the next function call or the return register write'''
         for j in range(start_idx, len(statements)):
             stmt = statements[j]
 
-            # call(); - overwrites REGS[0]
+            # call(); - overwrites the return register
             if isinstance(stmt, HLILExprStmt) and isinstance(stmt.expr, HLILCall):
                 return False
 
-            # var = call(); - also overwrites REGS[0]
+            # var = call(); - also overwrites the return register
             if isinstance(stmt, HLILAssign) and isinstance(stmt.src, HLILCall):
                 return False
 
-            # REGS[0] = expr; - overwrites REGS[0]
+            # ret_reg = expr; - overwrites the return register
             if isinstance(stmt, HLILAssign) and self._is_reg0_var(stmt.dest):
                 return False
 
-            # Check if this statement reads REGS[0]
+            # Check if this statement reads the return register
             if self._expr_reads_reg0(stmt):
                 return True
 
         return False
 
     def _expr_reads_reg0(self, node) -> bool:
-        '''Check if expression reads REGS[0]'''
+        '''Check if expression reads the return register'''
         if node is None:
             return False
 
         if isinstance(node, HLILVar):
-            return node.var.kind == VariableKind.REG and node.var.index == 0
+            return node.var.kind == VariableKind.REG and node.var.index == self.return_register
 
         if isinstance(node, HLILAssign):
             # Only check src, not dest (dest is a write)

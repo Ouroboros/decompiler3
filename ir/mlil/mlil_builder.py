@@ -2,6 +2,7 @@
 
 from typing import Optional, Union, List, TYPE_CHECKING
 
+from ir.core import CallTarget, Target
 from .mlil import *
 
 if TYPE_CHECKING:
@@ -15,7 +16,7 @@ class MLILBuilder:
         self.function: Optional[MediumLevelILFunction] = None
         self.current_block: Optional[MediumLevelILBasicBlock] = None
         self._inst_counter = 0  # For generating unique inst_index
-        self._current_address = 0  # Source SCP address for current instruction
+        self._current_address = 0  # Source bytecode address for current instruction
 
     def set_current_address(self, address: int):
         '''Set source address for subsequent instructions'''
@@ -23,11 +24,12 @@ class MLILBuilder:
 
     # === Function Management ===
 
-    def create_function(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False):
+    def create_function(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False,
+                        target: type[Target] = Target):
         '''Create MLIL function'''
         if self.function is not None:
             raise RuntimeError('Function already created')
-        self.function = MediumLevelILFunction(name, start_addr, params, is_common_func = is_common_func)
+        self.function = MediumLevelILFunction(name, start_addr, params, is_common_func = is_common_func, target = target)
 
     def finalize(self) -> MediumLevelILFunction:
         '''Finalize and return the constructed function'''
@@ -254,19 +256,9 @@ class MLILBuilder:
 
     # === Function Calls ===
 
-    def call(self, target: str, args: list[MediumLevelILInstruction]):
-        '''Function call'''
+    def call(self, target: Union[str, CallTarget], args: list[MediumLevelILInstruction]):
+        '''Call of a module function (name) or of a target-defined CallTarget'''
         inst = MLILCall(target, args)
-        self.add_instruction(inst)
-
-    def syscall(self, subsystem: int, cmd: int, args: list[MediumLevelILInstruction]):
-        '''System call'''
-        inst = MLILSyscall(subsystem, cmd, args)
-        self.add_instruction(inst)
-
-    def call_script(self, module: str, func: str, args: list[MediumLevelILInstruction]):
-        '''Falcom script call'''
-        inst = MLILCallScript(module, func, args)
         self.add_instruction(inst)
 
     # === Globals ===

@@ -14,8 +14,7 @@ from ..hlil import (
     HLILUnaryOp,
     HLILAddressOf,
     HLILCall,
-    HLILSyscall,
-    HLILExternCall,
+    HLILExternalCall,
     HLILIf,
     HLILWhile,
     HLILDoWhile,
@@ -173,7 +172,7 @@ class CopyPropagationPass(Pass):
         if isinstance(node, (HLILUnaryOp, HLILAddressOf)):
             return self._find_reachable_uses(node.operand, var, in_entered_loop, containing_loop)
 
-        if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
+        if isinstance(node, (HLILCall, HLILExternalCall)):
             all_uses = []
             for arg in node.args:
                 arg_uses, _ = self._find_reachable_uses(arg, var, in_entered_loop, containing_loop)
@@ -257,7 +256,7 @@ class CopyPropagationPass(Pass):
         elif isinstance(expr, (HLILUnaryOp, HLILAddressOf)):
             result.update(self._collect_vars(expr.operand))
 
-        elif isinstance(expr, (HLILCall, HLILSyscall, HLILExternCall)):
+        elif isinstance(expr, (HLILCall, HLILExternalCall)):
             for arg in expr.args:
                 result.update(self._collect_vars(arg))
 
@@ -265,7 +264,7 @@ class CopyPropagationPass(Pass):
 
     def _has_side_effects(self, expr: HLILExpression) -> bool:
         '''Check if expression has side effects.'''
-        if isinstance(expr, (HLILCall, HLILSyscall, HLILExternCall)):
+        if isinstance(expr, (HLILCall, HLILExternalCall)):
             return True
 
         if isinstance(expr, HLILBinaryOp):
@@ -286,7 +285,7 @@ class CopyPropagationPass(Pass):
                 return True
             return self._modifies_vars(node.src, vars_to_check)
 
-        if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
+        if isinstance(node, (HLILCall, HLILExternalCall)):
             # Conservative: calls may modify any variable
             return True
 
@@ -349,7 +348,7 @@ class CopyPropagationPass(Pass):
         if isinstance(expr, (HLILUnaryOp, HLILAddressOf)):
             return self._contains_var(expr.operand, var)
 
-        if isinstance(expr, (HLILCall, HLILSyscall, HLILExternCall)):
+        if isinstance(expr, (HLILCall, HLILExternalCall)):
             return any(self._contains_var(arg, var) for arg in expr.args)
 
         return False
@@ -391,7 +390,7 @@ class CopyPropagationPass(Pass):
             # Cannot replace variable with constant in address-of (need lvalue)
             return False
 
-        if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
+        if isinstance(node, (HLILCall, HLILExternalCall)):
             for i, arg in enumerate(node.args):
                 if isinstance(arg, HLILVar) and arg.var == var:
                     node.args[i] = replacement

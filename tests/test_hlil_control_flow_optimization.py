@@ -8,6 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from falcom.ed9.target import ED9Target
 from ir.hlil import (
     BinaryOp,
     ControlFlowOptimizationPass,
@@ -79,7 +80,7 @@ class TestControlFlowOptimizationSwitchConversion(unittest.TestCase):
     '''Tests for if-chain to switch conversion.'''
 
     def run_pass(self, first_if: HLILIf) -> HighLevelILFunction:
-        func = HighLevelILFunction(TEST_FUNCTION_NAME)
+        func = HighLevelILFunction(TEST_FUNCTION_NAME, target = ED9Target)
         func.add_statement(first_if)
         return ControlFlowOptimizationPass().run(func)
 

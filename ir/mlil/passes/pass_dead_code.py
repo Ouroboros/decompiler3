@@ -4,7 +4,7 @@ from ir.pipeline import Pass
 from ..mlil import (
     MediumLevelILFunction,
     MLILVar, MLILBinaryOp, MLILUnaryOp, MLILSetVar,
-    MLILIf, MLILRet, MLILCall, MLILSyscall, MLILCallScript,
+    MLILIf, MLILRet, MLILCall,
     MLILStoreGlobal, MLILStoreReg
 )
 
@@ -28,7 +28,7 @@ class DeadCodeEliminationPass(Pass):
             elif isinstance(expr, MLILUnaryOp):
                 count_uses(expr.operand)
 
-            elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+            elif isinstance(expr, MLILCall):
                 for arg in expr.args:
                     count_uses(arg)
 
@@ -45,7 +45,7 @@ class DeadCodeEliminationPass(Pass):
                     if inst.value:
                         count_uses(inst.value)
 
-                elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+                elif isinstance(inst, MLILCall):
                     for arg in inst.args:
                         count_uses(arg)
 

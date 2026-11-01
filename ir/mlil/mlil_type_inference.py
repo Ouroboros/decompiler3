@@ -116,15 +116,9 @@ class MLILTypeInference:
         elif isinstance(expr, MLILCall):
             return self._infer_call_type(expr)
 
-        elif isinstance(expr, MLILSyscall):
-            return self._infer_syscall_type(expr)
-
-        elif isinstance(expr, MLILCallScript):
-            return self._infer_script_call_type(expr)
-
         # Memory operations
         elif isinstance(expr, MLILLoadReg):
-            # Registers in this VM typically hold integers (syscall returns, indices, etc.)
+            # Registers typically hold integers (call results, indices, etc.)
             return MLILType.int_type()
 
         elif isinstance(expr, MLILLoadGlobal):
@@ -163,24 +157,6 @@ class MLILTypeInference:
         '''Infer return type from function call'''
         if self.signature_db:
             inferred_type = self.signature_db.get_call_return_type(call.target)
-            if inferred_type:
-                return inferred_type
-
-        return MLILType.unknown()
-
-    def _infer_syscall_type(self, syscall: MLILSyscall) -> MLILType:
-        '''Infer return type from syscall'''
-        if self.signature_db:
-            inferred_type = self.signature_db.get_syscall_return_type(syscall.subsystem, syscall.cmd)
-            if inferred_type:
-                return inferred_type
-
-        return MLILType.unknown()
-
-    def _infer_script_call_type(self, call: MLILCallScript) -> MLILType:
-        '''Infer return type from script call'''
-        if self.signature_db:
-            inferred_type = self.signature_db.get_script_call_return_type(call.module, call.func)
             if inferred_type:
                 return inferred_type
 

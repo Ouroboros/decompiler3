@@ -13,6 +13,7 @@ from common import *
 from falcom.ed9 import *
 from falcom.ed9.llil_builder import FalcomLLILFormatter
 from falcom.ed9.module import ED9ModuleDecompiler
+from falcom.ed9.target import ED9Target
 from ir.llil.llil import LowLevelILFunction
 from ir.mlil import *
 from ir.hlil import *
@@ -243,7 +244,7 @@ class TestScpParser(unittest.TestCase):
 
             # TypeScript final output
             typescript_path = test_file.with_suffix('.ts')
-            typescript_content = generate_typescript_header() + '\n'.join(typescript_lines) + '\n'
+            typescript_content = generate_typescript_header(ED9Target) + '\n'.join(typescript_lines) + '\n'
             typescript_path.write_text(typescript_content, encoding = 'utf-8')
 
 

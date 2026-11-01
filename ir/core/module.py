@@ -1,10 +1,10 @@
-'''Generic module container: the functions of one script at one IL level'''
+'''Generic module container: the functions of one module (a script file) at one IL level'''
 
 from typing import Any, Dict, Iterator
 
 
 class ILModule:
-    '''Functions of one script at one IL level, with the script's file-level metadata
+    '''Functions of one module at one IL level, with the module's file-level metadata
 
     The metadata is defined by the target and opaque to the core; every layer derived from a module
     carries the same metadata object, so file-level information reaches each layer unchanged.

@@ -32,8 +32,6 @@ from ..mlil import (
     MLILBitwiseNot,
     MLILRet,
     MLILCall,
-    MLILSyscall,
-    MLILCallScript,
     MLILStoreGlobal,
     MLILStoreReg,
     MLILStoreDeref,
@@ -109,17 +107,11 @@ class ConstantPropagationPass(Pass):
                 if new_value is not inst.value:
                     return MLILRet(new_value, address = inst.address).copy_metadata_from(inst)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             new_args = [self._propagate_in_expr(arg) for arg in inst.args]
             if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
                 if isinstance(inst, MLILCall):
                     return MLILCall(inst.target, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILSyscall):
-                    return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILCallScript):
-                    return MLILCallScript(inst.module, inst.func, new_args, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._propagate_in_expr(inst.value)

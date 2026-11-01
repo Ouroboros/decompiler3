@@ -86,18 +86,8 @@ class HLILFormatter:
             args = ', '.join(cls._format_expr(arg) for arg in expr.args)
             return f'{expr.func_name}({args})'
 
-        elif isinstance(expr, HLILSyscall):
-            args = ', '.join(cls._format_expr(arg) for arg in expr.args)
-            args = [
-                f'{expr.subsystem}',
-                f'{expr.cmd}',
-                *[cls._format_expr(arg) for arg in expr.args],
-            ]
-            return f'syscall({', '.join(args)})'
-
-        elif isinstance(expr, HLILExternCall):
-            args = ', '.join(cls._format_expr(arg) for arg in expr.args)
-            return f'{expr.target}({args})'
+        elif isinstance(expr, HLILExternalCall):
+            return expr.target.format_call([cls._format_expr(arg) for arg in expr.args])
 
         else:
             # Fallback

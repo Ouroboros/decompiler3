@@ -14,8 +14,7 @@ from ..hlil import (
     HLILUnaryOp,
     HLILAddressOf,
     HLILCall,
-    HLILSyscall,
-    HLILExternCall,
+    HLILExternalCall,
     HLILIf,
     HLILWhile,
     HLILDoWhile,
@@ -43,6 +42,8 @@ class ControlFlowOptimizationPass(Pass):
     '''Control flow optimizations: if-to-switch, empty-if inversion, else-if flattening, switch merging'''
 
     def run(self, func: HighLevelILFunction) -> HighLevelILFunction:
+        # Switch labels must be distinct under the target's equality
+        self.values = func.target.values
         self._optimize_block(func.body)
         self._merge_nested_switches(func.body)
         return func
@@ -250,7 +251,7 @@ class ControlFlowOptimizationPass(Pass):
             reads, _, _ = self._can_read_original_value(var, node.operand, killed)
             return (reads, killed, False)
 
-        if isinstance(node, (HLILCall, HLILSyscall, HLILExternCall)):
+        if isinstance(node, (HLILCall, HLILExternalCall)):
             for arg in node.args:
                 reads, _, _ = self._can_read_original_value(var, arg, killed)
                 if reads:
@@ -498,8 +499,8 @@ class ControlFlowOptimizationPass(Pass):
                     if self._stmt_modifies_any(s, vars_set):
                         return True
 
-        # Note: HLILExprStmt (function calls) are NOT considered to modify REGS
-        # REGS are only modified via direct assignment in this VM
+        # Note: HLILExprStmt (function calls) are NOT considered to modify registers;
+        # here registers change only through direct assignment
 
         return False
 
@@ -785,24 +786,10 @@ class ControlFlowOptimizationPass(Pass):
             default_body = current.false_block if real else None
             break
 
-        if len(cases) < MIN_SWITCH_CASES or not self._distinct_labels([value for value, _ in cases]):
+        if len(cases) < MIN_SWITCH_CASES or not self.values.labels_distinct([value for value, _ in cases]):
             return None
 
         return self._build_switch_moving_comments(scrutinee, cases, default_body, moves)
-
-    @classmethod
-    def _distinct_labels(cls, values: list) -> bool:
-        '''No two labels compare equal under VM equality (an integer equals the same-valued float);
-        strings and numbers are not mixed because a string compares by file offset'''
-        if any(isinstance(value, str) for value in values) and not all(isinstance(value, str) for value in values):
-            return False
-
-        # Other constants (raw words) have no common equality with numbers here
-        if not all(isinstance(value, (str, int, float)) for value in values):
-            return False
-
-        keys = [value if isinstance(value, str) else float(value) for value in values]
-        return len(set(keys)) == len(keys)
 
     def _build_switch(self, scrutinee: HLILVar, cases: list, default_body: Optional[HLILBlock]) -> Optional[HLILSwitch]:
         '''Switch from (value, body) pairs in source order; identical bodies share one case'''

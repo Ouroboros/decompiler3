@@ -80,8 +80,7 @@ class MediumLevelILOperation(IntEnum2):
     MLIL_RET                = 72    # Return (with optional value)
 
     # Function calls
-    MLIL_CALL               = 80    # Function call
-    MLIL_SYSCALL            = 81    # System call
+    MLIL_CALL               = 80    # Function call (a module function or a target CallTarget)
 
     # Globals
     MLIL_LOAD_GLOBAL        = 90
@@ -94,9 +93,6 @@ class MediumLevelILOperation(IntEnum2):
     # Debug
     MLIL_NOP                = 110
     MLIL_DEBUG              = 111
-
-    # Falcom VM specific
-    MLIL_CALL_SCRIPT        = 1000
 
     # SSA (future)
     MLIL_PHI                = 2000
@@ -479,49 +475,23 @@ class MLILRet(MediumLevelILStatement, Terminal):
 # === Function Calls ===
 
 class MLILCall(MediumLevelILStatement):
-    '''Function call'''
+    '''Function call: target is a function name of the module or a CallTarget defined by the target'''
 
-    def __init__(self, target: str, args: List[MediumLevelILInstruction], **kwargs):
+    def __init__(self, target: Union[str, CallTarget], args: List[MediumLevelILInstruction], **kwargs):
         super().__init__(MediumLevelILOperation.MLIL_CALL, **kwargs)
         self.target = target
         self.args = args
 
-    def __str__(self) -> str:
-        args_str = ', '.join(str(arg) for arg in self.args)
-        return f'{self.target}({args_str})'
-
-
-class MLILSyscall(MediumLevelILStatement):
-    '''System call'''
-
-    def __init__(self, subsystem: int, cmd: int, args: List[MediumLevelILInstruction], **kwargs):
-        super().__init__(MediumLevelILOperation.MLIL_SYSCALL, **kwargs)
-        self.subsystem = subsystem
-        self.cmd = cmd
-        self.args = args
+    @property
+    def is_external(self) -> bool:
+        return isinstance(self.target, CallTarget)
 
     def __str__(self) -> str:
-            args = [
-                f'{self.subsystem}',
-                f'{self.cmd}',
-                *[str(arg) for arg in self.args],
-            ]
+        args = [str(arg) for arg in self.args]
+        if self.is_external:
+            return self.target.format_call(args)
 
-            return f'syscall({', '.join(args)})'
-
-
-class MLILCallScript(MediumLevelILStatement):
-    '''Falcom script call'''
-
-    def __init__(self, module: str, func: str, args: List[MediumLevelILInstruction], **kwargs):
-        super().__init__(MediumLevelILOperation.MLIL_CALL_SCRIPT, **kwargs)
-        self.module = module
-        self.func = func
-        self.args = args
-
-    def __str__(self) -> str:
-        args_str = ', '.join(str(arg) for arg in self.args)
-        return f'{self.module}.{self.func}({args_str})'
+        return f'{self.target}({", ".join(args)})'
 
 
 # === Global Variables ===
@@ -648,9 +618,11 @@ class MediumLevelILBasicBlock:
 class MediumLevelILFunction:
     '''MLIL function container'''
 
-    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False):
+    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False,
+                 target: type[Target] = Target):
         self.name = name
         self.start_addr = start_addr
+        self.target = target
         self.source_params: List['IRParameter'] = params or []  # Original params from source
         self.basic_blocks: List[MediumLevelILBasicBlock] = []
         self.parameters: List[MLILVariable] = []  # Ordered parameter list (populated during translation)

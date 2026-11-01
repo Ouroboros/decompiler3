@@ -4,12 +4,12 @@ Infer types for SSA variables using:
 1. Parameter types from source_params
 2. Constant types
 3. Type propagation through assignments
-4. Syscall/call return types from signature_db
+4. Call return types from signature_db
 '''
 
 from typing import Dict, Optional
 
-from ir.core import RawWord
+from ir.core import PARAM_TYPE_INT, PARAM_TYPE_POINTER, PARAM_TYPE_STR, RawWord
 from ir.pipeline import Pass
 from ..mlil import *
 from ..mlil_ssa import *
@@ -141,22 +141,6 @@ class SSATypeInferencePass(Pass):
 
             return MLILType.unknown()
 
-        elif isinstance(expr, MLILSyscall):
-            if self.signature_db:
-                ret_type = self.signature_db.get_syscall_return_type(expr.subsystem, expr.cmd)
-                if ret_type:
-                    return ret_type
-
-            return MLILType.unknown()
-
-        elif isinstance(expr, MLILCallScript):
-            if self.signature_db:
-                ret_type = self.signature_db.get_script_call_return_type(expr.module, expr.func)
-                if ret_type:
-                    return ret_type
-
-            return MLILType.unknown()
-
         elif isinstance(expr, MLILLoadReg):
             return MLILType.int_type()
 
@@ -260,10 +244,8 @@ class SSATypeInferencePass(Pass):
             return MLILType.unknown()
 
         type_map = {
-            'Value32': MLILType.int_type(),
-            'str': MLILType.string_type(),
-            'Nullable32': MLILType.int_type(),
-            'NullableStr': MLILType.string_type(),
-            'Pointer': MLILType.pointer_type(),
+            PARAM_TYPE_INT: MLILType.int_type(),
+            PARAM_TYPE_STR: MLILType.string_type(),
+            PARAM_TYPE_POINTER: MLILType.pointer_type(),
         }
         return type_map.get(type_name, MLILType.unknown())

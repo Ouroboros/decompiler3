@@ -14,8 +14,6 @@ from ..mlil import (
     MLILUnaryOp,
     MLILRet,
     MLILCall,
-    MLILSyscall,
-    MLILCallScript,
     MLILStoreGlobal,
     MLILStoreReg,
     MLILStoreDeref,
@@ -107,7 +105,7 @@ class DeadCodeEliminationPass(Pass):
             if inst.value is not None:
                 self._collect_uses_in_expr(inst.value)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             for arg in inst.args:
                 self._collect_uses_in_expr(arg)
 

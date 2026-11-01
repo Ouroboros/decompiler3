@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from falcom.ed9.constant_folder import ED9ConstantFolder
 from falcom.ed9.vm_values import PAYLOAD_SIGN_BIT, TRUE_VALUE
 from ir.mlil import MLILAdd, MLILAnd, MLILConst, MLILDiv, MLILEq, MLILLt, MLILMod, MLILMul, MLILOr, MLILSub, MLILTestZero
-from ir.mlil.passes import ExpressionSimplificationPass, LatticeValue, NotFoldable
+from ir.mlil.passes import MLIL_VALUE_OPS as VALUE_OPS, ExpressionSimplificationPass, LatticeValue, NotFoldable
 
 
 INT30_MAX               = PAYLOAD_SIGN_BIT - 1
@@ -33,19 +33,19 @@ EV_VM_RESULT            = 1.036999225616455
 
 class TestFolding(unittest.TestCase):
     def test_float_operations_round_every_step_like_the_vm(self):
-        total = ED9ConstantFolder.binary(MLILAdd, EV_ADDEND_A, EV_ADDEND_B)
-        self.assertEqual(ED9ConstantFolder.binary(MLILSub, total, EV_SUBTRAHEND), EV_VM_RESULT)
+        total = ED9ConstantFolder.binary(VALUE_OPS[MLILAdd], EV_ADDEND_A, EV_ADDEND_B)
+        self.assertEqual(ED9ConstantFolder.binary(VALUE_OPS[MLILSub], total, EV_SUBTRAHEND), EV_VM_RESULT)
 
     def test_float_division_is_not_floored(self):
-        self.assertEqual(ED9ConstantFolder.binary(MLILDiv, FLOAT_VALUE, DIVISOR), FLOAT_QUOTIENT)
+        self.assertEqual(ED9ConstantFolder.binary(VALUE_OPS[MLILDiv], FLOAT_VALUE, DIVISOR), FLOAT_QUOTIENT)
 
     def test_integers_wrap_and_truncate_toward_zero(self):
-        self.assertEqual(ED9ConstantFolder.binary(MLILAdd, INT30_MAX, 1), INT30_MIN)
-        self.assertEqual(ED9ConstantFolder.binary(MLILDiv, DIVIDEND, DIVISOR), TRUNCATED_QUOTIENT)
-        self.assertEqual(ED9ConstantFolder.binary(MLILMod, DIVIDEND, DIVISOR), TRUNCATED_REMAINDER)
+        self.assertEqual(ED9ConstantFolder.binary(VALUE_OPS[MLILAdd], INT30_MAX, 1), INT30_MIN)
+        self.assertEqual(ED9ConstantFolder.binary(VALUE_OPS[MLILDiv], DIVIDEND, DIVISOR), TRUNCATED_QUOTIENT)
+        self.assertEqual(ED9ConstantFolder.binary(VALUE_OPS[MLILMod], DIVIDEND, DIVISOR), TRUNCATED_REMAINDER)
 
     def test_ez_on_integers(self):
-        self.assertEqual(ED9ConstantFolder.unary(MLILTestZero, 0), TRUE_VALUE)
+        self.assertEqual(ED9ConstantFolder.unary(VALUE_OPS[MLILTestZero], 0), TRUE_VALUE)
 
     def test_branches_test_the_payload(self):
         self.assertFalse(ED9ConstantFolder.is_true(0.0))
@@ -56,25 +56,25 @@ class TestFolding(unittest.TestCase):
 class TestNotFolded(unittest.TestCase):
     def test_runtime_faults_and_values_without_literals(self):
         with self.assertRaises(NotFoldable):
-            ED9ConstantFolder.binary(MLILDiv, DIVIDEND, 0)
+            ED9ConstantFolder.binary(VALUE_OPS[MLILDiv], DIVIDEND, 0)
 
         with self.assertRaises(NotFoldable):
-            ED9ConstantFolder.binary(MLILDiv, FLOAT_VALUE, 0.0)
+            ED9ConstantFolder.binary(VALUE_OPS[MLILDiv], FLOAT_VALUE, 0.0)
 
     def test_type_errors(self):
         with self.assertRaises(NotFoldable):
-            ED9ConstantFolder.unary(MLILTestZero, FLOAT_VALUE)
+            ED9ConstantFolder.unary(VALUE_OPS[MLILTestZero], FLOAT_VALUE)
 
         with self.assertRaises(NotFoldable):
-            ED9ConstantFolder.binary(MLILMod, FLOAT_VALUE, FLOAT_VALUE)
+            ED9ConstantFolder.binary(VALUE_OPS[MLILMod], FLOAT_VALUE, FLOAT_VALUE)
 
     def test_results_depending_on_string_offsets(self):
-        self.assertEqual(ED9ConstantFolder.binary(MLILEq, STRING_VALUE, STRING_VALUE), TRUE_VALUE)
+        self.assertEqual(ED9ConstantFolder.binary(VALUE_OPS[MLILEq], STRING_VALUE, STRING_VALUE), TRUE_VALUE)
         with self.assertRaises(NotFoldable):
-            ED9ConstantFolder.binary(MLILEq, STRING_VALUE, 0)
+            ED9ConstantFolder.binary(VALUE_OPS[MLILEq], STRING_VALUE, 0)
 
         with self.assertRaises(NotFoldable):
-            ED9ConstantFolder.binary(MLILLt, STRING_VALUE, STRING_VALUE)
+            ED9ConstantFolder.binary(VALUE_OPS[MLILLt], STRING_VALUE, STRING_VALUE)
 
 
 class TestAlgebraicIdentities(unittest.TestCase):

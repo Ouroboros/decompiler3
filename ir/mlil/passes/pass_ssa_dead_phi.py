@@ -16,8 +16,6 @@ from ..mlil import (
     MLILUnaryOp,
     MLILRet,
     MLILCall,
-    MLILSyscall,
-    MLILCallScript,
     MLILStoreGlobal,
     MLILStoreReg,
     MLILStoreDeref,
@@ -93,7 +91,7 @@ class DeadPhiSourceEliminationPass(Pass):
             if stmt.value:
                 self._collect_uses(stmt.value, user)
 
-        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(stmt, MLILCall):
             for arg in stmt.args:
                 self._collect_uses(arg, user)
 

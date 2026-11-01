@@ -9,7 +9,7 @@ from ir.pipeline import Pass
 from ..mlil import (
     MediumLevelILFunction, MediumLevelILBasicBlock, MediumLevelILInstruction,
     MLILConst, MLILVar, MLILBinaryOp, MLILUnaryOp, MLILSetVar,
-    MLILIf, MLILRet, MLILCall, MLILSyscall, MLILCallScript,
+    MLILIf, MLILRet, MLILCall,
     MLILLoadGlobal, MLILStoreGlobal, MLILLoadReg, MLILStoreReg,
     MLILAdd, MLILSub, MLILMul, MLILDiv, MLILMod,
     MLILAnd, MLILOr, MLILXor, MLILShl, MLILShr,
@@ -183,7 +183,7 @@ class RegGlobalValuePropagator:
             new_state.global_[inst.index] = resolved
             return new_state
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             new_state = state.copy()
             for k in new_state.reg:
                 new_state.reg[k] = None
@@ -221,7 +221,7 @@ class RegGlobalValuePropagator:
 
             return (inst, new_state)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             new_args = [self._substitute(arg, state) for arg in inst.args]
             new_state = state.copy()
             for k in new_state.reg:
@@ -471,12 +471,6 @@ class RegGlobalValuePropagator:
         '''Rebuild call instruction with new arguments'''
         if isinstance(inst, MLILCall):
             return MLILCall(inst.target, new_args, address = inst.address).copy_metadata_from(inst)
-
-        elif isinstance(inst, MLILSyscall):
-            return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address).copy_metadata_from(inst)
-
-        elif isinstance(inst, MLILCallScript):
-            return MLILCallScript(inst.module, inst.func, new_args, address = inst.address).copy_metadata_from(inst)
 
         else:
             raise NotImplementedError(f'Unhandled call type: {type(inst).__name__}')

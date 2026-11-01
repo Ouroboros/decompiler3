@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from codegen import generate_typescript
+from falcom.ed9.target import ED9Target
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILBinaryOp, HLILBlock, HLILCall, HLILConst, HLILExprStmt, HLILIf, HLILReturn,
     HLILSwitch, HLILSwitchCase, HLILVar, HLILVariable, VariableKind,
@@ -31,7 +32,7 @@ SCALE                   = 2
 
 
 def make_function(*statements) -> HighLevelILFunction:
-    func = HighLevelILFunction('f')
+    func = HighLevelILFunction('f', target = ED9Target)
     func.parameters = [HLILVariable(f'arg{number}', kind = VariableKind.PARAM) for number in range(1, PARAM_COUNT + 1)]
     func.body = HLILBlock(list(statements))
     return func

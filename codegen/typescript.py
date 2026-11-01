@@ -1,28 +1,12 @@
 '''TypeScript Code Generator - HLIL to production TypeScript'''
 
-import operator
-
 from common import *
 from typing import List, Optional
-from ir.core import RawWord
+from ir.core import COMPARISON_VALUE_OPS, RawWord, Target
 from ir.hlil import *
 
 
-CONSTANT_COMPARISONS = {
-    BinaryOp.EQ:    operator.eq,
-    BinaryOp.NE:    operator.ne,
-    BinaryOp.LT:    operator.lt,
-    BinaryOp.LE:    operator.le,
-    BinaryOp.GT:    operator.gt,
-    BinaryOp.GE:    operator.ge,
-}
-
 STRING_ESCAPES = {'\\': '\\\\', '"': '\\"', '\n': '\\n', '\r': '\\r', '\t': '\\t', '\0': '\\0'}
-
-# Script integers are 30-bit; constants outside this range wrap in the VM
-INT_PAYLOAD_BITS    = 30
-INT_PAYLOAD_MIN     = -(1 << (INT_PAYLOAD_BITS - 1))
-INT_PAYLOAD_MAX     = (1 << (INT_PAYLOAD_BITS - 1)) - 1
 
 
 class TypeScriptGenerator:
@@ -33,6 +17,24 @@ class TypeScriptGenerator:
     def set_signature_db(cls, db):
         '''Set signature database for formatting'''
         cls._signature_db = db
+
+    # --- Entry points for target hints (ir/core/target.py BackendHints) ---
+
+    @classmethod
+    def format_expr(cls, expr: HLILExpression) -> str:
+        return cls._format_expr(expr)
+
+    @classmethod
+    def format_args_with_signature(cls, args: list, params: list) -> str:
+        return cls._format_call_args_with_sig(args, params)
+
+    @classmethod
+    def signature_db(cls):
+        return cls._signature_db
+
+    @classmethod
+    def current_function(cls) -> 'HighLevelILFunction':
+        return cls._current_func
 
     @classmethod
     def _format_type(cls, type_hint) -> str:
@@ -51,7 +53,7 @@ class TypeScriptGenerator:
             }
             return type_map.get(type_hint, 'any')
 
-        # Handle string type hints (from FalcomTypeInferencePass)
+        # Handle string type hints (from a target type inference pass)
         if isinstance(type_hint, str):
             type_map = {
                 'int': 'number',
@@ -213,23 +215,19 @@ class TypeScriptGenerator:
 
     @classmethod
     def _fold_constant_comparison(cls, expr: HLILBinaryOp) -> Optional[str]:
-        '''Fold a comparison of two constants where it matches the VM: both Integers (signed payloads)
-        or both Floats. Strings compare by file offset and mixed operands through float32, so those stay.'''
+        '''Fold a comparison of two constants where the target's value semantics allow printing its result'''
         if not (isinstance(expr.lhs, HLILConst) and isinstance(expr.rhs, HLILConst)):
             return None
 
-        lhs, rhs = expr.lhs.value, expr.rhs.value
-        if type(lhs) is not type(rhs) or type(lhs) not in (int, float):
+        op = HLIL_VALUE_OPS.get(expr.op)
+        if op not in COMPARISON_VALUE_OPS:
             return None
 
-        if type(lhs) is int and not all(INT_PAYLOAD_MIN <= value <= INT_PAYLOAD_MAX for value in (lhs, rhs)):
+        result = cls._current_func.target.values.compare_literals(op, expr.lhs.value, expr.rhs.value)
+        if result is None:
             return None
 
-        compare = CONSTANT_COMPARISONS.get(expr.op)
-        if compare is None:
-            return None
-
-        return 'true' if compare(lhs, rhs) else 'false'
+        return 'true' if result else 'false'
 
     @classmethod
     def _is_boolean_expr(cls, expr: HLILExpression) -> bool:
@@ -267,11 +265,8 @@ class TypeScriptGenerator:
     def _format_expr(cls, expr: HLILExpression) -> str:
         if isinstance(expr, HLILVar):
             var = expr.var
-            if var.kind == VariableKind.GLOBAL:
-                return f'GLOBALS[{var.index}]'
-
-            elif var.kind == VariableKind.REG:
-                return f'REGS[{var.index}]'
+            if var.is_storage:
+                return f'{var.name}[{var.index}]'
 
             else:
                 return var.name
@@ -371,28 +366,9 @@ class TypeScriptGenerator:
             args = cls._format_call_args(expr.func_name, expr.args)
             return f'{expr.func_name}({args})'
 
-        elif isinstance(expr, HLILSyscall):
-            # Don't replace syscalls in common functions (they are the wrappers themselves)
-            is_common = cls._current_func and cls._current_func.is_common_func
-            sig = cls._signature_db.get_syscall(expr.subsystem, expr.cmd) if cls._signature_db and not is_common else None
-            if sig:
-                args = cls._format_call_args_with_sig(expr.args, sig.params)
-                return f'{sig.name}({args})'
-
-            else:
-                args = [
-                    f'{expr.subsystem}',
-                    f'{expr.cmd}',
-                    *[cls._format_expr(arg) for arg in expr.args],
-                ]
-                return f'syscall({", ".join(args)})'
-
-        elif isinstance(expr, HLILExternCall):
-            args = [
-                f"'{expr.target}'",
-                *[cls._format_expr(arg) for arg in expr.args],
-            ]
-            return f'extern_call({', '.join(args)})'
+        elif isinstance(expr, HLILExternalCall):
+            # The target decides how its external calls are written
+            return cls._current_func.target.hints.typescript_external_call(expr.target, expr.args, cls)
 
         else:
             # Fallback
@@ -633,11 +609,12 @@ class TypeScriptGenerator:
         return lines
 
 
-def generate_typescript_header() -> str:
-    return '''// VM state
-const GLOBALS: any[] = [];
-const REGS: any[] = new Array(16);
-
+def generate_typescript_header(target: type[Target] = Target) -> str:
+    storage = target.storage
+    return f'''// VM state
+const {storage.global_name}: any[] = [];
+const {storage.register_name}: any[] = new Array({storage.register_count});
+''' + '''
 // Intrinsic function: address-of operator (for output parameters)
 function addr_of<T>(value: T): T { return value; }
 
@@ -651,56 +628,7 @@ function int(b: number | boolean): number { return +b; }
 // Intrinsic function: word without a type tag (raw(payload))
 function raw(payload: number): number { return payload; }
 
-// Placeholder function: external script call
-function extern_call(target: string, ...args: any[]): any { return undefined; }
-
-// Placeholder function: system call
-function syscall(subsystem: number, cmd: number, ...args: any[]): any { return undefined; }
-
-'''
-
-
-def generate_syscall_wrappers(signature_db) -> str:
-    '''Generate TypeScript wrapper functions for syscalls'''
-    if not signature_db or not signature_db.syscalls:
-        return ''
-
-    lines = ['// Syscall wrappers']
-
-    for name, sig in signature_db.syscalls.items():
-        # Build parameter list
-        params = []
-        args = []
-        for p in sig.params:
-            if p.variadic:
-                params.append(f'...{p.name}: ({p.type})[]')
-                args.append(f'...{p.name}')
-
-            else:
-                params.append(f'{p.name}: {p.type}')
-                args.append(p.name)
-
-        params_str = ', '.join(params)
-        args_str = ', '.join(args)
-
-        # Determine return type
-        if sig.return_hint:
-            if sig.return_hint.type == 'void':
-                return_type = 'void'
-                body = f'syscall({sig.subsystem}, {sig.cmd}, {args_str});' if args_str else f'syscall({sig.subsystem}, {sig.cmd});'
-
-            else:
-                return_type = 'number'
-                body = f'return syscall({sig.subsystem}, {sig.cmd}, {args_str});' if args_str else f'return syscall({sig.subsystem}, {sig.cmd});'
-
-        else:
-            return_type = 'any'
-            body = f'return syscall({sig.subsystem}, {sig.cmd}, {args_str});' if args_str else f'return syscall({sig.subsystem}, {sig.cmd});'
-
-        lines.append(f'function {name}({params_str}): {return_type} {{ {body} }}')
-
-    lines.append('')
-    return '\n'.join(lines) + '\n'
+''' + target.hints.typescript_declarations()
 
 
 def generate_typescript(func: HighLevelILFunction) -> str:

@@ -4,14 +4,26 @@ from dataclasses import dataclass
 from typing import *
 
 from ir.llil.llil import *
-from ir.core import IRParameter, RawWord
+from ir.core import PARAM_TYPE_INT, PARAM_TYPE_POINTER, PARAM_TYPE_STR, IRParameter, RawWord
 
 from ..disasm import *
+from ..target import ED9Target
+from ..vm_values import WORD_SIZE
 from ..llil_builder import *
 from ..parser import *
 
 if TYPE_CHECKING:
     from ..parser.scp import *
+
+
+# Parameter kinds (raw parameter flags) as the IR's generic parameter type names
+PARAM_TYPE_NAMES = {
+    ScpParamType.Value:             PARAM_TYPE_INT,
+    ScpParamType.Offset:            PARAM_TYPE_STR,
+    ScpParamType.NullableValue:     PARAM_TYPE_INT,
+    ScpParamType.NullableOffset:    PARAM_TYPE_STR,
+    ScpParamType.Pointer:           PARAM_TYPE_POINTER,
+}
 
 
 @dataclass
@@ -41,7 +53,7 @@ class ED9VMLifter:
 
         builder = FalcomVMBuilder()
         ir_params = self._convert_params(func.params)
-        builder.create_function(func.name, func.offset, ir_params, is_common_func=func.is_common_func)
+        builder.create_function(func.name, func.offset, ir_params, is_common_func=func.is_common_func, target = ED9Target)
 
         blocks = self._collect_blocks(func.entry_block)
         blocks.sort(key = lambda b: b.offset)
@@ -81,7 +93,7 @@ class ED9VMLifter:
         result = []
         for i, param in enumerate(params):
             name = f'arg{i + 1}'
-            type_name = param.type.get_python_type()
+            type_name = PARAM_TYPE_NAMES[param.type.flags]
             default_value = param.default_value.value if param.default_value else None
             if param.default_value is not None and param.default_value.type == ScpValue.Type.Raw:
                 default_value = RawWord(int(default_value))
@@ -138,20 +150,21 @@ class ED9VMLifter:
                 target = self._require_block(inst.operands[0].value, block_map, llil_blocks)
                 builder.push_caller_frame(target)
 
+            # Stack operands are byte offsets; the IR counts stack slots
             case ED9Opcode.LOAD_STACK:
-                builder.load_stack(int(inst.operands[0].value))
+                builder.load_stack(self._slots(inst))
 
             case ED9Opcode.LOAD_STACK_DEREF:
-                builder.load_stack_deref(int(inst.operands[0].value))
+                builder.load_stack_deref(self._slots(inst))
 
             case ED9Opcode.PUSH_STACK_OFFSET:
-                builder.push_stack_addr(int(inst.operands[0].value))
+                builder.push_stack_addr(self._slots(inst))
 
             case ED9Opcode.POP_TO:
-                builder.pop_to(int(inst.operands[0].value))
+                builder.pop_to(self._slots(inst))
 
             case ED9Opcode.POP_TO_DEREF:
-                builder.pop_to_deref(int(inst.operands[0].value))
+                builder.pop_to_deref(self._slots(inst))
 
             case ED9Opcode.POP:
                 pop_size = int(inst.operands[0].value) if inst.operands else 0
@@ -309,3 +322,8 @@ class ED9VMLifter:
 
     def _pop_words(self, builder: FalcomVMBuilder, words: int) -> None:
         builder.pop_bytes(words * WORD_SIZE)
+
+    @classmethod
+    def _slots(cls, inst: Instruction) -> int:
+        '''Stack slot offset of an instruction whose operand is a byte offset'''
+        return int(inst.operands[0].value) // WORD_SIZE

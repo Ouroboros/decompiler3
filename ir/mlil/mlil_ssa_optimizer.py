@@ -1,5 +1,8 @@
 '''MLIL SSA Optimizer - orchestrates SSA optimization passes'''
 
+from typing import Optional
+
+from ir.pipeline import PassObserver
 from .mlil import MediumLevelILFunction
 from .passes import (
     NNFPass,
@@ -18,15 +21,23 @@ from .passes import (
 class SSAOptimizer:
     '''Orchestrates SSA optimization passes'''
 
-    def __init__(self, function: MediumLevelILFunction, folder: type[ConstantFolder] = ConstantFolder):
+    def __init__(self, function: MediumLevelILFunction, folder: type[ConstantFolder] = ConstantFolder,
+                 observer: Optional[PassObserver] = None):
         self.function = function
         self.folder = folder
+        # Reports SCCP and every iterated pass as '<pass>#<iteration>'
+        self.observer = observer
+
+    def _observe(self, name: str):
+        if self.observer is not None:
+            self.observer(name, self.function)
 
     def optimize(self) -> MediumLevelILFunction:
         '''Run all optimization passes'''
         # Run SCCP first for aggressive constant propagation and unreachable code elimination
         sccp = SCCP(self.function, folder = self.folder)
         sccp.run()
+        self._observe(SCCP.__name__)
 
         # Passes to run iteratively until fixpoint
         passes = [
@@ -42,11 +53,12 @@ class SSAOptimizer:
 
         # Iterative optimization until fixpoint
         max_iterations = 10
-        for _ in range(max_iterations):
+        for iteration in range(1, max_iterations + 1):
             snapshot = self._snapshot()
 
             for p in passes:
                 p.run(self.function)
+                self._observe(f'{p.name}#{iteration}')
 
             if self._snapshot() == snapshot:
                 break

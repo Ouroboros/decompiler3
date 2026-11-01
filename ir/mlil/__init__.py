@@ -112,8 +112,6 @@ __all__ = [
 
     # Function calls
     'MLILCall',
-    'MLILSyscall',
-    'MLILCallScript',
 
     # Globals
     'MLILLoadGlobal',

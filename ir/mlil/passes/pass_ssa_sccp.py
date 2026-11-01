@@ -1,6 +1,7 @@
 '''SCCP - Sparse Conditional Constant Propagation Pass'''
 
 from typing import Any, Dict, List, Optional, Set
+from ir.core import NotFoldable, ValueOp, ValueSemantics
 from ir.pipeline import Pass
 from ..mlil import (
     MediumLevelILFunction,
@@ -35,8 +36,6 @@ from ..mlil import (
     MLILGoto,
     MLILRet,
     MLILCall,
-    MLILSyscall,
-    MLILCallScript,
     MLILStoreGlobal,
     MLILStoreReg,
     MLILDeref,
@@ -51,29 +50,33 @@ from ..mlil_ssa import (
 )
 
 
-class NotFoldable(Exception):
-    '''Raised by a ConstantFolder when an operation on constants has no known result'''
+# Constant folding uses the target's value semantics (ir/core/target.py); the base folds nothing
+ConstantFolder = ValueSemantics
 
-
-class ConstantFolder:
-    '''Evaluates operators on constants with the value semantics of the target VM
-
-    The base class knows no target and folds nothing, so SCCP only propagates constants.
-    Operator arguments are MLIL operation classes (MLILAdd, MLILTestZero, ...).
-    '''
-
-    @classmethod
-    def binary(cls, op_type: type, lhs: Any, rhs: Any) -> Any:
-        raise NotFoldable(op_type.__name__)
-
-    @classmethod
-    def unary(cls, op_type: type, operand: Any) -> Any:
-        raise NotFoldable(op_type.__name__)
-
-    @classmethod
-    def is_true(cls, value: Any) -> bool:
-        '''Whether a branch on this constant takes the true edge'''
-        raise NotFoldable('branch')
+MLIL_VALUE_OPS = {
+    MLILAdd:        ValueOp.ADD,
+    MLILSub:        ValueOp.SUB,
+    MLILMul:        ValueOp.MUL,
+    MLILDiv:        ValueOp.DIV,
+    MLILMod:        ValueOp.MOD,
+    MLILAnd:        ValueOp.BIT_AND,
+    MLILOr:         ValueOp.BIT_OR,
+    MLILXor:        ValueOp.BIT_XOR,
+    MLILShl:        ValueOp.SHL,
+    MLILShr:        ValueOp.SHR,
+    MLILLogicalAnd: ValueOp.LOGICAL_AND,
+    MLILLogicalOr:  ValueOp.LOGICAL_OR,
+    MLILEq:         ValueOp.EQ,
+    MLILNe:         ValueOp.NE,
+    MLILLt:         ValueOp.LT,
+    MLILLe:         ValueOp.LE,
+    MLILGt:         ValueOp.GT,
+    MLILGe:         ValueOp.GE,
+    MLILNeg:        ValueOp.NEG,
+    MLILLogicalNot: ValueOp.LOGICAL_NOT,
+    MLILBitwiseNot: ValueOp.BIT_NOT,
+    MLILTestZero:   ValueOp.TEST_ZERO,
+}
 
 
 class LatticeValue:
@@ -253,7 +256,7 @@ class SCCP:
             if stmt.value:
                 self._collect_uses(stmt.value, user)
 
-        elif isinstance(stmt, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(stmt, MLILCall):
             for arg in stmt.args:
                 self._collect_uses(arg, user)
 
@@ -440,10 +443,14 @@ class SCCP:
             # Unknown expression type
             return LatticeValue.bottom()
 
-    def _fold(self, evaluate, *operands) -> LatticeValue:
-        '''Constant result of evaluate(*operands), BOTTOM when the folder cannot compute it'''
+    def _fold(self, evaluate, op_type: type, *operands) -> LatticeValue:
+        '''Constant result of evaluate(op, *operands), BOTTOM when the target cannot compute it'''
+        op = MLIL_VALUE_OPS.get(op_type)
+        if op is None:
+            return LatticeValue.bottom()
+
         try:
-            return LatticeValue.constant(evaluate(*operands))
+            return LatticeValue.constant(evaluate(op, *operands))
 
         except NotFoldable:
             return LatticeValue.bottom()
@@ -512,18 +519,12 @@ class SCCP:
                 if new_value is not inst.value:
                     return MLILRet(new_value, address = inst.address).copy_metadata_from(inst)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             new_args = [self._replace_constants_in_expr(arg) for arg in inst.args]
 
             if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
                 if isinstance(inst, MLILCall):
                     return MLILCall(inst.target, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILSyscall):
-                    return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILCallScript):
-                    return MLILCallScript(inst.module, inst.func, new_args, address = inst.address).copy_metadata_from(inst)
 
         elif isinstance(inst, (MLILStoreGlobal, MLILStoreReg)):
             new_value = self._replace_constants_in_expr(inst.value)

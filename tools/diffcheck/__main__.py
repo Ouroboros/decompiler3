@@ -54,7 +54,7 @@ def _print_report(report: FunctionReport):
     for mismatch in report.mismatches:
         print(f'        run {mismatch.run}, event #{mismatch.index}, stage: {mismatch.stage}')
         print(f'        bytecode: {mismatch.bytecode_event}  [{mismatch.bytecode_status}]')
-        print(f'        hlil:     {mismatch.hlil_event}  [{mismatch.hlil_status}]')
+        print(f'        stage:    {mismatch.candidate_event}  [{mismatch.candidate_status}]')
 
     if report.error is not None:
         print(f'        {report.error.strip()}')
@@ -123,6 +123,8 @@ def main(argv = None) -> int:
     arg_parser.add_argument('--verbose', action = 'store_true', help = 'print passing functions too')
     arg_parser.add_argument('--lenient-raw', action = 'store_true',
                             help = 'observe Raw words by payload like integers (by default their tag is observed too)')
+    arg_parser.add_argument('--per-pass', action = 'store_true',
+                            help = 'compare the IR after every pass in every run (slow; normally passes are replayed only to localize a mismatch)')
     arg_parser.add_argument('--dump', type = Path, metavar = 'DIR',
                             help = 'write the HLIL and TypeScript of every function to DIR/<script>.json')
     arg_parser.add_argument('--changed-since', type = Path, metavar = 'DIR',
@@ -135,6 +137,7 @@ def main(argv = None) -> int:
         localize = not args.no_localize,
         max_mismatches = args.max_mismatches,
         strict_raw = not args.lenient_raw,
+        per_pass = args.per_pass,
     )
 
     started = time.time()

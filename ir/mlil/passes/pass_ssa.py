@@ -1,6 +1,6 @@
 '''SSA-related passes'''
 
-from ir.pipeline import Pass
+from ir.pipeline import Pass, PassObserver
 from ..mlil import MediumLevelILFunction
 from ..mlil_ssa import convert_to_ssa, convert_from_ssa
 from .pass_ssa_sccp import ConstantFolder
@@ -23,9 +23,15 @@ class SSAOptimizationPass(Pass):
 
     def run(self, mlil_func: MediumLevelILFunction) -> MediumLevelILFunction:
         '''Optimize SSA form'''
+        return self._optimize(mlil_func, None)
+
+    def run_observed(self, mlil_func: MediumLevelILFunction, observer: PassObserver) -> MediumLevelILFunction:
+        return self._optimize(mlil_func, observer)
+
+    def _optimize(self, mlil_func: MediumLevelILFunction, observer) -> MediumLevelILFunction:
         # Delayed import to avoid circular dependency
         from ..mlil_ssa_optimizer import SSAOptimizer
-        optimizer = SSAOptimizer(mlil_func, folder = self.folder)
+        optimizer = SSAOptimizer(mlil_func, folder = self.folder, observer = observer)
         return optimizer.optimize()
 
 

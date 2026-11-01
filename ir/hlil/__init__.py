@@ -17,6 +17,7 @@ __all__ = [
 
     # Operations
     'HLILOperation',
+    'HLIL_VALUE_OPS',
 
     # Base classes
     'HLILInstruction',
@@ -35,8 +36,7 @@ __all__ = [
     'HLILAddressOf',
     'HLILDeref',
     'HLILCall',
-    'HLILSyscall',
-    'HLILExternCall',
+    'HLILExternalCall',
 
     # Control flow
     'HLILBlock',

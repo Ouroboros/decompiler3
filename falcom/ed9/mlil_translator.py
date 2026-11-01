@@ -4,6 +4,7 @@ from ir.llil import *
 from ir.mlil import *
 from .llil_ext import *
 from .constants import *
+from .calls import ED9ScriptCall, ED9Syscall
 
 
 class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
@@ -54,8 +55,7 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
         # Translate arguments
         mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
 
-        # Generate MLIL CallScript
-        self.builder.call_script(llil_inst.module, llil_inst.func, mlil_args)
+        self.builder.call(ED9ScriptCall(llil_inst.module, llil_inst.func), mlil_args)
 
         # Add goto to return target (always a LowLevelILBasicBlock in Falcom)
         return_block = self.block_map[llil_inst.return_target]
@@ -73,8 +73,7 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
         # Translate arguments from LLIL
         mlil_args = [self._translate_expr(arg) for arg in llil_inst.args]
 
-        # Generate MLIL Syscall
-        self.builder.syscall(llil_inst.subsystem, llil_inst.cmd, mlil_args)
+        self.builder.call(ED9Syscall(llil_inst.subsystem, llil_inst.cmd), mlil_args)
 
     def _translate_expr(self, llil_expr: LowLevelILInstruction) -> MediumLevelILInstruction:
         '''Translate LLIL expression, handling Falcom-specific types'''

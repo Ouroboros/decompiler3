@@ -5,6 +5,7 @@ from typing import Union
 from ir.llil import *
 from .constants import *
 from .llil_ext import *
+from .vm_values import WORD_SIZE
 
 
 class FalcomVMBuilder(LowLevelILBuilder):
@@ -270,10 +271,10 @@ class FalcomVMBuilder(LowLevelILBuilder):
         self.stack_push(reg_val)
 
     def pop_to(self, offset: int):
-        '''POP_TO operation - pop and store to STACK[sp + offset]'''
+        '''POP_TO operation - pop and store to STACK[sp + offset] (offset in stack slots)'''
         val = self.pop(hidden_for_formatter = True)
         # offset is relative to sp AFTER pop (new_sp + offset)
-        slot_index = self.sp_get() + offset // WORD_SIZE
+        slot_index = self.sp_get() + offset
         self.add_instruction(LowLevelILStackStore(val, offset = offset, slot_index = slot_index))
 
     def pop_jmp_zero(self, true_target, false_target):

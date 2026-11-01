@@ -14,11 +14,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from falcom.ed9.backend import EXTERN_INTRINSIC, SYSCALL_INTRINSIC
+from falcom.ed9.calls import ED9ScriptCall, ED9Syscall
+from falcom.ed9.target import ED9Target
 from ir.core import RawWord
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILAddressOf, HLILAssign, HLILBinaryOp, HLILBlock, HLILBreak, HLILCall,
-    HLILComment, HLILConst, HLILContinue, HLILDebug, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternCall,
-    HLILIf, HLILReturn, HLILStatement, HLILSwitch, HLILSwitchCase, HLILSyscall, HLILUnaryOp, HLILVar, HLILVariable,
+    HLILComment, HLILConst, HLILContinue, HLILDebug, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternalCall,
+    HLILIf, HLILReturn, HLILStatement, HLILSwitch, HLILSwitchCase, HLILUnaryOp, HLILVar, HLILVariable,
     HLILWhile, UnaryOp, VariableKind,
 )
 
@@ -65,7 +68,7 @@ UNARY_OPS = {'-': UnaryOp.NEG, '!': UnaryOp.NOT, '~': UnaryOp.BIT_NOT}
 
 BOOLEAN_LITERALS = {'true': 1, 'false': 0}
 RAW_INTRINSIC = 'raw'
-STORAGE_KINDS = {'GLOBALS': VariableKind.GLOBAL, 'REGS': VariableKind.REG}
+STORAGE_KINDS = {ED9Target.storage.global_name: VariableKind.GLOBAL, ED9Target.storage.register_name: VariableKind.REG}
 EXTERN_SEPARATOR = ':'
 
 
@@ -159,7 +162,7 @@ class TypeScriptParser:
 
     def parse_function(self) -> HighLevelILFunction:
         self._expect('function')
-        func = HighLevelILFunction(self._expect_name(), self.start_addr)
+        func = HighLevelILFunction(self._expect_name(), self.start_addr, target = ED9Target)
         self._expect('(')
         while not self._at(')'):
             name = self._expect_name()
@@ -390,7 +393,7 @@ class TypeScriptParser:
 
             self._expect(']')
             index = int(index_token.text, 0)
-            return HLILVar(HLILVariable(f'{name}[{index}]', kind = STORAGE_KINDS[name], index = index))
+            return HLILVar(HLILVariable(name, kind = STORAGE_KINDS[name], index = index))
 
         if self._at('('):
             return self._call(name, self._parse_arguments())
@@ -410,16 +413,17 @@ class TypeScriptParser:
         if name == RAW_INTRINSIC:
             return HLILConst(RawWord(self._integer(self._single(name, args))))
 
-        if name == 'syscall':
+        if name == SYSCALL_INTRINSIC:
             subsystem, cmd = (self._literal(arg) for arg in args[:2])
-            return HLILSyscall(subsystem, cmd, args[2:])
+            return HLILExternalCall(ED9Syscall(subsystem, cmd), args[2:])
 
-        if name == 'extern_call':
+        if name == EXTERN_INTRINSIC:
             target = self._literal(args[0])
             if not isinstance(target, str) or EXTERN_SEPARATOR not in target:
                 raise TSParseError(f'bad extern_call target {target!r}')
 
-            return HLILExternCall(target, args[1:])
+            module, _, func = target.partition(EXTERN_SEPARATOR)
+            return HLILExternalCall(ED9ScriptCall(module, func), args[1:])
 
         return HLILCall(name, args)
 

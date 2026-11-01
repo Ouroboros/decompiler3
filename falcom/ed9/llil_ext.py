@@ -8,10 +8,11 @@ from .constants import *
 
 class LowLevelILFalcomOperation(IntEnum):
     '''Falcom-specific LLIL operations'''
-    LLIL_PUSH_CALLER_FRAME = LowLevelILOperation.LLIL_PUSH_CALLER_FRAME  # Push caller frame (4 values)
-    LLIL_CALL_SCRIPT = LowLevelILOperation.LLIL_CALL_SCRIPT              # Call script function
-    LLIL_GLOBAL_LOAD = LowLevelILOperation.LLIL_USER_DEFINED     # Load from global variable array
-    LLIL_GLOBAL_STORE = LowLevelILOperation.LLIL_USER_DEFINED + 1  # Store to global variable array
+    LLIL_GLOBAL_LOAD        = LowLevelILOperation.LLIL_USER_DEFINED      # Load from global variable array
+    LLIL_GLOBAL_STORE       = LowLevelILOperation.LLIL_USER_DEFINED + 1  # Store to global variable array
+    LLIL_PUSH_CALLER_FRAME  = LowLevelILOperation.LLIL_USER_DEFINED + 2  # Push caller frame (4 values)
+    LLIL_CALL_SCRIPT        = LowLevelILOperation.LLIL_USER_DEFINED + 3  # Call script function
+    LLIL_SYSCALL            = LowLevelILOperation.LLIL_USER_DEFINED + 4  # System call
 
 
 class LowLevelILPushCallerFrame(LowLevelILStatement):
@@ -87,3 +88,21 @@ class LowLevelILGlobalStore(LowLevelILStatement):
 
     def __str__(self) -> str:
         return f'GLOBAL[{self.index}] = {self.value}'
+
+
+class LowLevelILSyscall(LowLevelILStatement):
+    '''SYSCALL - system call (statement)'''
+
+    def __init__(self, subsystem: int, cmd: int, argc: int, args: List['LowLevelILExpr'] = None):
+        super().__init__(LowLevelILFalcomOperation.LLIL_SYSCALL)
+        self.subsystem = subsystem
+        self.cmd = cmd
+        self.argc = argc
+        self.args = args if args is not None else []  # Argument expressions (from vstack)
+
+    def __str__(self) -> str:
+        if self.args:
+            args_str = ', '.join(str(arg) for arg in self.args)
+            return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {args_str})'
+        else:
+            return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'

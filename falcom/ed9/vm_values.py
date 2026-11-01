@@ -29,6 +29,8 @@ PAYLOAD_SIGN_BIT    = 1 << (PAYLOAD_BITS - 1)
 FLOAT_DROPPED_BITS  = 2
 FLOAT_KEPT_MASK     = ~((1 << FLOAT_DROPPED_BITS) - 1)
 WORD_MASK           = 0xFFFFFFFF
+# Bytes per stack slot; stack operands of the instructions are byte offsets
+WORD_SIZE           = 4
 FLOAT32_FORMAT      = '<f'
 WORD_FORMAT         = '<I'
 

@@ -90,7 +90,7 @@ class SSADef:
     reg_index: int
     expr: MediumLevelILInstruction  # The defining expression
     is_call: bool
-    is_global: bool = False  # True for GLOBALS, False for REGS
+    is_global: bool = False  # True for global storage, False for registers
     is_live_out: bool = False
     use_count: int = 0
     deleted: bool = False
@@ -132,12 +132,14 @@ class RegisterResolver:
       Phase D: Used during code generation
 
     Optimization:
-      Each REGS[n]/GLOBALS[n] write creates a local variable.
+      Each register or global write creates a local variable.
       All reads before the next write use that local variable.
     '''
 
     def __init__(self, mlil_func: MediumLevelILFunction):
         self.mlil_func = mlil_func
+        # Register every call writes its result to (target calling convention); None: calls write none
+        self.return_register = mlil_func.target.calls.return_register
 
         # Definitions: (block_idx, instr_idx) -> SSADef
         self.definitions: Dict[Tuple[int, int], SSADef] = {}
@@ -160,7 +162,7 @@ class RegisterResolver:
         # var_key is ('reg', index) or ('global', index)
         self.reaching_defs_entry: Dict[int, Dict[Tuple[str, int], Set[SSADef]]] = {}
 
-        # Local variable names for REGS/GLOBALS optimization
+        # Local variable names for register and global definitions
         # (block_idx, instr_idx) -> var_name
         self.def_var_names: Dict[Tuple[int, int], str] = {}
         self._var_counters: Dict[str, int] = {}  # base_name -> counter
@@ -182,17 +184,17 @@ class RegisterResolver:
         return f'{base}_v{count}'
 
     def _assign_var_names(self):
-        '''Assign local variable names to REGS/GLOBALS definitions that have uses'''
+        '''Assign local variable names to register and global definitions that have uses'''
         for key, ssa_def in self.definitions.items():
             if ssa_def.use_count == 0 and not ssa_def.is_live_out:
                 continue  # Dead, no var needed
 
             # Generate var name based on type
             if ssa_def.is_global:
-                continue  # Globals are emitted as literal GLOBALS[i], no local name
+                continue  # Globals are emitted as the global itself, no local name
 
             elif ssa_def.is_call:
-                base = 'reg0'
+                base = f'reg{self.return_register}'
 
             elif ssa_def.reg_index >= 0:
                 base = f'reg{ssa_def.reg_index}'
@@ -257,13 +259,14 @@ class RegisterResolver:
                 key = (block_idx, instr_idx)
 
                 # Record definitions
-                if isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
-                    ssa_def = SSADef(block_idx, instr_idx, 0, instr, is_call=True)
-                    self.definitions[key] = ssa_def
-                    current_def[('reg', 0)] = ssa_def
+                if isinstance(instr, MLILCall):
+                    if self.return_register is not None:
+                        ssa_def = SSADef(block_idx, instr_idx, self.return_register, instr, is_call=True)
+                        self.definitions[key] = ssa_def
+                        current_def[('reg', self.return_register)] = ssa_def
 
                 elif isinstance(instr, MLILStoreReg):
-                    is_call = isinstance(instr.value, (MLILCall, MLILSyscall, MLILCallScript))
+                    is_call = isinstance(instr.value, MLILCall)
                     ssa_def = SSADef(block_idx, instr_idx, instr.index, instr, is_call=is_call)
                     self.definitions[key] = ssa_def
                     current_def[('reg', instr.index)] = ssa_def
@@ -376,8 +379,9 @@ class RegisterResolver:
                 # Collect uses of vars not yet defined locally
                 self._collect_var_uses(instr, entry_uses, local_defs)
                 # Collect local definitions
-                if isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
-                    local_defs.add(('reg', 0))
+                if isinstance(instr, MLILCall):
+                    if self.return_register is not None:
+                        local_defs.add(('reg', self.return_register))
 
                 elif isinstance(instr, MLILStoreReg):
                     local_defs.add(('reg', instr.index))
@@ -400,7 +404,7 @@ class RegisterResolver:
 
     def _collect_var_uses(self, instr: MediumLevelILInstruction,
                           entry_uses: Set[Tuple[str, int]], local_defs: Set[Tuple[str, int]]):
-        '''Collect REGS/GLOBALS uses that are not locally defined'''
+        '''Collect register and global uses that are not locally defined'''
         def visit(expr):
             if isinstance(expr, MLILLoadReg):
                 var_key = ('reg', expr.index)
@@ -439,7 +443,7 @@ class RegisterResolver:
                 if expr.value:
                     visit(expr.value)
 
-            elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+            elif isinstance(expr, MLILCall):
                 for arg in expr.args:
                     visit(arg)
 
@@ -448,7 +452,7 @@ class RegisterResolver:
     def _count_uses(self, instr: MediumLevelILInstruction,
                     block_idx: int, instr_idx: int,
                     current_def: Dict[Tuple[str, int], SSADef]):
-        '''Count REGS/GLOBALS uses in an instruction'''
+        '''Count register and global uses in an instruction'''
 
         def visit(expr):
             if isinstance(expr, MLILLoadReg):
@@ -477,7 +481,7 @@ class RegisterResolver:
             elif isinstance(expr, MLILAddressOf):
                 visit(expr.operand)
 
-            elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+            elif isinstance(expr, MLILCall):
                 for arg in expr.args:
                     visit(arg)
 
@@ -505,7 +509,7 @@ class RegisterResolver:
 
     def _mark_live_out_before(self, block_idx: int, instr_idx: int):
         '''Mark registers as live-out before a return instruction'''
-        # Find the last definition of REG[0] before this point
+        # Find the last definition of the return register before this point
         block = self.mlil_func.basic_blocks[block_idx]
         for i in range(instr_idx - 1, -1, -1):
             instr = block.instructions[i]
@@ -513,12 +517,12 @@ class RegisterResolver:
 
             if key in self.definitions:
                 ssa_def = self.definitions[key]
-                if ssa_def.reg_index == 0:  # REG[0] is the return value register
+                if ssa_def.reg_index == self.return_register:
                     ssa_def.is_live_out = True
                     break
 
-            if isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
-                # Call defines REG[0]
+            if isinstance(instr, MLILCall):
+                # Call defines the return register
                 if key in self.definitions:
                     self.definitions[key].is_live_out = True
                 break
@@ -558,8 +562,8 @@ class RegisterResolver:
                             source_def = use.def_ref
                             break
 
-            elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
-                # Call directly defines REG[0]
+            elif isinstance(instr, MLILCall):
+                # Call directly defines the return register
                 source_def = ssa_def  # The call itself is the source
 
             if source_def is not None and source_def is not ssa_def:
@@ -639,14 +643,13 @@ class RegisterResolver:
 
     def get_return_var_name(self, block_idx: int, instr_idx: int) -> Optional[str]:
         '''Get the return value variable name at a return instruction'''
-        # Find the last definition of REG[0] before this return
+        # Find the last definition of the return register before this return
         block = self.mlil_func.basic_blocks[block_idx]
         for i in range(instr_idx - 1, -1, -1):
             key = (block_idx, i)
             if key in self.definitions:
                 ssa_def = self.definitions[key]
-                # REG[0] is the return value register (not GLOBALS)
-                if ssa_def.reg_index == 0 and not ssa_def.is_global:
+                if ssa_def.reg_index == self.return_register and not ssa_def.is_global:
                     return self.def_var_names.get(key)
 
         return None
@@ -660,7 +663,9 @@ class MLILToHLILConverter:
 
     def __init__(self, mlil_func: MediumLevelILFunction):
         self.mlil_func = mlil_func
-        self.hlil_func = HighLevelILFunction(mlil_func.name, mlil_func.start_addr, is_common_func=mlil_func.is_common_func)
+        self.hlil_func = HighLevelILFunction(mlil_func.name, mlil_func.start_addr, is_common_func=mlil_func.is_common_func,
+                                             target = mlil_func.target)
+        self.storage = mlil_func.target.storage
 
         self.block_successors: Dict[int, List[int]] = {}
         self.visited_blocks: Set[int] = set()
@@ -736,7 +741,7 @@ class MLILToHLILConverter:
                 collect_read_vars(expr.operand)
             elif isinstance(expr, MLILAddressOf):
                 collect_read_vars(expr.operand)
-            elif isinstance(expr, (MLILCall, MLILSyscall, MLILCallScript)):
+            elif isinstance(expr, MLILCall):
                 for arg in expr.args:
                     collect_read_vars(arg)
 
@@ -749,7 +754,7 @@ class MLILToHLILConverter:
                     collect_read_vars(inst.condition)
                 elif isinstance(inst, MLILRet) and inst.value:
                     collect_read_vars(inst.value)
-                elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+                elif isinstance(inst, MLILCall):
                     for arg in inst.args:
                         collect_read_vars(arg)
                 elif isinstance(inst, MLILStoreGlobal):
@@ -786,7 +791,7 @@ class MLILToHLILConverter:
             hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint)
             self.hlil_func.variables.append(hlil_var)
 
-        # Add REGS/GLOBALS local variables (they hold numeric values)
+        # Add the locals of register and global definitions (they hold numeric values)
         added_var_names: Set[str] = set()
         for var_name in self.resolver.def_var_names.values():
             if var_name not in added_var_names:
@@ -1380,7 +1385,7 @@ class MLILToHLILConverter:
                 stmt = HLILReturn(self._convert_expr(instr.value))
 
             else:
-                # Check if there's a _reg0 variable as the return value
+                # Check if there's a return register variable as the return value
                 ret_var = self.resolver.get_return_var_name(block_idx, instr_idx)
                 if ret_var is not None:
                     stmt = HLILReturn(HLILVar(HLILVariable(ret_var, None)))
@@ -1412,7 +1417,7 @@ class MLILToHLILConverter:
 
         elif isinstance(instr, MLILStoreGlobal):
             # Globals are shared state: always emit the literal array write
-            var = HLILVariable(kind=VariableKind.GLOBAL, index=instr.index)
+            var = HLILVariable(self.storage.global_name, kind=VariableKind.GLOBAL, index=instr.index)
             stmt = HLILAssign(HLILVar(var), self._convert_expr(instr.value))
             self._set_hlil_source_info(stmt, instr, mlil_index)
             result.append(stmt)
@@ -1422,8 +1427,8 @@ class MLILToHLILConverter:
             self._set_hlil_source_info(stmt, instr, mlil_index)
             result.append(stmt)
 
-        elif isinstance(instr, (MLILCall, MLILSyscall, MLILCallScript)):
-            # Call implicitly writes to REG[0]
+        elif isinstance(instr, MLILCall):
+            # Call implicitly writes to the return register
             call_expr = self._convert_expr(instr)
             use_count = self.resolver.get_use_count(block_idx, instr_idx)
             ssa_def = self.resolver.definitions.get(key)
@@ -1512,8 +1517,8 @@ class MLILToHLILConverter:
             if var_name is not None:
                 return HLILVar(HLILVariable(var_name, None))
 
-            # Default: emit REGS[n]
-            var = HLILVariable(kind=VariableKind.REG, index=expr.index)
+            # Default: emit the register itself
+            var = HLILVariable(self.storage.register_name, kind=VariableKind.REG, index=expr.index)
             return HLILVar(var)
 
         elif isinstance(expr, MLILLoadGlobal):
@@ -1524,21 +1529,16 @@ class MLILToHLILConverter:
             if var_name is not None:
                 return HLILVar(HLILVariable(var_name, None))
 
-            # Default: emit GLOBALS[n]
-            var = HLILVariable(kind=VariableKind.GLOBAL, index=expr.index)
+            # Default: emit the global itself
+            var = HLILVariable(self.storage.global_name, kind=VariableKind.GLOBAL, index=expr.index)
             return HLILVar(var)
 
         elif isinstance(expr, MLILCall):
             args = [self._convert_expr(arg) for arg in expr.args]
+            if expr.is_external:
+                return HLILExternalCall(expr.target, args)
+
             return HLILCall(str(expr.target), args)
-
-        elif isinstance(expr, MLILSyscall):
-            args = [self._convert_expr(arg) for arg in expr.args]
-            return HLILSyscall(expr.subsystem, expr.cmd, args)
-
-        elif isinstance(expr, MLILCallScript):
-            args = [self._convert_expr(arg) for arg in expr.args]
-            return HLILExternCall(f'{expr.module}:{expr.func}', args)
 
         else:
             return HLILConst(f'<{type(expr).__name__}>')

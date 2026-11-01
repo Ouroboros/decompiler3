@@ -3,7 +3,7 @@
 from typing import Optional
 from ir.mlil.mlil import MediumLevelILFunction
 from ir.hlil import HighLevelILFunction
-from ir.pipeline import Pipeline
+from ir.pipeline import PassObserver, Pipeline
 from ir.hlil.hlil_passes import (
     MLILToHLILPass,
     ExpressionSimplificationPass,
@@ -16,8 +16,9 @@ from .hlil_passes import FalcomTypeInferencePass
 from .parser.types_parser import Function
 
 
-def convert_falcom_mlil_to_hlil(mlil_func: MediumLevelILFunction, scp_func: Optional[Function] = None) -> HighLevelILFunction:
-    '''Convert MLIL function to HLIL with Falcom-specific type information'''
+def convert_falcom_mlil_to_hlil(mlil_func: MediumLevelILFunction, scp_func: Optional[Function] = None,
+                                observer: Optional[PassObserver] = None) -> HighLevelILFunction:
+    '''Convert MLIL function to HLIL with Falcom-specific type information; observer sees every pass'''
     pipeline = Pipeline()
     pipeline.add_pass(MLILToHLILPass())
 
@@ -32,4 +33,4 @@ def convert_falcom_mlil_to_hlil(mlil_func: MediumLevelILFunction, scp_func: Opti
     pipeline.add_pass(CommonReturnExtractionPass())
     pipeline.add_pass(DeadCodeEliminationPass())
 
-    return pipeline.run(mlil_func)
+    return pipeline.run(mlil_func, observer = observer)

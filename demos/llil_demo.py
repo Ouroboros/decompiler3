@@ -213,7 +213,7 @@ def create_sound_play_se():
     # LOAD_STACK(-32) x 8 - Load all 8 parameters
     # Will auto-detect and use fp-relative: STACK[fp + 0..7]
     for i in range(8):
-        builder.load_frame(i * WORD_SIZE)  # Load STACK[fp + i] = STACK[i]
+        builder.load_frame(i)  # Load STACK[fp + i] = STACK[i] (frame offsets are in slots)
 
     # SYSCALL(6, 0x10, 0x08)
     builder.syscall(6, 0x10, 0x08)

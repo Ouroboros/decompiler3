@@ -1,7 +1,8 @@
 # Differential Checker (`tools/diffcheck`)
 
-Checks that decompiled HLIL behaves like the original ED9 bytecode, function by function.
-It replaces the old structural validator (`tools/ir_semantic_validator.py`).
+Checks, function by function, that every layer of the decompiler behaves like the original ED9 bytecode:
+bytecode ≡ LLIL ≡ MLIL ≡ HLIL ≡ TypeScript. It replaces the old structural validator
+(`tools/ir_semantic_validator.py`).
 
 ```bash
 python -m tools.diffcheck tests/debug.dat
@@ -23,6 +24,8 @@ Exit code is 0 only when every function passes.
   a different order only makes unchanged functions look changed (they are then checked, never skipped).
 - Raw words are observed with their tag, so a decompiler that turns a Raw value into an Integer fails
   (`docs/CONTRACT.md`); `--lenient-raw` observes them by payload like integers.
+- `--per-pass` runs the IR after every pass (each MLIL pass iteration, each HLIL pass) on every run instead
+  of only the final LLIL, MLIL and HLIL; it is much slower and meant for debugging a pass.
 - Progress goes to stderr with timestamps: disassembly, every 100 decompiled functions and every 100
   checked functions.
 
@@ -96,6 +99,16 @@ Not modeled: string offsets (arithmetic or ordering on strings faults on both si
 addresses, global references through `*_DEREF` (the VM's bounds check halts before reaching that path),
 raw-tagged return values from callees, and the `CALL_SCRIPT` failure path that leaves `REGS[0]` unchanged.
 
+## LLIL and MLIL Interpreters
+
+Both run against the same world as the bytecode (`environment.py`), so their traces compare event by event.
+`llil_interp.py` executes the lifted stack IR: absolute stack slots, frame slot `f` holding parameter
+`num_params - f`, `sp` following `SpAdd` (a pointer at or above `sp` reads UNDEF like a popped slot), and a
+dereferenced parameter (or a copy of one) addressing caller memory. `mlil_interp.py` executes MLIL in or out
+of SSA form: SSA version 0 is the entry value, phi nodes read the source of the predecessor the block was
+entered from, and a variable whose address is taken also lives in memory so writes through pointers and call
+output parameters reach the SSA pseudo-definition `var#n = undef` that follows them.
+
 ## HLIL Interpreter
 
 Evaluates operators with the VM value semantics of the opcodes they were lifted from, and control flow as
@@ -130,7 +143,9 @@ pass-by-value `addr_of`) is not part of the check (`falcom/ed9/spec/vm_spec.md` 
 - Each run records at most 1024 events at first; both sides are compared on that prefix. When a truncated
   run still reached new blocks, the cap doubles (up to 16384) and the run is repeated, so long
   straight-line scripts are checked to the end while input-independent endless loops stay cheap.
-- `FAIL` reports, per divergence site, the first divergent event of both traces and, unless
-  `--no-localize`, the first HLIL stage whose output already diverges (`MLILToHLIL (or MLIL)` when the
-  divergence predates the HLIL passes). `--max-mismatches N` keeps searching until N distinct sites are found.
+- `FAIL` reports, per divergence site, the first divergent event of both traces and the stage: the first
+  diverging layer (`LLIL`, `MLIL`, `HLIL`, `TypeScript`) and, unless `--no-localize`, the first pass of
+  that layer whose output already diverges (`MLIL/CopyPropagationPass#2`, `HLIL/ControlFlowOptimizationPass`).
+  The pass is found by replaying the layer's passes on a fresh decompilation and running the IR after each
+  one (`ir/pipeline.py` observers). `--max-mismatches N` keeps searching until N distinct sites are found.
 - `ERROR` means the function could not be decompiled or the reference interpreter cannot model it.

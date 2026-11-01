@@ -1,6 +1,7 @@
-'''Per-function differential check: bytecode reference vs decompiled HLIL'''
+'''Per-function differential check: bytecode reference vs every layer (LLIL, MLIL, HLIL, TypeScript)'''
 
 import contextlib
+import copy
 import io
 import traceback
 from collections import Counter, deque
@@ -11,16 +12,17 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from falcom.ed9.module import ED9ModuleDecompiler
 from codegen import generate_typescript
 from falcom.ed9.vm_values import TYPE_ERROR
-from ir.hlil import (
-    CommonReturnExtractionPass, ControlFlowOptimizationPass, DeadCodeEliminationPass,
-    ExpressionSimplificationPass, HighLevelILFunction, HLILFormatter, MLILToHLILPass,
-)
+from ir.hlil import HighLevelILFunction, HLILFormatter
+from ir.llil import LowLevelILFunction
+from ir.mlil import MediumLevelILFunction
 
 from .bytecode_interp import (
     BytecodeInterpreter, collect_blocks, collect_constants, collect_global_indices, collect_reg_indices,
 )
 from .environment import DEFAULT_POOL, EVENT_FAULT, MAX_EVENTS, ORIGIN_RETURN, InputPlan, Origin, RunStatus, Trace
 from .hlil_interp import HLILInterpreter
+from .llil_interp import LLILInterpreter
+from .mlil_interp import MLILInterpreter
 from .symbolic import flip
 from .ts_parse import parse_typescript
 
@@ -48,17 +50,13 @@ REFERENCE_LIMITATIONS = frozenset({
     'stack_out_of_range', 'missing_fallthrough', 'bad_branch_target',
 })
 
-# Mirrors falcom/ed9/hlil_converter.py; used only to localize a divergence to one pass
-HLIL_STAGES = (
-    ('MLILToHLIL', MLILToHLILPass),
-    ('ExpressionSimplification', ExpressionSimplificationPass),
-    ('ControlFlowOptimization', ControlFlowOptimizationPass),
-    ('CommonReturnExtraction', CommonReturnExtractionPass),
-    ('DeadCodeElimination', DeadCodeEliminationPass),
-)
-
+# Layers compared with the bytecode, in pipeline order; a mismatch names the first diverging one
+LAYER_LLIL              = 'LLIL'
+LAYER_MLIL              = 'MLIL'
+LAYER_HLIL              = 'HLIL'
 # Stage reported when the HLIL matches the bytecode but the TypeScript emitted from it does not
 TYPESCRIPT_STAGE        = 'TypeScript'
+STAGE_SEPARATOR         = '/'
 
 
 class Verdict(Enum):
@@ -75,6 +73,8 @@ class CheckOptions:
     max_mismatches: int = DEFAULT_MAX_MISMATCHES
     # Observe Raw words with their tag, so Raw turned into Integer is a mismatch
     strict_raw: bool = True
+    # Compare the IR after every pass in every run, instead of replaying passes only to localize a mismatch
+    per_pass: bool = False
 
 
 @dataclass
@@ -82,9 +82,9 @@ class Mismatch:
     run: int
     index: int
     bytecode_event: str
-    hlil_event: str
+    candidate_event: str
     bytecode_status: str
-    hlil_status: str
+    candidate_status: str
     inputs: Dict[str, Any]
     stage: Optional[str] = None
     event_cap: int = 0
@@ -162,9 +162,9 @@ def build_pool(constants: Set[Any]) -> List[Any]:
 
 
 def decompile(decompiler: ED9ModuleDecompiler, func):
-    '''Run the production pipeline, silencing its progress output'''
+    '''Run the production pipeline, silencing its progress output; returns (llil, mlil, hlil)'''
     with contextlib.redirect_stdout(io.StringIO()):
-        return decompiler.decompile(func)
+        return decompiler.decompile_layers(func)
 
 
 @dataclass
@@ -174,6 +174,8 @@ class DecompiledFunction:
     hlil_text: Optional[str] = None
     ts_text: Optional[str] = None
     error: Optional[str] = None
+    llil: Optional[LowLevelILFunction] = None
+    mlil: Optional[MediumLevelILFunction] = None
 
     def texts(self) -> Dict[str, str]:
         '''Dump form; equal texts mean unchanged decompiler output'''
@@ -185,7 +187,7 @@ class DecompiledFunction:
 
 def decompile_function(decompiler: ED9ModuleDecompiler, func) -> DecompiledFunction:
     try:
-        hlil_func = decompile(decompiler, func)
+        llil_func, mlil_func, hlil_func = decompile(decompiler, func)
 
     except Exception as e:
         return DecompiledFunction(error = f'decompile: {type(e).__name__}: {e}')
@@ -195,9 +197,9 @@ def decompile_function(decompiler: ED9ModuleDecompiler, func) -> DecompiledFunct
         ts_text = generate_typescript(hlil_func)
 
     except Exception as e:
-        return DecompiledFunction(hlil_func, hlil_text, error = f'typescript: {type(e).__name__}: {e}')
+        return DecompiledFunction(hlil_func, hlil_text, error = f'typescript: {type(e).__name__}: {e}', llil = llil_func, mlil = mlil_func)
 
-    return DecompiledFunction(hlil_func, hlil_text, ts_text)
+    return DecompiledFunction(hlil_func, hlil_text, ts_text, llil = llil_func, mlil = mlil_func)
 
 
 class FunctionChecker:
@@ -222,8 +224,29 @@ class FunctionChecker:
     def _reference(self, plan: InputPlan):
         return BytecodeInterpreter(self.parser, self.func, plan, blocks = self.blocks, max_events = self.event_cap).run()
 
-    def _candidate(self, hlil_func, plan: InputPlan) -> Trace:
-        return HLILInterpreter(hlil_func, self.param_count, plan, max_events = self.event_cap).run()
+    def _candidate(self, ir_func, plan: InputPlan) -> Trace:
+        '''Run any layer's IR: LLIL, MLIL (SSA or not) or HLIL (also the TypeScript parsed back)'''
+        if isinstance(ir_func, LowLevelILFunction):
+            return LLILInterpreter(ir_func, plan, max_events = self.event_cap).run()
+
+        if isinstance(ir_func, MediumLevelILFunction):
+            return MLILInterpreter(ir_func, self.param_count, plan, max_events = self.event_cap).run()
+
+        return HLILInterpreter(ir_func, self.param_count, plan, max_events = self.event_cap).run()
+
+    def _stage_snapshots(self) -> List[Tuple[str, Any]]:
+        '''The IR after every pass of a fresh decompilation, copied before the next pass changes it'''
+        snapshots: List[Tuple[str, Any]] = []
+
+        def observer(layer: str):
+            return lambda name, ir: snapshots.append((f'{layer}{STAGE_SEPARATOR}{name}', copy.deepcopy(ir)))
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            snapshots.append((LAYER_LLIL, self.decompiler.lift(self.func)))
+            self.decompiler.to_mlil(self.func, observer(LAYER_MLIL))
+            self.decompiler.to_hlil(self.func, observer(LAYER_HLIL))
+
+        return snapshots
 
     @classmethod
     def _context(cls, origin: Origin, trace: Trace) -> Any:
@@ -289,6 +312,13 @@ class FunctionChecker:
             report.error = f'typescript: {type(e).__name__}: {e}'
             return report
 
+        if self.options.per_pass:
+            layers = self._stage_snapshots() + [(TYPESCRIPT_STAGE, ts_func)]
+
+        else:
+            layers = [(LAYER_LLIL, decompiled.llil), (LAYER_MLIL, decompiled.mlil), (LAYER_HLIL, hlil_func), (TYPESCRIPT_STAGE, ts_func)]
+            layers = [(layer, ir) for layer, ir in layers if ir is not None]
+
         covered_blocks: Set[int] = set()
         covered_edges: Set[Tuple[int, int]] = set()
         queue: deque = deque()
@@ -306,18 +336,19 @@ class FunctionChecker:
                 report.error = f'reference interpreter: {reference.trace.events[-1]}'
                 break
 
-            candidate = self._candidate(hlil_func, plan)
             report.runs = run + 1
             new_edges = reference.covered_edges - covered_edges
             new_blocks = reference.covered_blocks - covered_blocks
             covered_edges |= reference.covered_edges
             covered_blocks |= reference.covered_blocks
             stage = None
-            index = first_divergence(reference.trace, candidate)
-            if index is None:
-                candidate = self._candidate(ts_func, plan)
+            index = None
+            for layer, ir_func in layers:
+                candidate = self._candidate(ir_func, plan)
                 index = first_divergence(reference.trace, candidate)
-                stage = TYPESCRIPT_STAGE
+                if index is not None:
+                    stage = layer
+                    break
 
             if index is not None:
                 report.verdict = Verdict.FAIL
@@ -328,11 +359,9 @@ class FunctionChecker:
                         run, index, _event_text(reference.trace, index), _event_text(candidate, index),
                         reference.trace.status.value, candidate.status.value, plan.describe(),
                     )
-                    if stage is not None:
-                        mismatch.stage = stage
-
-                    elif self.options.localize:
-                        mismatch.stage = self._localize(run, forced, reference.trace)
+                    mismatch.stage = stage
+                    if stage in (LAYER_MLIL, LAYER_HLIL) and self.options.localize:
+                        mismatch.stage = self._localize(stage, run, forced, reference.trace)
 
                     mismatch.event_cap = self.event_cap
 
@@ -363,22 +392,29 @@ class FunctionChecker:
         report.uncovered_blocks = [f'0x{offset:X}' for offset in sorted(set(self.blocks) - covered_blocks)]
         return report
 
-    def _localize(self, run: int, forced: Dict[Origin, Any], reference: Trace) -> str:
-        '''Name the first HLIL stage whose output already diverges for the failing input'''
+    def _localize(self, layer: str, run: int, forced: Dict[Origin, Any], reference: Trace) -> str:
+        '''Name the first pass of the diverging layer whose output already diverges for the failing input
+
+        The layer before it matched, so its passes are replayed on a fresh decompilation and the IR is
+        run after each one.
+        '''
+        found: List[str] = []
+
+        def observer(name: str, ir):
+            if not found and first_divergence(reference, self._candidate(ir, self._plan(run, forced))) is not None:
+                found.append(f'{layer}{STAGE_SEPARATOR}{name}')
+
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 self.decompiler.lift(self.func)
-                data = self.decompiler.to_mlil(self.func)
-                for stage_name, stage_class in HLIL_STAGES:
-                    data = stage_class().run(data)
-                    candidate = self._candidate(data, self._plan(run, forced))
-                    if first_divergence(reference, candidate) is not None:
-                        return stage_name if stage_name != HLIL_STAGES[0][0] else f'{stage_name} (or MLIL)'
+                self.decompiler.to_mlil(self.func, observer if layer == LAYER_MLIL else None)
+                if layer == LAYER_HLIL:
+                    self.decompiler.to_hlil(self.func, observer)
 
         except Exception as e:
-            return f'localize failed: {type(e).__name__}: {e}'
+            return f'{layer} (localize failed: {type(e).__name__}: {e})'
 
-        return 'not reproduced stage by stage'
+        return found[0] if found else f'{layer} (not reproduced pass by pass)'
 
 
 def check_functions(parser, functions, options: CheckOptions, progress = None,

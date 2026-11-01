@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from falcom.ed9.calls import ED9ScriptCall, ED9Syscall
 from falcom.ed9.vm_values import Pointer, VMFault, normalize
 
 from .values import observable
@@ -42,6 +43,17 @@ MAX_STEPS               = 2_000_000
 
 
 Origin = Tuple[Any, ...]
+
+
+def call_event_key(target) -> Tuple[Any, ...]:
+    '''Event key prefix of a call: a module function name or an ED9 call target'''
+    if isinstance(target, ED9Syscall):
+        return (EVENT_SYSCALL, int(target.subsystem), int(target.cmd))
+
+    if isinstance(target, ED9ScriptCall):
+        return (EVENT_EXTERN, str(target.module), str(target.func))
+
+    return (EVENT_CALL, str(target))
 
 
 @dataclass

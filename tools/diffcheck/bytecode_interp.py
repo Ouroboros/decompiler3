@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from falcom.ed9.disasm import BasicBlock, ED9Opcode, Instruction
 from falcom.ed9.parser.types_scp import ScpValue
 from falcom.ed9.vm_values import COMPARISON_OPS, EQUALITY_OPS, Op, Pointer, Raw, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
-from ir.llil import WORD_SIZE
+from falcom.ed9.vm_values import WORD_SIZE
 
 from .environment import (
     EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS,

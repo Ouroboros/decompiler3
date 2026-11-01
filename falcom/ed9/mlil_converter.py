@@ -5,7 +5,6 @@ from ir.mlil import *
 from ir.pipeline import *
 from ir.mlil.mlil_passes import *
 from ir.mlil.passes import SSATypeInferencePass
-from .constant_folder import ED9ConstantFolder
 from .mlil_passes import *
 from .type_signatures import ED9TypeSignatures
 
@@ -13,7 +12,8 @@ from .type_signatures import ED9TypeSignatures
 def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
                                  parser=None,
                                  optimize: bool = True,
-                                 infer_types: bool = True) -> MediumLevelILFunction:
+                                 infer_types: bool = True,
+                                 observer: PassObserver = None) -> MediumLevelILFunction:
     '''Convert LLIL function to MLIL with Falcom-specific handling
 
     Args:
@@ -21,6 +21,7 @@ def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
         parser: Optional ScpParser for extracting function signatures
         optimize: Whether to run SSA optimizations (default True)
         infer_types: Whether to run type inference (default True)
+        observer: Called with every pass name and the MLIL it left (ir/pipeline.py)
     '''
     print(f'Translating {llil_func.name} @ 0x{llil_func.start_addr:08X}')
 
@@ -32,7 +33,7 @@ def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
     # Phase 2: SSA-based optimization (optional)
     if optimize:
         pipeline.add_pass(SSAConversionPass())
-        pipeline.add_pass(SSAOptimizationPass(folder = ED9ConstantFolder))
+        pipeline.add_pass(SSAOptimizationPass(folder = llil_func.target.values))
 
         # Type inference (on SSA form)
         if infer_types:
@@ -43,4 +44,4 @@ def convert_falcom_llil_to_mlil(llil_func: LowLevelILFunction,
         # pipeline.add_pass(DeadCodeEliminationPass())  # TODO: check if needed
         pipeline.add_pass(RegGlobalValuePropagationPass())
 
-    return pipeline.run(llil_func)
+    return pipeline.run(llil_func, observer = observer)

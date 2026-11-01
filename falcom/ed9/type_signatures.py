@@ -2,6 +2,7 @@
 
 from typing import Optional
 from ir.mlil.mlil_types import MLILType, FunctionSignatureDB
+from .calls import ED9ScriptCall, ED9Syscall
 from .parser.scp import ScpParser
 
 
@@ -35,6 +36,12 @@ class ED9TypeSignatures(FunctionSignatureDB):
         return self.script_call_sigs.get((module, func))
 
     def get_call_return_type(self, target) -> Optional[MLILType]:
+        if isinstance(target, ED9Syscall):
+            return self.get_syscall_return_type(target.subsystem, target.cmd)
+
+        if isinstance(target, ED9ScriptCall):
+            return self.get_script_call_return_type(target.module, target.func)
+
         if not isinstance(target, str):
             return None
 

@@ -31,8 +31,6 @@ from ..mlil import (
     MLILBitwiseNot,
     MLILRet,
     MLILCall,
-    MLILSyscall,
-    MLILCallScript,
     MLILBinaryOp,
     MLILUnaryOp,
     MLILAddressOf,
@@ -121,7 +119,7 @@ class CopyPropagationPass(Pass):
         if isinstance(node, (MLILUnaryOp, MLILAddressOf)):
             return self._count_uses(node.operand, var)
 
-        if isinstance(node, (MLILCall, MLILSyscall, MLILCallScript)):
+        if isinstance(node, MLILCall):
             return sum(self._count_uses(arg, var) for arg in node.args)
 
         if isinstance(node, (MLILSetVarSSA, MLILStoreGlobal, MLILStoreReg)):
@@ -155,7 +153,7 @@ class CopyPropagationPass(Pass):
                 for later in block.instructions[idx + 1:]:
                     # Operands are read before the instruction writes anything
                     local += self._count_uses(later, copy_var)
-                    if isinstance(later, (MLILCall, MLILSyscall, MLILCallScript, MLILStoreDeref)):
+                    if isinstance(later, (MLILCall, MLILStoreDeref)):
                         break
 
                     if isinstance(later, MLILSetVarSSA) and later.var.base_var.name == source_name:
@@ -184,17 +182,11 @@ class CopyPropagationPass(Pass):
                 if new_value is not inst.value:
                     return MLILRet(new_value, address = inst.address).copy_metadata_from(inst)
 
-        elif isinstance(inst, (MLILCall, MLILSyscall, MLILCallScript)):
+        elif isinstance(inst, MLILCall):
             new_args = [self._replace_in_expr(arg, copies) for arg in inst.args]
             if any(new_args[i] is not inst.args[i] for i in range(len(inst.args))):
                 if isinstance(inst, MLILCall):
                     return MLILCall(inst.target, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILSyscall):
-                    return MLILSyscall(inst.subsystem, inst.cmd, new_args, address = inst.address).copy_metadata_from(inst)
-
-                elif isinstance(inst, MLILCallScript):
-                    return MLILCallScript(inst.module, inst.func, new_args, address = inst.address).copy_metadata_from(inst)
 
         return inst
 

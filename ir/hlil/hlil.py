@@ -3,6 +3,7 @@
 from typing import Any, List, Optional, Union
 from enum import auto
 from common import *
+from ir.core import CallTarget, Target, ValueOp
 
 
 class HLILTypeKind(IntEnum2):
@@ -52,6 +53,29 @@ class UnaryOp(IntEnum2):
     DEREF   = auto()
 
 
+# Operators whose result on constants the target's value semantics define
+HLIL_VALUE_OPS = {
+    BinaryOp.ADD:       ValueOp.ADD,
+    BinaryOp.SUB:       ValueOp.SUB,
+    BinaryOp.MUL:       ValueOp.MUL,
+    BinaryOp.DIV:       ValueOp.DIV,
+    BinaryOp.MOD:       ValueOp.MOD,
+    BinaryOp.EQ:        ValueOp.EQ,
+    BinaryOp.NE:        ValueOp.NE,
+    BinaryOp.LT:        ValueOp.LT,
+    BinaryOp.LE:        ValueOp.LE,
+    BinaryOp.GT:        ValueOp.GT,
+    BinaryOp.GE:        ValueOp.GE,
+    BinaryOp.AND:       ValueOp.LOGICAL_AND,
+    BinaryOp.OR:        ValueOp.LOGICAL_OR,
+    BinaryOp.BIT_AND:   ValueOp.BIT_AND,
+    BinaryOp.BIT_OR:    ValueOp.BIT_OR,
+    BinaryOp.BIT_XOR:   ValueOp.BIT_XOR,
+    BinaryOp.SHL:       ValueOp.SHL,
+    BinaryOp.SHR:       ValueOp.SHR,
+}
+
+
 class HLILOperation(IntEnum2):
     '''HLIL operation types'''
     # Control flow statements
@@ -77,7 +101,7 @@ class HLILOperation(IntEnum2):
     HLIL_UNARY_OP       = auto()
     HLIL_ADDRESS_OF     = auto()
     HLIL_CALL           = auto()
-    HLIL_SYSCALL        = auto()
+    HLIL_EXTERNAL_CALL  = auto()
 
 
 class HLILInstruction:
@@ -85,7 +109,7 @@ class HLILInstruction:
 
     def __init__(self, operation: HLILOperation):
         self.operation = operation
-        self.address: int = 0  # Source SCP bytecode offset (inherited from MLIL)
+        self.address: int = 0  # Source bytecode offset (inherited from MLIL)
         self.mlil_index: int = -1  # Source MLIL instruction index (for debugging/mapping)
 
     def __str__(self) -> str:
@@ -126,15 +150,16 @@ class HLILVariable:
         self.type_hint = type_hint
         self.default_value = default_value
         self.kind = kind if kind is not None else VariableKind.LOCAL
-        self.index = index  # For GLOBAL/REG: the slot index
+        self.index = index  # For GLOBAL/REG: the slot index; name is then the storage space (StorageModel)
         self.flags = flags  # For PARAM: the target's parameter flags (IRParameter.flags)
 
-    def __str__(self) -> str:
-        if self.kind == VariableKind.GLOBAL:
-            return f'GLOBALS[{self.index}]'
+    @property
+    def is_storage(self) -> bool:
+        return self.kind in (VariableKind.GLOBAL, VariableKind.REG)
 
-        elif self.kind == VariableKind.REG:
-            return f'REGS[{self.index}]'
+    def __str__(self) -> str:
+        if self.is_storage:
+            return f'{self.name}[{self.index}]'
 
         return self.name
 
@@ -296,37 +321,19 @@ class HLILCall(HLILExpression):
         return f'HLILCall({self.func_name}, {len(self.args)} args)'
 
 
-class HLILSyscall(HLILExpression):
-    '''System call'''
+class HLILExternalCall(HLILExpression):
+    '''Call of something outside the module; target is a CallTarget defined by the target'''
 
-    def __init__(self, subsystem: str, cmd: str, args: List[HLILExpression]):
-        super().__init__(HLILOperation.HLIL_SYSCALL)
-        self.subsystem = subsystem
-        self.cmd = cmd
+    def __init__(self, target: CallTarget, args: List[HLILExpression]):
+        super().__init__(HLILOperation.HLIL_EXTERNAL_CALL)
+        self.target = target
         self.args = args
 
     def __str__(self) -> str:
-        args_str = ', '.join(str(arg) for arg in self.args)
-        return f'{self.subsystem}.{self.cmd}({args_str})'
+        return self.target.format_call([str(arg) for arg in self.args])
 
     def __repr__(self) -> str:
-        return f'HLILSyscall({self.subsystem}.{self.cmd})'
-
-
-class HLILExternCall(HLILExpression):
-    '''External module call (e.g., script call)'''
-
-    def __init__(self, target: str, args: List[HLILExpression]):
-        super().__init__(HLILOperation.HLIL_CALL)
-        self.target = target  # Format: "module:func"
-        self.args = args
-
-    def __str__(self) -> str:
-        args_str = ', '.join(str(arg) for arg in self.args)
-        return f'{self.target}({args_str})'
-
-    def __repr__(self) -> str:
-        return f'HLILExternCall({self.target}, {len(self.args)} args)'
+        return f'HLILExternalCall({self.target!r}, {len(self.args)} args)'
 
 
 # ============================================================================
@@ -576,13 +583,14 @@ class HLILDebug(HLILComment):
 class HighLevelILFunction:
     '''HLIL function container'''
 
-    def __init__(self, name: str, start_addr: int = 0, *, is_common_func: bool = False):
+    def __init__(self, name: str, start_addr: int = 0, *, is_common_func: bool = False, target: type[Target] = Target):
         self.name = name
         self.start_addr = start_addr
         self.body = HLILBlock()
         self.variables: List[HLILVariable] = []  # Local variables
         self.parameters: List[HLILVariable] = []  # Parameters
         self.is_common_func = is_common_func
+        self.target = target
 
     def add_statement(self, stmt: HLILStatement):
         '''Add a statement to the function body'''

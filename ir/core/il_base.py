@@ -8,6 +8,11 @@ DEBUG_LINE  = 'line'
 DEBUG_LOG   = 'log'
 DEBUG_KINDS = (DEBUG_LINE, DEBUG_LOG)
 
+# Parameter type names (IRParameter.type_name) a target maps its parameter kinds to
+PARAM_TYPE_INT      = 'int'
+PARAM_TYPE_STR      = 'str'
+PARAM_TYPE_POINTER  = 'pointer'
+
 
 class ILInstruction(ABC):
     '''Base class for all IL instructions'''

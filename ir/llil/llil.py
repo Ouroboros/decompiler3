@@ -9,9 +9,6 @@ if TYPE_CHECKING:
     # Forward declaration for type hints
     pass
 
-# Constants
-WORD_SIZE = 4  # 4 bytes per word
-
 
 class LowLevelILOperation(IntEnum2):
     '''Atomic LLIL operations'''
@@ -63,18 +60,13 @@ class LowLevelILOperation(IntEnum2):
     LLIL_NOP                = 52    # no operation
 
     # VM specific
-    LLIL_SYSCALL            = 60    # system call
     LLIL_DEBUG              = 61    # debug info
     LLIL_STACK_ADDR         = 62    # address of stack location (sp + offset)
     LLIL_DEREF_LOAD         = 63    # load through a pointer value
     LLIL_DEREF_STORE        = 64    # store through a pointer value
 
-    # Falcom VM specific (user-defined extensions)
-    LLIL_PUSH_CALLER_FRAME  = 1000  # Falcom VM: push caller frame (4 values)
-    LLIL_CALL_SCRIPT        = 1001  # Falcom VM: call script function
-
-    # User-defined extensions (reserved range: 1002+)
-    LLIL_USER_DEFINED       = 1002  # Start of user-defined operations
+    # Target-defined extensions (reserved range: 1000+)
+    LLIL_USER_DEFINED       = 1000  # Start of target-defined operations
 
 
 class LowLevelILInstruction(ILInstruction):
@@ -120,12 +112,12 @@ class LowLevelILStackStore(LowLevelILStatement):
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0, slot_index: int = None):
         super().__init__(LowLevelILOperation.LLIL_STACK_STORE)
         self.value = value
-        self.offset = offset  # Byte offset
+        self.offset = offset  # Slot offset relative to sp
         self.slot_index = slot_index  # Absolute stack slot index
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
-        word_offset = self.offset // WORD_SIZE
+        # Offsets are in stack slots
+        word_offset = self.offset
         if word_offset == 0:
             return f'STACK[sp] = {self.value}'
         elif word_offset > 0:
@@ -139,7 +131,7 @@ class LowLevelILStackLoad(LowLevelILExpr):
 
     def __init__(self, offset: int, slot_index: int):
         super().__init__(LowLevelILOperation.LLIL_STACK_LOAD)
-        self.offset = offset  # Byte offset
+        self.offset = offset  # Slot offset relative to sp
         self.slot_index = slot_index  # Absolute stack slot index
 
     def __eq__(self, other):
@@ -149,8 +141,8 @@ class LowLevelILStackLoad(LowLevelILExpr):
         return object.__hash__(self)
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
-        word_offset = self.offset // WORD_SIZE
+        # Offsets are in stack slots
+        word_offset = self.offset
         if word_offset == 0:
             return f'STACK[sp<{self.slot_index}>]'
         elif word_offset > 0:
@@ -164,12 +156,12 @@ class LowLevelILFrameLoad(LowLevelILExpr):
 
     def __init__(self, offset: int = 0):
         super().__init__(LowLevelILOperation.LLIL_FRAME_LOAD)
-        self.offset = offset  # Byte offset relative to frame
+        self.offset = offset  # Slot offset relative to frame
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
+        # Offsets are in stack slots
         # Always show explicit offset: fp + 0, fp + 1, etc.
-        word_offset = self.offset // WORD_SIZE
+        word_offset = self.offset
         if word_offset >= 0:
             return f'STACK[fp + {word_offset}]'
         else:
@@ -182,12 +174,12 @@ class LowLevelILFrameStore(LowLevelILStatement):
     def __init__(self, value: Union['LowLevelILInstruction', int, str], offset: int = 0):
         super().__init__(LowLevelILOperation.LLIL_FRAME_STORE)
         self.value = value
-        self.offset = offset  # Byte offset relative to frame
+        self.offset = offset  # Slot offset relative to frame
 
     def __str__(self) -> str:
-        # Convert byte offset to word offset for display
+        # Offsets are in stack slots
         # Always show explicit offset: fp + 0, fp + 1, etc.
-        word_offset = self.offset // WORD_SIZE
+        word_offset = self.offset
         if word_offset >= 0:
             return f'STACK[fp + {word_offset}] = {self.value}'
         else:
@@ -545,26 +537,6 @@ class LowLevelILDebug(LowLevelILStatement):
         return f'dbg_{self.debug_type.lower()} {self.value}'
 
 
-# === VM Specific ===
-
-class LowLevelILSyscall(LowLevelILStatement):
-    '''System call (statement)'''
-
-    def __init__(self, subsystem: int, cmd: int, argc: int, args: List['LowLevelILExpr'] = None):
-        super().__init__(LowLevelILOperation.LLIL_SYSCALL)
-        self.subsystem = subsystem
-        self.cmd = cmd
-        self.argc = argc
-        self.args = args if args is not None else []  # Argument expressions (from vstack)
-
-    def __str__(self) -> str:
-        if self.args:
-            args_str = ', '.join(str(arg) for arg in self.args)
-            return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {args_str})'
-        else:
-            return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'
-
-
 # === Helper Functions ===
 
 def default_label_for_addr(addr: int) -> str:
@@ -649,9 +621,11 @@ class LowLevelILBasicBlock:
 class LowLevelILFunction:
     '''Function containing LLIL basic blocks (following BN design)'''
 
-    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False):
+    def __init__(self, name: str, start_addr: int = 0, params: List['IRParameter'] = None, *, is_common_func: bool = False,
+                 target: type[Target] = Target):
         self.name = name
         self.start_addr = start_addr
+        self.target = target
         self.params: List['IRParameter'] = params or []
         self.basic_blocks: List[LowLevelILBasicBlock] = []
         self._block_map: dict[int, LowLevelILBasicBlock] = {}  # addr -> block
