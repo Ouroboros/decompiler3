@@ -14,4 +14,7 @@ __all__ = [
     'IRParameter',
     'ILOptions',
     'ILModule',
+    'DEBUG_LINE',
+    'DEBUG_LOG',
+    'DEBUG_KINDS',
 ]

@@ -27,14 +27,14 @@ Exit code is 0 only when no difference is found.
 | `writer` | Parsing and writing back with the original layout (`falcom/ed9/parser/writer.py`) must give the original bytes; the code range is generated only by the instruction encoder | — |
 | `code` | Per function, the instructions decoded linearly from the entry to the next function (the last one to the string pool), dead code included, must re-encode to the original bytes | — |
 | `parser` | Parser model (`ScpParser`) | — |
-| `llil` | Function name, `is_common_func`, parameter types and defaults; file-level items, `name_hash`, `byte06` and debug records from the LLIL module metadata | `LowLevelILDebug` (`line`, `log`) with address |
+| `llil` | Function name, `is_common_func`, parameter flags and defaults; file-level items, `name_hash`, `byte06` and debug records from the LLIL module metadata | `LowLevelILDebug` (`line`, `log`) with address |
 | `mlil` | As LLIL, from `source_params` and the MLIL module | `MLILDebug` (`line`, `log`) with address |
-| `hlil` | Function name, `is_common_func`, defaults; module items as LLIL, from the HLIL module | Line and log statements with address |
+| `hlil` | Function name, `is_common_func`, parameter flags, defaults; module items as LLIL, from the HLIL module | `HLILDebug` statements (`line`, `log`) with address |
 | `ts` | Not audited: the TypeScript file-level format is deferred | `// line(N)` / `// log(N)` comments, values only (no addresses) |
 
 Items a layer does not represent are reported as `missing`. Values are compared with their tag, so a
-Raw default that became an Integer is a difference. Parameter types of LLIL and MLIL are Python type names
-mapped back to the raw flags (`Value32` 1, `str` 2, `Pointer` 5, `Nullable32` 9, `NullableStr` 10).
+Raw default that became an Integer is a difference. Parameter flags are the raw 32-bit values kept in
+`IRParameter.flags` (LLIL, MLIL) and `HLILVariable.flags` (HLIL parameters).
 `name_hash` is regenerable from the name (`falcom/ed9/parser/crc32.py`); the parser layer reports the
 computed value and the audit compares it with the stored one.
 

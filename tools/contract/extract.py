@@ -11,28 +11,16 @@ from codegen import generate_typescript
 from falcom.ed9.disasm import ED9Opcode
 from falcom.ed9.module import ED9ModuleDecompiler
 from falcom.ed9.parser.types_parser import FunctionCallDebugInfo
-from falcom.ed9.parser.types_scp import RawInt, ScpParamType, ScpValue
+from falcom.ed9.parser.types_scp import RawInt, ScpValue
 from ir.hlil import (
-    HighLevelILFunction, HLILBlock, HLILComment, HLILDoWhile, HLILFor, HLILIf, HLILStatement, HLILSwitch, HLILWhile,
+    HighLevelILFunction, HLILBlock, HLILDebug, HLILDoWhile, HLILFor, HLILIf, HLILStatement, HLILSwitch, HLILWhile,
 )
-from ir.core import ILModule
+from ir.core import DEBUG_KINDS, DEBUG_LINE, DEBUG_LOG, ILModule
 from ir.llil import LowLevelILDebug, LowLevelILFunction
 from ir.mlil import MediumLevelILFunction, MLILDebug
 
 from .model import TAG_FLOAT, TAG_INT, TAG_RAW, TAG_STR, NO_CALLEE, CodeItems, FunctionEntry, ModuleTables, Value
 
-
-DEBUG_LINE  = 'line'
-DEBUG_LOG   = 'log'
-
-# Python parameter types of the lifter (ScpParamFlags.get_python_type) back to the raw flags
-PYTHON_TYPE_FLAGS = {
-    'Value32':      ScpParamType.Value,
-    'str':          ScpParamType.Offset,
-    'Nullable32':   ScpParamType.NullableValue,
-    'NullableStr':  ScpParamType.NullableOffset,
-    'Pointer':      ScpParamType.Pointer,
-}
 
 SCP_VALUE_TAGS = {
     ScpValue.Type.Raw:      TAG_RAW,
@@ -41,7 +29,6 @@ SCP_VALUE_TAGS = {
     ScpValue.Type.String:   TAG_STR,
 }
 
-HLIL_DEBUG_COMMENT  = re.compile(r'^(line|log)\((-?\d+)\)$')
 TS_DEBUG_COMMENT    = re.compile(r'//\s*(line|log)\((-?\d+)\)')
 
 
@@ -164,13 +151,17 @@ def tables_from_module(module: ILModule, entries: Dict[str, FunctionEntry]) -> M
     )
 
 
+def _flags(params) -> Optional[tuple]:
+    flags = tuple(param.flags for param in params)
+    return None if None in flags else flags
+
+
 def entry_from_params(name: str, params, is_common: bool) -> FunctionEntry:
-    '''Function table items an LLIL or MLIL function keeps: IRParameter type names and default values'''
-    flags = tuple(PYTHON_TYPE_FLAGS.get(param.type_name) for param in params)
+    '''Function table items an LLIL or MLIL function keeps: IRParameter flags and default values'''
     return FunctionEntry(
         name = name,
         is_common = bool(is_common),
-        param_flags = None if None in flags else tuple(int(flag) for flag in flags),
+        param_flags = _flags(params),
         defaults = tuple(value_of_python(param.default_value) if param.default_value is not None else None for param in params),
     )
 
@@ -179,6 +170,7 @@ def entry_from_hlil(func: HighLevelILFunction) -> FunctionEntry:
     return FunctionEntry(
         name = func.name,
         is_common = bool(func.is_common_func),
+        param_flags = _flags(func.parameters),
         defaults = tuple(value_of_python(param.default_value) if param.default_value is not None else None for param in func.parameters),
     )
 
@@ -205,7 +197,7 @@ def code_from_mlil(func: MediumLevelILFunction) -> CodeItems:
     items = CodeItems()
     for block in func.basic_blocks:
         for inst in block.instructions:
-            if isinstance(inst, MLILDebug) and inst.debug_type in (DEBUG_LINE, DEBUG_LOG):
+            if isinstance(inst, MLILDebug) and inst.debug_type in DEBUG_KINDS:
                 _debug_items(items, inst.debug_type, inst.address, int(inst.value))
 
     return items
@@ -233,10 +225,8 @@ def hlil_statements(block: HLILBlock) -> Iterator[HLILStatement]:
 def code_from_hlil(func: HighLevelILFunction) -> CodeItems:
     items = CodeItems()
     for stmt in hlil_statements(func.body):
-        if isinstance(stmt, HLILComment):
-            match = HLIL_DEBUG_COMMENT.match(stmt.text)
-            if match:
-                _debug_items(items, match.group(1), stmt.address, int(match.group(2)))
+        if isinstance(stmt, HLILDebug) and stmt.debug_type in DEBUG_KINDS:
+            _debug_items(items, stmt.debug_type, stmt.address, int(stmt.value))
 
     return items
 

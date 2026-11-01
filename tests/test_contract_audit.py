@@ -186,6 +186,22 @@ class TestCodeAudit(unittest.TestCase):
 
         self.assertEqual(compare_code('ts', SCRIPT, LINE_FUNCTION, self.expected, code_from_ts(forms.ts), with_addresses = False), [])
 
+    def test_debug_log_reaches_every_layer(self):
+        _, parser, functions = load()
+        func = functions[LINE_FUNCTION]
+        line_offsets = {offset for offset, _ in code_from_instructions(func).lines}
+        inst = next(inst for inst in func.instructions if inst.offset in line_offsets)
+        inst.opcode = ED9Opcode.DEBUG_LOG
+        inst.descriptor = ED9_INSTRUCTION_TABLE.get_descriptor(ED9Opcode.DEBUG_LOG)
+        expected = code_from_instructions(func)
+        self.assertEqual(len(expected.logs), SINGLE)
+        forms = run_pipeline(ED9ModuleDecompiler(parser), func)
+        for layer, items in (('llil', forms.llil_code), ('mlil', code_from_mlil(forms.mlil)), ('hlil', code_from_hlil(forms.hlil))):
+            with self.subTest(layer = layer):
+                self.assertEqual(compare_code(layer, SCRIPT, LINE_FUNCTION, expected, items), [])
+
+        self.assertEqual(compare_code('ts', SCRIPT, LINE_FUNCTION, expected, code_from_ts(forms.ts), with_addresses = False), [])
+
     def assert_one_line_lost(self, differences):
         self.assertEqual([(d.item, d.count) for d in differences], [('code.lines', SINGLE)])
 

@@ -83,7 +83,7 @@ class ED9VMLifter:
             name = f'arg{i + 1}'
             type_name = param.type.get_python_type()
             default_value = param.default_value.value if param.default_value else None
-            result.append(IRParameter(name, type_name, default_value))
+            result.append(IRParameter(name, type_name, default_value, flags = param.type.flags))
         return result
 
     def _collect_blocks(self, entry: BasicBlock) -> list[BasicBlock]:
@@ -243,7 +243,7 @@ class ED9VMLifter:
                 builder.debug_line(int(inst.operands[0].value))
 
             case ED9Opcode.DEBUG_LOG:
-                pass
+                builder.debug_log(int(inst.operands[0].value))
 
             case ED9Opcode.RETURN:
                 builder.ret()

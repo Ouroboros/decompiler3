@@ -5,6 +5,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Optional, Tuple, Union
 
+from ir.core import DEBUG_KINDS
 from ir.mlil.mlil import *
 from ir.mlil.mlil_types import MLILType, MLILTypeKind
 from .hlil import *
@@ -769,11 +770,13 @@ class MLILToHLILConverter:
 
             # Get default value from source_params
             default_value = None
+            flags = None
             if i < len(self.mlil_func.source_params):
                 default_value = self.mlil_func.source_params[i].default_value
+                flags = self.mlil_func.source_params[i].flags
 
             hlil_var = HLILVariable(mlil_var.name, type_hint=type_hint,
-                                    default_value=default_value, kind=VariableKind.PARAM)
+                                    default_value=default_value, kind=VariableKind.PARAM, flags = flags)
             self.hlil_func.parameters.append(hlil_var)
 
         for mlil_var in self.mlil_func.locals.values():
@@ -1208,6 +1211,12 @@ class MLILToHLILConverter:
             while self._is_passthrough_block(block_idx) and block_idx not in seen_passthrough and block_idx != stop_at:
                 seen_passthrough.add(block_idx)
                 mlil_block = self.mlil_func.basic_blocks[block_idx]
+                # The skipped block's line and log markers still run on this path
+                for instr_idx, instr in enumerate(mlil_block.instructions[:-1]):
+                    if isinstance(instr, MLILDebug) and instr.debug_type in DEBUG_KINDS:
+                        for stmt in self._convert_instruction(instr, block_idx, instr_idx):
+                            target_block.add_statement(stmt)
+
                 last_instr = mlil_block.instructions[-1]
                 if isinstance(last_instr, MLILGoto) and last_instr.target:
                     block_idx = last_instr.target.index
@@ -1359,7 +1368,7 @@ class MLILToHLILConverter:
             return result
 
         if isinstance(instr, MLILDebug):
-            stmt = HLILComment(f'{instr.debug_type}({instr.value})')
+            stmt = HLILDebug(instr.debug_type, instr.value)
             self._set_hlil_source_info(stmt, instr, mlil_index)
             result.append(stmt)
 

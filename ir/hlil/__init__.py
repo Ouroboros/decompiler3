@@ -54,6 +54,7 @@ __all__ = [
     'HLILAssign',
     'HLILExprStmt',
     'HLILComment',
+    'HLILDebug',
 
     # Function
     'HighLevelILFunction',

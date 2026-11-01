@@ -1,6 +1,6 @@
 '''HLIL - Structured control flow (if/while/for) from unstructured MLIL (goto/label)'''
 
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 from enum import auto
 from common import *
 
@@ -121,12 +121,13 @@ class HLILVariable:
     '''HLIL variable with optional type information'''
 
     def __init__(self, name: Optional[str] = None, type_hint: Optional[str] = None, default_value: Optional[str] = None,
-                 kind: VariableKind = None, index: Optional[int] = None):
+                 kind: VariableKind = None, index: Optional[int] = None, flags: Optional[int] = None):
         self.name = name
         self.type_hint = type_hint
         self.default_value = default_value
         self.kind = kind if kind is not None else VariableKind.LOCAL
         self.index = index  # For GLOBAL/REG: the slot index
+        self.flags = flags  # For PARAM: the target's parameter flags (IRParameter.flags)
 
     def __str__(self) -> str:
         if self.kind == VariableKind.GLOBAL:
@@ -554,6 +555,18 @@ class HLILComment(HLILStatement):
 
     def __repr__(self) -> str:
         return f'HLILComment({self.text})'
+
+
+class HLILDebug(HLILComment):
+    '''Debug marker (line number or debug log value); structuring treats it like a comment'''
+
+    def __init__(self, debug_type: str, value: Any):
+        super().__init__(f'{debug_type}({value})')
+        self.debug_type = debug_type
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f'HLILDebug({self.debug_type}, {self.value})'
 
 
 # ============================================================================

@@ -629,6 +629,9 @@ class ControlFlowOptimizationPass(Pass):
         scrutinee = None
         default_body = None
         current_if = if_stmt
+        # Comments between two comparisons move into the next case once the conversion succeeds
+        pending_comments = []
+        moves = []
 
         while current_if:
             if not isinstance(current_if.condition, HLILBinaryOp):
@@ -657,6 +660,7 @@ class ControlFlowOptimizationPass(Pass):
                 case_body = current_if.true_block
                 seen_case_values.add(case_value)
                 cases.append((case_value, case_body))
+                moves.append((case_body, pending_comments))
 
                 if current_if.false_block and current_if.false_block.statements:
                     default_body = current_if.false_block
@@ -690,10 +694,13 @@ class ControlFlowOptimizationPass(Pass):
             case_body = current_if.false_block or HLILBlock()
             seen_case_values.add(case_value)
             cases.append((case_value, case_body))
+            moves.append((case_body, pending_comments))
+            pending_comments = []
 
             if current_if.true_block:
                 real_stmts = [s for s in current_if.true_block.statements if not isinstance(s, HLILComment)]
                 if len(real_stmts) == 1 and isinstance(real_stmts[0], HLILIf):
+                    pending_comments = [s for s in current_if.true_block.statements if isinstance(s, HLILComment)]
                     current_if = real_stmts[0]
                     continue
 
@@ -703,6 +710,10 @@ class ControlFlowOptimizationPass(Pass):
                     next_stmt = real_stmts[0]
                     if isinstance(next_stmt, HLILSwitch):
                         if isinstance(next_stmt.scrutinee, HLILVar) and next_stmt.scrutinee.var == scrutinee.var:
+                            if next_stmt.cases:
+                                comments = [s for s in current_if.true_block.statements if isinstance(s, HLILComment)]
+                                moves.append((next_stmt.cases[0].body, comments))
+
                             for nested_case in next_stmt.cases:
                                 if nested_case.is_default():
                                     default_body = nested_case.body
@@ -723,7 +734,22 @@ class ControlFlowOptimizationPass(Pass):
         if len(cases) < MIN_CASES or scrutinee is None:
             return None
 
-        return self._build_switch(scrutinee, list(reversed(cases)), default_body)
+        return self._build_switch_moving_comments(scrutinee, list(reversed(cases)), default_body, moves)
+
+    def _build_switch_moving_comments(self, scrutinee: HLILVar, cases: list, default_body: Optional[HLILBlock],
+                                      moves: list) -> Optional[HLILSwitch]:
+        '''_build_switch after prepending each (block, comments) move; the moves are undone if no switch is built'''
+        saved = [(block, block.statements) for block, comments in moves if comments]
+        for block, comments in moves:
+            if comments:
+                block.statements = comments + block.statements
+
+        switch = self._build_switch(scrutinee, cases, default_body)
+        if switch is None:
+            for block, statements in reversed(saved):
+                block.statements = statements
+
+        return switch
 
     def _eq_label(self, condition: HLILExpression) -> Optional[tuple]:
         '''(variable, constant) of a `variable == constant` condition'''
@@ -739,6 +765,7 @@ class ControlFlowOptimizationPass(Pass):
         scrutinee = None
         default_body = None
         current = if_stmt
+        moves = []
         while True:
             label = self._eq_label(current.condition)
             if label is None or (scrutinee is not None and label[0].var != scrutinee.var):
@@ -751,8 +778,7 @@ class ControlFlowOptimizationPass(Pass):
             next_label = self._eq_label(real[0].condition) if len(real) == 1 and isinstance(real[0], HLILIf) else None
             if next_label is not None and next_label[0].var == scrutinee.var:
                 # Comments between the comparisons move into the next case
-                comments = [stmt for stmt in rest if isinstance(stmt, HLILComment)]
-                real[0].true_block.statements = comments + real[0].true_block.statements
+                moves.append((real[0].true_block, [stmt for stmt in rest if isinstance(stmt, HLILComment)]))
                 current = real[0]
                 continue
 
@@ -762,7 +788,7 @@ class ControlFlowOptimizationPass(Pass):
         if len(cases) < MIN_SWITCH_CASES or not self._distinct_labels([value for value, _ in cases]):
             return None
 
-        return self._build_switch(scrutinee, cases, default_body)
+        return self._build_switch_moving_comments(scrutinee, cases, default_body, moves)
 
     @classmethod
     def _distinct_labels(cls, values: list) -> bool:
@@ -786,12 +812,14 @@ class ControlFlowOptimizationPass(Pass):
 
         switch_cases = []
         by_text = {}
+        merges = []
         for case_value, case_body in cases:
-            # Line comments differ between copies of the same code; the first body's comments are kept
+            # Line comments differ between copies of the same code; the copies' comments are merged into the first body
             code = HLILBlock([stmt for stmt in case_body.statements if not isinstance(stmt, HLILComment)])
             text = '\n'.join(HLILFormatter.format_block(code))
             if text in by_text:
                 by_text[text].extra_values.append(HLILConst(case_value))
+                merges.append((by_text[text].body, case_body))
                 continue
 
             case = HLILSwitchCase(HLILConst(case_value), case_body)
@@ -801,7 +829,58 @@ class ControlFlowOptimizationPass(Pass):
         if default_body and default_body.statements:
             switch_cases.append(HLILSwitchCase(None, default_body))
 
+        for kept, copy in merges:
+            kept.statements = self._merge_comments(kept.statements, copy.statements)
+
         return HLILSwitch(scrutinee, switch_cases)
+
+    @classmethod
+    def _merge_comments(cls, kept: list, copy: list) -> list:
+        '''Statements of kept with the comments of copy inserted at the same position among the code
+
+        Both lists hold the same code statements; nested blocks are merged the same way.
+        '''
+        def segments(statements):
+            result, comments = [], []
+            for stmt in statements:
+                if isinstance(stmt, HLILComment):
+                    comments.append(stmt)
+
+                else:
+                    result.append((comments, stmt))
+                    comments = []
+
+            return result, comments
+
+        kept_segments, kept_tail = segments(kept)
+        copy_segments, copy_tail = segments(copy)
+        merged = []
+        for (kept_comments, kept_stmt), (copy_comments, copy_stmt) in zip(kept_segments, copy_segments):
+            merged.extend(cls._union(kept_comments, copy_comments))
+            if kept_stmt is not copy_stmt:
+                cls._merge_nested_comments(kept_stmt, copy_stmt)
+
+            merged.append(kept_stmt)
+
+        return merged + cls._union(kept_tail, copy_tail)
+
+    @classmethod
+    def _union(cls, kept: list, copy: list) -> list:
+        return kept + [stmt for stmt in copy if not any(stmt is other for other in kept)]
+
+    @classmethod
+    def _merge_nested_comments(cls, kept: HLILStatement, copy: HLILStatement):
+        for name in ('true_block', 'false_block', 'body'):
+            kept_block, copy_block = getattr(kept, name, None), getattr(copy, name, None)
+            if isinstance(kept_block, HLILBlock) and isinstance(copy_block, HLILBlock):
+                kept_block.statements = cls._merge_comments(kept_block.statements, copy_block.statements)
+
+        if isinstance(kept, HLILBlock) and isinstance(copy, HLILBlock):
+            kept.statements = cls._merge_comments(kept.statements, copy.statements)
+
+        if isinstance(kept, HLILSwitch) and isinstance(copy, HLILSwitch):
+            for kept_case, copy_case in zip(kept.cases, copy.cases):
+                kept_case.body.statements = cls._merge_comments(kept_case.body.statements, copy_case.body.statements)
 
     def _contains_bare_break(self, block: Optional[HLILBlock]) -> bool:
         '''Check for an unlabeled break not owned by a nested loop or switch'''
@@ -836,6 +915,12 @@ class ControlFlowOptimizationPass(Pass):
                             if isinstance(nested_stmt.scrutinee, HLILVar) and isinstance(stmt.scrutinee, HLILVar):
                                 if nested_stmt.scrutinee.var == stmt.scrutinee.var:
                                     if case.is_default():
+                                        # Comments in front of the nested switch move into its first case
+                                        comments = [s for s in case.body.statements if isinstance(s, HLILComment)]
+                                        if comments and nested_stmt.cases:
+                                            first = nested_stmt.cases[0].body
+                                            first.statements = comments + first.statements
+
                                         stmt.cases.remove(case)
                                         stmt.cases.extend(nested_stmt.cases)
                                         self._merge_nested_switches(block)

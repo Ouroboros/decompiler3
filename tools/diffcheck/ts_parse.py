@@ -6,6 +6,7 @@ Only the subset codegen/typescript.py emits is accepted; anything else raises TS
 - deref(p) / deref_set(p, v) / addr_of(x) are pointer operations, int(x) is x
 - syscall(subsystem, cmd, ...) / extern_call('module:func', ...) are external calls, other calls script calls
 - true / false are the integers 1 / 0, numeric literals with '.' or an exponent are floats
+- a `// line(N)` or `// log(N)` comment on its own is a debug statement; other comments are ignored
 '''
 
 import re
@@ -14,7 +15,7 @@ from typing import Dict, List, Optional
 
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILAddressOf, HLILAssign, HLILBinaryOp, HLILBlock, HLILBreak, HLILCall,
-    HLILComment, HLILConst, HLILContinue, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternCall,
+    HLILComment, HLILConst, HLILContinue, HLILDebug, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternCall,
     HLILIf, HLILReturn, HLILStatement, HLILSwitch, HLILSwitchCase, HLILSyscall, HLILUnaryOp, HLILVar, HLILVariable,
     HLILWhile, UnaryOp, VariableKind,
 )
@@ -39,6 +40,8 @@ TOKEN_PATTERN = re.compile(r'''
   | (?P<name>[A-Za-z_$][A-Za-z0-9_$]*)
   | (?P<op>===|!==|==|!=|<=|>=|&&|\|\||<<|>>|[-+*/%&|^!~<>=(){}\[\],;:?.])
 ''', re.VERBOSE)
+
+DEBUG_COMMENT = re.compile(r'//\s*(line|log)\((-?\d+)\)\s*$')
 
 STRING_ESCAPES = {'n': '\n', 't': '\t', 'r': '\r', '0': '\0', '\\': '\\', '"': '"', "'": "'"}
 
@@ -72,7 +75,10 @@ def tokenize(source: str) -> List[Token]:
             raise TSParseError(f'unexpected character {source[position]!r} at {position}')
 
         kind = match.lastgroup
-        if kind not in ('space', 'comment'):
+        if kind == 'comment' and DEBUG_COMMENT.match(match.group()):
+            tokens.append(Token('debug', match.group(), position))
+
+        elif kind not in ('space', 'comment'):
             tokens.append(Token(kind, match.group(), position))
 
         position = match.end()
@@ -194,6 +200,10 @@ class TypeScriptParser:
         return block
 
     def _parse_statement(self) -> Optional[HLILStatement]:
+        if self._peek().kind == 'debug':
+            debug_type, value = DEBUG_COMMENT.match(self._next().text).groups()
+            return HLILDebug(debug_type, int(value))
+
         if self._accept('let'):
             name = self._expect_name()
             self._parse_type()
@@ -309,7 +319,8 @@ class TypeScriptParser:
         '''A case body must end the case; JavaScript would fall through into the next one otherwise'''
         position = self._peek().position
         body = self._parse_block()
-        last = body.statements[-1] if body.statements else None
+        executable = [stmt for stmt in body.statements if not isinstance(stmt, HLILDebug)]
+        last = executable[-1] if executable else None
         if not isinstance(last, (HLILBreak, HLILContinue, HLILReturn)):
             raise TSParseError(f'case at {position} falls through')
 

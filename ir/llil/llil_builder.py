@@ -581,7 +581,11 @@ class LowLevelILBuilder:
 
     def debug_line(self, line_no: int):
         '''Debug line number'''
-        self.add_instruction(LowLevelILDebug('line', line_no))
+        self.add_instruction(LowLevelILDebug(DEBUG_LINE, line_no))
+
+    def debug_log(self, value: int):
+        '''Debug log value'''
+        self.add_instruction(LowLevelILDebug(DEBUG_LOG, value))
 
 
 class LLILFormatter:
