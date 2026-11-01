@@ -59,8 +59,10 @@ class InputPlan:
 
     def __init__(self, seed: Any, pool: Iterable[Any], hints: Dict[Origin, List[Any]],
                  global_candidates: Iterable[int], param_count: int, forced: Optional[Dict[Origin, Any]] = None,
-                 global_count: Optional[int] = None, reg_candidates: Iterable[int] = ()):
+                 global_count: Optional[int] = None, reg_candidates: Iterable[int] = (), strict_raw: bool = False):
         self.seed = seed
+        # Observe Raw words with their tag instead of as plain integers
+        self.strict_raw = strict_raw
         # Registers the function reads; a callee may leave any value in them (the VM never clears REGS)
         self.reg_candidates = sorted(set(reg_candidates))
         self.pool = list(pool) or list(DEFAULT_POOL)
@@ -220,12 +222,15 @@ class WorldState:
         self.cells[param_number] = value
         self.written_cells.add(param_number)
 
+    def _observe(self, value: Any, deref) -> Any:
+        return observable(value, deref, strict_raw = self.plan.strict_raw)
+
     def globals_snapshot(self, deref) -> Tuple[Tuple[int, Any], ...]:
-        return tuple((index, observable(self.globals[index], deref)) for index in sorted(self.written_globals))
+        return tuple((index, self._observe(self.globals[index], deref)) for index in sorted(self.written_globals))
 
     def external_call(self, key_prefix: Tuple[Any, ...], args: List[Any], deref, address: int) -> CallOutcome:
         '''Record a call event and return the environment's response'''
-        observed_args = tuple(observable(arg, deref) for arg in args)
+        observed_args = tuple(self._observe(arg, deref) for arg in args)
         self.trace.emit(key_prefix + (observed_args, self.globals_snapshot(deref)), address)
         pointer_positions = [pos for pos, arg in enumerate(args) if isinstance(arg, Pointer)]
         outcome = self.plan.call_outcome(self.call_index, pointer_positions)
@@ -241,8 +246,8 @@ class WorldState:
 
     def finish(self, return_value: Any, deref, address: int):
         # Writes through pointer parameters are visible to the caller after return
-        cells = tuple((number, observable(self.cells[number], deref)) for number in sorted(self.written_cells))
-        self.trace.emit((EVENT_RETURN, observable(return_value, deref), self.globals_snapshot(deref), cells), address)
+        cells = tuple((number, self._observe(self.cells[number], deref)) for number in sorted(self.written_cells))
+        self.trace.emit((EVENT_RETURN, self._observe(return_value, deref), self.globals_snapshot(deref), cells), address)
 
     def fault(self, fault: VMFault, address: int):
         self.trace.events.append(Event((EVENT_FAULT, fault.kind), address))

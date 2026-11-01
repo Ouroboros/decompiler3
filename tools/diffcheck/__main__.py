@@ -119,6 +119,8 @@ def main(argv = None) -> int:
     arg_parser.add_argument('--no-localize', action = 'store_true', help = 'skip per-pass localization of failures')
     arg_parser.add_argument('--json', type = Path, help = 'write full results to this file')
     arg_parser.add_argument('--verbose', action = 'store_true', help = 'print passing functions too')
+    arg_parser.add_argument('--strict-raw', action = 'store_true',
+                            help = 'observe Raw words with their tag, so Raw turned into Integer is a mismatch')
     arg_parser.add_argument('--dump', type = Path, metavar = 'DIR',
                             help = 'write the HLIL and TypeScript of every function to DIR/<script>.json')
     arg_parser.add_argument('--changed-since', type = Path, metavar = 'DIR',
@@ -130,6 +132,7 @@ def main(argv = None) -> int:
         max_runs = args.max_runs,
         localize = not args.no_localize,
         max_mismatches = args.max_mismatches,
+        strict_raw = args.strict_raw,
     )
 
     started = time.time()

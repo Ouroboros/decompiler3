@@ -75,6 +75,7 @@ class CheckOptions:
     max_runs: int = MAX_RUNS
     localize: bool = True
     max_mismatches: int = DEFAULT_MAX_MISMATCHES
+    strict_raw: bool = False
 
 
 @dataclass
@@ -217,7 +218,8 @@ class FunctionChecker:
 
     def _plan(self, run: int, forced: Dict[Origin, Any]) -> InputPlan:
         return InputPlan(f'{self.options.seed}/{run}', self.pool, self.hints, self.global_candidates,
-                         self.param_count, forced, len(self.parser.global_vars), self.reg_candidates)
+                         self.param_count, forced, len(self.parser.global_vars), self.reg_candidates,
+                         self.options.strict_raw)
 
     def _reference(self, plan: InputPlan):
         return BytecodeInterpreter(self.parser, self.func, plan, blocks = self.blocks, max_events = self.event_cap).run()

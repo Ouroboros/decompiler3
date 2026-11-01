@@ -15,20 +15,26 @@ class ObservedFloat:
         return f'{bits_to_float(self.bits)!r}f'
 
 
-def observable(value: Any, deref: Callable[[Pointer], Any], depth: int = 0) -> Any:
+OBSERVED_RAW = 'raw'
+
+
+def observable(value: Any, deref: Callable[[Pointer], Any], depth: int = 0, *, strict_raw: bool = False) -> Any:
     '''Hashable, representation-independent form of a value for trace comparison
 
-    Raw words are observed by payload: script output cannot distinguish them from integers.
+    Raw words are observed by payload, like integers; with strict_raw they are observed with their tag,
+    so a decompiler that turns Raw into Integer is caught.
     '''
     if value is UNDEF:
         return ('undef',)
 
     if isinstance(value, Pointer):
         # Pointer identity differs between interpreters; compare the referenced value instead
-        return ('ptr', observable(deref(value), deref, depth + 1) if depth == 0 else ('nested',))
+        inner = observable(deref(value), deref, depth + 1, strict_raw = strict_raw) if depth == 0 else ('nested',)
+        return ('ptr', inner)
 
     if isinstance(value, Raw):
-        return normalize(value).payload
+        payload = normalize(value).payload
+        return (OBSERVED_RAW, payload) if strict_raw else payload
 
     if isinstance(value, float):
         return ObservedFloat(float32_bits(normalize(value)))
