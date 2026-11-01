@@ -4,6 +4,7 @@ import operator
 
 from common import *
 from typing import List, Optional
+from ir.core import RawWord
 from ir.hlil import *
 
 
@@ -78,7 +79,7 @@ class TypeScriptGenerator:
         elif isinstance(value, float):
             return format_float(value)
 
-        elif isinstance(value, int):
+        elif isinstance(value, (int, RawWord)):
             return str(value)
 
         elif value is None:
@@ -646,6 +647,9 @@ function deref_set<T>(pointer: T, value: T): void { }
 
 // Intrinsic function: boolean/number to int conversion
 function int(b: number | boolean): number { return +b; }
+
+// Intrinsic function: word without a type tag (raw(payload))
+function raw(payload: number): number { return payload; }
 
 // Placeholder function: external script call
 function extern_call(target: string, ...args: any[]): any { return undefined; }

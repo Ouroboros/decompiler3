@@ -14,7 +14,9 @@ import unittest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from common.config import default_encoding
-from ir.hlil import HLILComment
+from codegen import generate_typescript
+from ir.core import RawWord
+from ir.hlil import HLILComment, HLILConst
 from ir.llil import LowLevelILDebug
 from ml import fileio
 from falcom.ed9.disasm import ED9_INSTRUCTION_TABLE, ED9Opcode
@@ -28,7 +30,7 @@ from tools.contract.extract import (
 )
 from tools.contract.image import read_tables
 from tools.contract.model import TAG_INT
-from tools.diffcheck.check import CheckOptions, FunctionChecker, Verdict
+from tools.diffcheck.check import CheckOptions, FunctionChecker, Verdict, decompile_function
 
 
 DAT_PATH            = Path(__file__).parent / 'debug.dat'
@@ -231,14 +233,44 @@ class TestCodeAudit(unittest.TestCase):
         self.assert_one_line_lost(compare_code('ts', SCRIPT, LINE_FUNCTION, self.expected, code_from_ts(text), with_addresses = False))
 
 
+def raw_constants(node, seen = None):
+    '''Every HLILConst holding a RawWord reachable from node'''
+    seen = set() if seen is None else seen
+    if id(node) in seen or not hasattr(node, '__dict__'):
+        return []
+
+    seen.add(id(node))
+    found = [node] if isinstance(node, HLILConst) and isinstance(node.value, RawWord) else []
+    for value in vars(node).values():
+        for item in value if isinstance(value, (list, tuple)) else [value]:
+            found += raw_constants(item, seen)
+
+    return found
+
+
 class TestStrictRaw(unittest.TestCase):
+    def setUp(self):
+        _, self.parser, functions = load()
+        self.func = functions[RAW_RETURN_FUNCTION]
+        self.decompiler = ED9ModuleDecompiler(self.parser)
+
+    def check(self, output, strict_raw: bool):
+        return FunctionChecker(self.parser, self.func, CheckOptions(strict_raw = strict_raw), self.decompiler).check(output).verdict
+
+    def test_raw_return_is_kept(self):
+        output = decompile_function(self.decompiler, self.func)
+        self.assertTrue(raw_constants(output.hlil))
+        self.assertIn('raw(0)', output.ts_text)
+        self.assertEqual(self.check(output, strict_raw = True), Verdict.PASS)
+
     def test_raw_return_turned_into_integer_is_a_mismatch(self):
-        _, parser, functions = load()
-        func = functions[RAW_RETURN_FUNCTION]
-        lenient = FunctionChecker(parser, func, CheckOptions()).check()
-        strict = FunctionChecker(parser, func, CheckOptions(strict_raw = True)).check()
-        self.assertEqual(lenient.verdict, Verdict.PASS)
-        self.assertEqual(strict.verdict, Verdict.FAIL)
+        output = decompile_function(self.decompiler, self.func)
+        for const in raw_constants(output.hlil):
+            const.value = const.value.payload
+
+        output.ts_text = generate_typescript(output.hlil)
+        self.assertEqual(self.check(output, strict_raw = False), Verdict.PASS)
+        self.assertEqual(self.check(output, strict_raw = True), Verdict.FAIL)
 
 
 if __name__ == '__main__':

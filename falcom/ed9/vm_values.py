@@ -9,7 +9,7 @@ top two bits are a type tag:
 - tag 2 Float:   float32 stored as (bits >> 2), so the two lowest bits are dropped
 - tag 3 String:  offset of the string in the script file
 
-Python representation: Raw -> Raw, Integer -> int, Float -> float (already truncated),
+Python representation: Raw -> Raw (the IR's RawWord), Integer -> int, Float -> float (already truncated),
 String -> str (content; the file offset is not modeled), stack address -> Pointer.
 '''
 
@@ -18,6 +18,8 @@ import struct
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
+
+from ir.core import RawWord
 
 
 PAYLOAD_BITS        = 30
@@ -70,10 +72,8 @@ class Pointer:
     key: Any
 
 
-@dataclass(frozen = True)
-class Raw:
-    '''Tag-0 word; payload holds the low 30 bits read as a signed integer'''
-    payload: int
+# Tag-0 word; payload holds the low 30 bits read as a signed integer
+Raw = RawWord
 
 
 class Op(Enum):

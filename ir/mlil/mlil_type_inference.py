@@ -1,6 +1,7 @@
 '''MLIL Type Inference - SSA-based type propagation'''
 
 from typing import Dict, Set, List, Optional
+from ir.core import RawWord
 from .mlil import *
 from .mlil_ssa import MLILVariableSSA, MLILVarSSA, MLILSetVarSSA, MLILPhi
 from .mlil_types import MLILType, unify_types, FunctionSignatureDB
@@ -139,8 +140,8 @@ class MLILTypeInference:
         if not const.is_hex and isinstance(const.value, str):
             return MLILType.string_type()
 
-        # Numeric constant
-        if isinstance(const.value, int):
+        # Numeric constant; a raw word is a numeric word without a type tag
+        if isinstance(const.value, (int, RawWord)):
             return MLILType.int_type()
 
         elif isinstance(const.value, float):

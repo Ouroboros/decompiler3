@@ -21,8 +21,8 @@ Exit code is 0 only when every function passes.
   functions whose output differs or that are missing from it. Use full runs after changing the checker
   itself. Set `PYTHONHASHSEED=0` on both runs: TypeScript `let` order still depends on set iteration, and
   a different order only makes unchanged functions look changed (they are then checked, never skipped).
-- `--strict-raw` observes Raw words with their tag instead of by payload, so a decompiler that turns a
-  Raw value into an Integer fails (`docs/CONTRACT.md`).
+- Raw words are observed with their tag, so a decompiler that turns a Raw value into an Integer fails
+  (`docs/CONTRACT.md`); `--lenient-raw` observes them by payload like integers.
 - Progress goes to stderr with timestamps: disassembly, every 100 decompiled functions and every 100
   checked functions.
 

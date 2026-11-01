@@ -3,6 +3,7 @@
 from .il_base import *
 from .il_options import *
 from .module import ILModule
+from .values import RawWord
 
 __all__ = [
     'ILInstruction',
@@ -17,4 +18,5 @@ __all__ = [
     'DEBUG_LINE',
     'DEBUG_LOG',
     'DEBUG_KINDS',
+    'RawWord',
 ]

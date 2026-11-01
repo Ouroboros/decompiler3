@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import *
 
 from ir.llil.llil import *
-from ir.core import IRParameter
+from ir.core import IRParameter, RawWord
 
 from ..disasm import *
 from ..llil_builder import *
@@ -83,6 +83,9 @@ class ED9VMLifter:
             name = f'arg{i + 1}'
             type_name = param.type.get_python_type()
             default_value = param.default_value.value if param.default_value else None
+            if param.default_value is not None and param.default_value.type == ScpValue.Type.Raw:
+                default_value = RawWord(int(default_value))
+
             result.append(IRParameter(name, type_name, default_value, flags = param.type.flags))
         return result
 

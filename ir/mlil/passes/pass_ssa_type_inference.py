@@ -9,6 +9,7 @@ Infer types for SSA variables using:
 
 from typing import Dict, Optional
 
+from ir.core import RawWord
 from ir.pipeline import Pass
 from ..mlil import *
 from ..mlil_ssa import *
@@ -170,7 +171,8 @@ class SSATypeInferencePass(Pass):
         if not const.is_hex and isinstance(const.value, str):
             return MLILType.string_type()
 
-        if isinstance(const.value, int):
+        # A raw word is a numeric word without a type tag
+        if isinstance(const.value, (int, RawWord)):
             return MLILType.int_type()
 
         elif isinstance(const.value, float):

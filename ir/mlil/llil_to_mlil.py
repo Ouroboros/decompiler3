@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional
 
+from ir.core import RawWord
 from ir.llil import *
 from .mlil import *
 from .mlil_builder import *
@@ -130,6 +131,9 @@ class LLILToMLILTranslator:
 
         # Constants
         if isinstance(llil_expr, LowLevelILConst):
+            if llil_expr.is_raw:
+                return MLILConst(RawWord(llil_expr.value))
+
             return MLILConst(llil_expr.value, llil_expr.is_hex)
 
         # Stack operations → Variables

@@ -6,6 +6,7 @@ Only the subset codegen/typescript.py emits is accepted; anything else raises TS
 - deref(p) / deref_set(p, v) / addr_of(x) are pointer operations, int(x) is x
 - syscall(subsystem, cmd, ...) / extern_call('module:func', ...) are external calls, other calls script calls
 - true / false are the integers 1 / 0, numeric literals with '.' or an exponent are floats
+- raw(n) is a word without a type tag (RawWord)
 - a `// line(N)` or `// log(N)` comment on its own is a debug statement; other comments are ignored
 '''
 
@@ -13,6 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from ir.core import RawWord
 from ir.hlil import (
     BinaryOp, HighLevelILFunction, HLILAddressOf, HLILAssign, HLILBinaryOp, HLILBlock, HLILBreak, HLILCall,
     HLILComment, HLILConst, HLILContinue, HLILDebug, HLILDeref, HLILDoWhile, HLILExpression, HLILExprStmt, HLILExternCall,
@@ -62,6 +64,7 @@ BINARY_LEVELS = (
 UNARY_OPS = {'-': UnaryOp.NEG, '!': UnaryOp.NOT, '~': UnaryOp.BIT_NOT}
 
 BOOLEAN_LITERALS = {'true': 1, 'false': 0}
+RAW_INTRINSIC = 'raw'
 STORAGE_KINDS = {'GLOBALS': VariableKind.GLOBAL, 'REGS': VariableKind.REG}
 EXTERN_SEPARATOR = ':'
 
@@ -404,6 +407,9 @@ class TypeScriptParser:
         if name == 'int':
             return self._single(name, args)
 
+        if name == RAW_INTRINSIC:
+            return HLILConst(RawWord(self._integer(self._single(name, args))))
+
         if name == 'syscall':
             subsystem, cmd = (self._literal(arg) for arg in args[:2])
             return HLILSyscall(subsystem, cmd, args[2:])
@@ -423,6 +429,18 @@ class TypeScriptParser:
             raise TSParseError(f'{name} takes one argument, got {len(args)}')
 
         return args[0]
+
+    @classmethod
+    def _integer(cls, expr: HLILExpression) -> int:
+        '''Integer literal, possibly negated'''
+        if isinstance(expr, HLILUnaryOp) and expr.op == UnaryOp.NEG:
+            return -cls._integer(expr.operand)
+
+        value = cls._literal(expr)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TSParseError(f'expected an integer, got {value!r}')
+
+        return value
 
     @classmethod
     def _literal(cls, expr: HLILExpression):

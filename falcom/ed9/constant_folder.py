@@ -29,7 +29,7 @@ from ir.mlil import (
 )
 from ir.mlil.passes import ConstantFolder, NotFoldable
 
-from .vm_values import EQUALITY_OPS, Op, VMFault, binary_op, is_zero, normalize, unary_op
+from .vm_values import EQUALITY_OPS, Op, Raw, VMFault, binary_op, is_zero, normalize, unary_op
 
 
 BINARY_OPS = {
@@ -61,14 +61,14 @@ UNARY_OPS = {
 }
 
 # Values an MLIL constant can hold and print as a literal
-LITERAL_TYPES = (int, float, str)
+LITERAL_TYPES = (int, float, str, Raw)
 
 
 class ED9ConstantFolder(ConstantFolder):
     '''Folds constants as VMContext::execute computes them (falcom/ed9/spec/vm_spec.md section 7)
 
     Nothing is folded when the result depends on a string's file offset, faults at run time
-    (integer division by zero) or has no literal form (Raw words, infinities, NaN).
+    (integer division by zero, type errors) or has no literal form (infinities, NaN).
     '''
 
     @classmethod

@@ -15,7 +15,7 @@ from falcom.ed9.parser.types_scp import RawInt, ScpValue
 from ir.hlil import (
     HighLevelILFunction, HLILBlock, HLILDebug, HLILDoWhile, HLILFor, HLILIf, HLILStatement, HLILSwitch, HLILWhile,
 )
-from ir.core import DEBUG_KINDS, DEBUG_LINE, DEBUG_LOG, ILModule
+from ir.core import DEBUG_KINDS, DEBUG_LINE, DEBUG_LOG, ILModule, RawWord
 from ir.llil import LowLevelILDebug, LowLevelILFunction
 from ir.mlil import MediumLevelILFunction, MLILDebug
 
@@ -39,7 +39,10 @@ def value_of_scp(value: ScpValue) -> Value:
 
 
 def value_of_python(value: Any) -> Value:
-    '''Value of a default as the IR keeps it (a plain Python value; RawInt marks Raw)'''
+    '''Value of a default as the IR keeps it (a plain Python value; RawWord marks Raw)'''
+    if isinstance(value, RawWord):
+        return (TAG_RAW, value.payload)
+
     if isinstance(value, RawInt):
         return (TAG_RAW, int(value))
 

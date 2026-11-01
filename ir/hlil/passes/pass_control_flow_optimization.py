@@ -797,6 +797,10 @@ class ControlFlowOptimizationPass(Pass):
         if any(isinstance(value, str) for value in values) and not all(isinstance(value, str) for value in values):
             return False
 
+        # Other constants (raw words) have no common equality with numbers here
+        if not all(isinstance(value, (str, int, float)) for value in values):
+            return False
+
         keys = [value if isinstance(value, str) else float(value) for value in values]
         return len(set(keys)) == len(keys)
 

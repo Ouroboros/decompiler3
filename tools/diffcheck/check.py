@@ -73,7 +73,8 @@ class CheckOptions:
     max_runs: int = MAX_RUNS
     localize: bool = True
     max_mismatches: int = DEFAULT_MAX_MISMATCHES
-    strict_raw: bool = False
+    # Observe Raw words with their tag, so Raw turned into Integer is a mismatch
+    strict_raw: bool = True
 
 
 @dataclass

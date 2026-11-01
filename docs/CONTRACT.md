@@ -45,7 +45,7 @@ its address and none may appear at a new address.
 
 Raw versus Integer inside code is not audited statically: a `PUSH_RAW 0` that only reserves a stack slot
 is regenerable, and only the behavior check can tell it from a Raw value that reaches a call, a global or a
-return. `python -m tools.diffcheck --strict-raw` observes Raw words with their tag.
+return. `python -m tools.diffcheck` observes Raw words with their tag (`--lenient-raw` turns this off).
 
 ## Negative tests
 
