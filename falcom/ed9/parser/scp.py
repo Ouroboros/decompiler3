@@ -90,6 +90,14 @@ class ScpParser(StrictBase):
     function_map    : dict[str, Function]
 
     def __init__(self, fs: fileio.FileStream, name: str = ''):
+        # Parsing seeks for nearly every value; on a file-backed stream each seek refills the buffer
+        # from disk, which is very slow on /mnt drives. Decode from an in-memory copy instead.
+        if not fs.MemoryFile:
+            with fs.PositionSaver:
+                data = fs.ReadAll()
+
+            fs = fileio.FileStream(data, encoding = fs.Encoding)
+
         self.fs = fs
 
     def get_func_by_name(self, name: str) -> Function:

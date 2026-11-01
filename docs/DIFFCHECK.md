@@ -7,9 +7,22 @@ It replaces the old structural validator (`tools/ir_semantic_validator.py`).
 python -m tools.diffcheck tests/debug.dat
 python -m tools.diffcheck tests/debug.dat --function FC_Event_PartySet --verbose
 python -m tools.diffcheck tests/*.dat --json result.json
+
+# Incremental: record a baseline, change the decompiler, then check only functions whose output changed
+PYTHONHASHSEED=0 python -m tools.diffcheck tests/*.dat --dump out/base
+PYTHONHASHSEED=0 python -m tools.diffcheck tests/*.dat --changed-since out/base --dump out/new
 ```
 
 Exit code is 0 only when every function passes.
+
+- `--dump DIR` writes the HLIL and TypeScript text of every function to `DIR/<script>.json`
+  (`{name: {"hlil": ..., "ts": ...}}`, or `{"error": ...}` when decompilation failed).
+- `--changed-since DIR` decompiles every function, compares its text with that dump and checks only the
+  functions whose output differs or that are missing from it. Use full runs after changing the checker
+  itself. Set `PYTHONHASHSEED=0` on both runs: TypeScript `let` order still depends on set iteration, and
+  a different order only makes unchanged functions look changed (they are then checked, never skipped).
+- Progress goes to stderr with timestamps: disassembly, every 100 decompiled functions and every 100
+  checked functions.
 
 ## Equivalence Contract
 

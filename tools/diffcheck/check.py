@@ -15,7 +15,7 @@ from codegen import generate_typescript
 from falcom.ed9.vm_values import TYPE_ERROR
 from ir.hlil import (
     CommonReturnExtractionPass, ControlFlowOptimizationPass, DeadCodeEliminationPass,
-    ExpressionSimplificationPass, MLILToHLILPass,
+    ExpressionSimplificationPass, HighLevelILFunction, HLILFormatter, MLILToHLILPass,
 )
 
 from .bytecode_interp import (
@@ -169,6 +169,39 @@ def decompile(parser, func):
         return convert_falcom_mlil_to_hlil(mlil_func, func)
 
 
+@dataclass
+class DecompiledFunction:
+    '''Decompiler output of one function; error is set when decompilation or TypeScript generation failed'''
+    hlil: Optional[HighLevelILFunction] = None
+    hlil_text: Optional[str] = None
+    ts_text: Optional[str] = None
+    error: Optional[str] = None
+
+    def texts(self) -> Dict[str, str]:
+        '''Dump form; equal texts mean unchanged decompiler output'''
+        if self.error is not None:
+            return {'error': self.error}
+
+        return {'hlil': self.hlil_text, 'ts': self.ts_text}
+
+
+def decompile_function(parser, func) -> DecompiledFunction:
+    try:
+        hlil_func = decompile(parser, func)
+
+    except Exception as e:
+        return DecompiledFunction(error = f'decompile: {type(e).__name__}: {e}')
+
+    hlil_text = '\n'.join(HLILFormatter.format_function(hlil_func))
+    try:
+        ts_text = generate_typescript(hlil_func)
+
+    except Exception as e:
+        return DecompiledFunction(hlil_func, hlil_text, error = f'typescript: {type(e).__name__}: {e}')
+
+    return DecompiledFunction(hlil_func, hlil_text, ts_text)
+
+
 class FunctionChecker:
     def __init__(self, parser, func, options: CheckOptions):
         self.parser = parser
@@ -238,19 +271,18 @@ class FunctionChecker:
                 follow_up.update(assignment)
                 queue.appendleft(follow_up)
 
-    def check(self) -> FunctionReport:
+    def check(self, decompiled: Optional[DecompiledFunction] = None) -> FunctionReport:
         report = FunctionReport(self.func.name, self.func.offset, Verdict.PASS, blocks_total = len(self.blocks))
-        try:
-            hlil_func = decompile(self.parser, self.func)
-
-        except Exception as e:
+        decompiled = decompiled or decompile_function(self.parser, self.func)
+        if decompiled.error is not None:
             report.verdict = Verdict.ERROR
-            report.error = f'decompile: {type(e).__name__}: {e}'
+            report.error = decompiled.error
             return report
 
+        hlil_func = decompiled.hlil
         try:
             # The emitted text, parsed back and executed with the same semantics as the HLIL
-            ts_func = parse_typescript(generate_typescript(hlil_func), hlil_func.start_addr)
+            ts_func = parse_typescript(decompiled.ts_text, hlil_func.start_addr)
 
         except Exception as e:
             report.verdict = Verdict.ERROR
@@ -349,11 +381,13 @@ class FunctionChecker:
         return 'not reproduced stage by stage'
 
 
-def check_functions(parser, functions, options: CheckOptions, progress = None) -> List[FunctionReport]:
+def check_functions(parser, functions, options: CheckOptions, progress = None,
+                    decompiled: Optional[Dict[str, DecompiledFunction]] = None) -> List[FunctionReport]:
+    '''decompiled: outputs already produced for these functions, keyed by name'''
     reports = []
     for func in functions:
         try:
-            report = FunctionChecker(parser, func, options).check()
+            report = FunctionChecker(parser, func, options).check((decompiled or {}).get(func.name))
 
         except Exception as e:
             report = FunctionReport(func.name, func.offset, Verdict.ERROR, error = f'checker: {type(e).__name__}: {e}\n{traceback.format_exc(limit = 3)}')
