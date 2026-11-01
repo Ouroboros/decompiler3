@@ -108,10 +108,6 @@ def code_from_instructions(func) -> CodeItems:
         seen.add(block.offset)
         pending.extend(block.succs)
         for inst in block.instructions:
-            # Synthetic fallthrough jumps added by the disassembler have no bytes
-            if inst.size == 0:
-                continue
-
             if inst.opcode == ED9Opcode.DEBUG_SET_LINENO:
                 items.lines.add((inst.offset, int(inst.operands[0].value)))
 

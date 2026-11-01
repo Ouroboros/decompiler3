@@ -61,6 +61,12 @@ class ED9VMLifter:
                 builder.set_current_address(inst.offset)
                 self._translate_instruction(builder, inst, block, block_map, llil_blocks)
 
+            # Execution continues into the next block without a jump in the bytecode
+            if block.fallthrough is not None:
+                target = self._require_block(block.fallthrough.offset, block_map, llil_blocks)
+                builder.jmp(target)
+                builder.save_stack_for_offset(target.start)
+
         return builder.finalize()
 
     def lift_functions(self, functions: Iterable[Function]) -> list[LiftResult]:

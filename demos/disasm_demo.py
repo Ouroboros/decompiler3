@@ -214,10 +214,7 @@ def test_jump_into_middle():
     ])
 
     # Disassemble
-    from falcom.ed9.disasm.ed9_optable import ed9_create_fallthrough_jump
-    context = DisassemblerContext(
-        create_fallthrough_jump = ed9_create_fallthrough_jump,
-    )
+    context = DisassemblerContext()
 
     disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
 

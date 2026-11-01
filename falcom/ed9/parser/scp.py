@@ -127,6 +127,7 @@ class ScpParser(StrictBase):
         self.functions      = self._read_functions(fs, func_entries)
         self.global_vars    = self._read_global_vars(fs)
         self.layout         = self._read_layout(fs, func_entries)
+        self._read_code(fs)
 
         self.function_map = {func.name: func for func in self.functions}
 
@@ -152,6 +153,45 @@ class ScpParser(StrictBase):
 
         body_offset = max(table_ends)
         return ScriptLayout(len(data), body_offset, data[body_offset:])
+
+    def _read_code(self, fs: fileio.FileStream):
+        '''Decode each function linearly from its entry to the next function's entry, keeping dead code
+
+        The code is one contiguous range; the last function ends where the string pool starts, at the
+        smallest string offset referenced by an instruction or a table.
+        '''
+        ordered = sorted(self.functions, key = lambda func: func.offset)
+        strings = self._table_string_offsets()
+        for index, func in enumerate(ordered):
+            limit = ordered[index + 1].offset if index + 1 < len(ordered) else None
+            func.instructions = self._decode_range(fs, func, limit, strings)
+
+        self.layout.string_pool_offset = min(strings, default = self.layout.size)
+
+    def _decode_range(self, fs: fileio.FileStream, func: Function, limit: int | None, strings: list[int]) -> list[Instruction]:
+        '''limit None: decode up to the lowest string offset seen so far'''
+        instructions = []
+        fs.Position = func.offset
+        while fs.Position < (limit if limit is not None else min(strings, default = self.layout.size)):
+            inst = ED9_INSTRUCTION_TABLE.decode_instruction(fs, fs.Position)
+            instructions.append(inst)
+            strings.extend(value.offset for value in instruction_values(inst) if value.type == ScpValue.Type.String)
+
+        func.code_end = fs.Position
+        if limit is not None and func.code_end != limit:
+            raise ValueError(f'{func.name}: code decodes to 0x{func.code_end:X}, past the next function at 0x{limit:X}')
+
+        return instructions
+
+    def _table_string_offsets(self) -> list[int]:
+        offsets = [func.layout.name_offset for func in self.functions] + [var.name_offset for var in self.global_vars]
+        for func in self.functions:
+            offsets.extend(param.default_value.offset for param in func.params
+                           if param.default_value is not None and param.default_value.type == ScpValue.Type.String)
+            offsets.extend(arg.value.offset for info in func.debug_info for arg in info.args
+                           if arg.value.type == ScpValue.Type.String)
+
+        return offsets
 
     def _read_function_entries(self, fs: fileio.FileStream):
         return [ScpFunctionEntry(fs = fs) for _ in range(self.header.function_count)]
@@ -407,6 +447,10 @@ class ScpParser(StrictBase):
 
             print(f'Disassembling {func.name} @ 0x{func.offset:08X}')
 
+            # Disassembly rewrites call-sequence pushes in place; start again from freshly decoded instructions
+            if func.entry_block is not None:
+                func.instructions = self._decode_range(self.fs, func, func.code_end, [])
+
             # Create new context for each function
             context = ScpDisassemblerContext(
                 get_func_argc           = self.get_func_argc,
@@ -414,10 +458,9 @@ class ScpParser(StrictBase):
                 on_block_start          = self.on_block_start,
                 on_instruction_decoded  = self.on_instruction_decoded,
                 on_pre_add_branch       = self.on_pre_add_branch,
-                create_fallthrough_jump = ed9_create_fallthrough_jump,
             )
 
-            disasm = Disassembler(ED9_INSTRUCTION_TABLE, context)
+            disasm = Disassembler(ED9_INSTRUCTION_TABLE, context, decoded = {inst.offset: inst for inst in func.instructions})
             try:
                 func.entry_block = disasm.disasm_function(self.fs, offset = func.offset, name = func.name)
                 disassembled_functions.append(func)

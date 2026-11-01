@@ -1,6 +1,7 @@
 """Instruction table interface and descriptor"""
 
 from common import *
+import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from .basic_block import BranchKind
@@ -90,6 +91,22 @@ class OperandDescriptor:
             OperandType.Float32 : lambda: fs.ReadFloat(),
             OperandType.Offset  : lambda: fs.ReadULong(),
         }[self.format.type]()
+
+    # struct formats of the fixed-size operand types
+    PACK_FORMATS = {
+        OperandType.SInt8   : '<b',
+        OperandType.SInt16  : '<h',
+        OperandType.SInt32  : '<i',
+        OperandType.UInt8   : '<B',
+        OperandType.UInt16  : '<H',
+        OperandType.UInt32  : '<I',
+        OperandType.Float32 : '<f',
+        OperandType.Offset  : '<I',
+    }
+
+    def write_value(self, value: Any) -> bytes:
+        """Encode operand value; inverse of read_value"""
+        return struct.pack(self.PACK_FORMATS[self.format.type], value)
 
     def format_operand(self, operand: 'Operand', context: 'FormatterContext') -> str:
         """Format operand for display"""
@@ -264,3 +281,12 @@ class InstructionTable(ABC):
         inst.size = fs.Position - offset
 
         return inst
+
+    def encode_instruction(self, inst: 'Instruction') -> bytes:
+        """Encode a decoded instruction; inverse of decode_instruction"""
+        return self.write_opcode(inst.opcode) + b''.join(op.descriptor.write_value(op.value) for op in inst.operands)
+
+    @abstractmethod
+    def write_opcode(self, opcode: int) -> bytes:
+        """Encode opcode; inverse of read_opcode"""
+        pass

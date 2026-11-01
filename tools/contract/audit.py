@@ -25,15 +25,15 @@ def _element_count(reference, actual) -> int:
     return sum((expected - found).values()) + sum((found - expected).values())
 
 
-def compare_bytes(layer: str, script: str, expected: bytes, found: bytes) -> List[Difference]:
-    '''Byte-exact comparison; reports the number of differing bytes and the first difference'''
+def compare_bytes(layer: str, script: str, expected: bytes, found: bytes, function: str = '', base: int = 0) -> List[Difference]:
+    '''Byte-exact comparison; reports the number of differing bytes and the first difference (at base + index)'''
     if expected == found:
         return []
 
     differing = sum(1 for a, b in zip(expected, found) if a != b) + abs(len(expected) - len(found))
     first = next((index for index, (a, b) in enumerate(zip(expected, found)) if a != b), min(len(expected), len(found)))
-    return [Difference(layer, script, 'bytes', count = differing,
-                       detail = f'size {len(expected)} -> {len(found)}, first difference at 0x{first:X}')]
+    return [Difference(layer, script, 'bytes', function, count = differing,
+                       detail = f'size {len(expected)} -> {len(found)}, first difference at 0x{base + first:X}')]
 
 
 def compare_tables(layer: str, script: str, reference: ModuleTables, actual: ModuleTables,

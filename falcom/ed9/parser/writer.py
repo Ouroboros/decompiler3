@@ -1,14 +1,15 @@
 '''Write a parsed script back to bytes with its original layout
 
 Every table is regenerated from the parser model (header, function entries, parameter flags, defaults,
-call debug records, globals) together with the strings they reference; the body after the tables (code
-and the string pool) is kept as bytes until the instruction layer can encode it.
+call debug records, globals) and the code is re-encoded from each function's instructions, together
+with the strings they reference; the rest of the string pool is kept as bytes.
 '''
 
 import struct
 
 from common.config import default_encoding
 
+from ..disasm.ed9_optable import ED9_INSTRUCTION_TABLE, instruction_values
 from .types_scp import (
     ScpFunctionCallDebugInfo, ScpFunctionCallDebugInfoArg, ScpFunctionEntry, ScpGlobalVar, ScpHeader, ScpParamFlags, ScpValue,
     VALUE_TAG_SHIFT,
@@ -34,6 +35,10 @@ class ScpWriter:
         layout = parser.layout
         self.buffer = bytearray(layout.size)
         self.buffer[layout.body_offset:] = layout.body
+        # The code range is generated only from the instructions
+        self.buffer[layout.body_offset:layout.string_pool_offset] = bytes(layout.string_pool_offset - layout.body_offset)
+        for func in parser.functions:
+            self._write_code(func)
 
         header = parser.header
         struct.pack_into(HEADER_FORMAT, self.buffer, 0, ScpHeader.MAGIC, header.function_entry_offset, len(parser.functions),
@@ -72,6 +77,19 @@ class ScpWriter:
                 arg_position = info.info_offset + ScpFunctionCallDebugInfoArg.SIZE * arg_index
                 self._write_value(arg_position, arg.value)
                 self._write_word(arg_position + ScpValue.SIZE, arg.type)
+
+    def _write_code(self, func):
+        position = func.offset
+        for inst in func.instructions:
+            if inst.offset != position:
+                raise ValueError(f'{func.name}: instruction at 0x{inst.offset:X}, expected 0x{position:X}')
+
+            data = ED9_INSTRUCTION_TABLE.encode_instruction(inst)
+            self.buffer[position:position + len(data)] = data
+            position += len(data)
+            for value in instruction_values(inst):
+                if value.type == ScpValue.Type.String:
+                    self._write_string(value.value, value.offset)
 
     def _write_word(self, position: int, word: int):
         struct.pack_into(WORD_FORMAT, self.buffer, position, word)

@@ -77,6 +77,8 @@ class ScriptLayout:
         self.size           = size
         self.body_offset    = body_offset
         self.body           = body
+        # Start of the string pool after the code; set once the code is decoded
+        self.string_pool_offset = size
 
 
 class FunctionLayout:
@@ -98,6 +100,9 @@ class Function:
     debug_info      : list[FunctionCallDebugInfo]
     layout          : FunctionLayout
     entry_block     : BasicBlock | None
+    # Every instruction from the entry up to the next function, dead code included, in offset order
+    instructions    : list
+    code_end        : int
 
     def __init__(self):
         self.params     = []
@@ -105,6 +110,8 @@ class Function:
         self.byte06     = 0
         self.layout     = None
         self.entry_block = None
+        self.instructions = []
+        self.code_end   = 0
 
     def name_hash(self) -> int:
         return hash_func_Name(self.name)

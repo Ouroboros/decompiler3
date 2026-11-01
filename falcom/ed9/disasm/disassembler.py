@@ -14,7 +14,6 @@ class DisassemblerContext:
     """Context for disassembler with callbacks"""
     instruction_table      : 'InstructionTable' = None
     get_func_argc          : Callable[[int], int | None] = None  # func_id -> argc
-    create_fallthrough_jump: Callable[[int, int, 'InstructionTable'], 'Instruction'] = None  # offset, target, inst_table -> synthetic_jmp
     on_disasm_function      : Callable[['DisassemblerContext', int, str], None] = None  # context, offset, name
     on_block_start          : Callable[['DisassemblerContext', int], None] = None  # context, offset
     on_instruction_decoded  : Callable[['DisassemblerContext', 'Instruction', 'BasicBlock'], list[BranchTarget]] = None  # context, current_inst, block -> branch_targets
@@ -24,10 +23,12 @@ class DisassemblerContext:
 class Disassembler:
     """Recursive descent disassembler"""
 
-    def __init__(self, instruction_table: InstructionTable, context: DisassemblerContext):
+    def __init__(self, instruction_table: InstructionTable, context: DisassemblerContext, decoded: dict[int, Instruction] | None = None):
         self.instruction_table = instruction_table
         self.context = context
         self.context.instruction_table = instruction_table
+        # Instructions already decoded linearly (offset -> instruction); the CFG reuses these objects
+        self.decoded = decoded or {}
 
         # Tracking dictionaries
         self.disassembled_blocks: dict[int, BasicBlock] = {}   # offset -> completed block
@@ -124,11 +125,17 @@ class Disassembler:
 
             # Check if we've reached another block's instructions
             if pos in self.disassembled_offset:
-                # Reached an instruction that's part of another block
+                # Execution continues into an instruction another block already holds
+                self._add_fallthrough(block, pos)
                 break
 
             # Decode instruction
-            inst = self.instruction_table.decode_instruction(fs, pos)
+            inst = self.decoded.get(pos)
+            if inst is None:
+                inst = self.instruction_table.decode_instruction(fs, pos)
+
+            else:
+                fs.Position = pos + inst.size
 
             # Record instruction
             self.disassembled_offset[pos] = inst
@@ -167,7 +174,7 @@ class Disassembler:
             # Check if next position is an allocated block
             if fs.Position in self.allocated_blocks:
                 # Next instruction belongs to a pre-allocated block
-                self._add_fallthrough_jump(block, pos, fs.Position)
+                self._add_fallthrough(block, fs.Position)
                 break
 
         # Restore previous block context
@@ -175,15 +182,10 @@ class Disassembler:
 
         return block
 
-    def _add_fallthrough_jump(self, block: BasicBlock, src_offset: int, target_offset: int):
-        """Emit a synthetic fallthrough jump from block to the block at target_offset"""
+    def _add_fallthrough(self, block: BasicBlock, target_offset: int):
+        """Record that block continues into the block at target_offset without a jump instruction"""
         next_block = self.ensure_block_at(target_offset)
-        synthetic_jmp = self.context.create_fallthrough_jump(
-            src_offset,
-            target_offset,
-            self.instruction_table
-        )
-        block.instructions.append(synthetic_jmp)
+        block.fallthrough = next_block
         block.add_branch(next_block, BranchKind.UNCONDITIONAL)
 
     def create_block(self, offset: int) -> BasicBlock:
@@ -243,24 +245,15 @@ class Disassembler:
         tail.succs = owner.succs.copy()
         tail.true_succs = owner.true_succs.copy()
         tail.false_succs = owner.false_succs.copy()
+        tail.fallthrough = owner.fallthrough
 
-        # Update owner (head)
+        # Update owner (head): it now continues into the tail
         owner.end_offset = split_offset
         owner.instructions = owner.instructions[:split_idx]
-
-        # Add synthetic fallthrough jump instruction to owner to make it terminate properly
-        # This is needed for LLIL conversion to ensure every block ends with a terminal instruction
-
-        synthetic_jmp = self.context.create_fallthrough_jump(
-            split_offset,
-            tail.start_offset,
-            self.instruction_table
-        )
-        owner.instructions.append(synthetic_jmp)
-
         owner.succs = [tail]
         owner.true_succs = []
         owner.false_succs = []
+        owner.fallthrough = tail
 
         # Register tail in all tracking dictionaries
         self.allocated_blocks[tail.start_offset] = tail

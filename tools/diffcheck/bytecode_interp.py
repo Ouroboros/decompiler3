@@ -214,6 +214,9 @@ class BytecodeInterpreter:
             self.stack.append((self.plan.param(number), SymInput((ORIGIN_PARAM, number))))
 
     def _fallthrough(self, block: BasicBlock) -> BasicBlock:
+        if block.fallthrough is not None:
+            return block.fallthrough
+
         if len(block.succs) != 1:
             raise VMFault('missing_fallthrough', block.name)
 

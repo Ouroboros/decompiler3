@@ -26,6 +26,8 @@ class BasicBlock:
     true_succs      : list['BasicBlock']  = field(default_factory = list)   # True branch successors
     false_succs     : list['BasicBlock']  = field(default_factory = list)   # False branch successors
     preds           : list['BasicBlock']  = field(default_factory = list)   # All predecessors
+    # Block execution continues into when the last instruction does not transfer control (no instruction encodes it)
+    fallthrough     : 'BasicBlock | None' = None
 
     def __post_init__(self):
         if not self.name:

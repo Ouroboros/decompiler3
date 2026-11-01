@@ -1,6 +1,7 @@
 """ED9 (Kuro no Kiseki) Instruction Table"""
 
 from common import *
+import struct
 from ml import fileio
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,9 @@ from ..parser.types_scp import *
 
 if TYPE_CHECKING:
     from .formatter import FormatterContext
+
+OPCODE_FORMAT       = '<B'
+PUSH_SIZE_FORMAT    = '<B'
 
 # ED9-specific operand types
 class ED9OperandType(IntEnum2):
@@ -33,6 +37,18 @@ class ED9OperandDescriptor(OperandDescriptor):
 
             case _:
                 return super().read_value(fs)
+
+    def write_value(self, value: Any) -> bytes:
+        """Encode ED9-specific operand values; inverse of read_value"""
+        match self.format.type:
+            case ED9OperandType.Func:
+                return struct.pack(self.PACK_FORMATS[OperandType.UInt16], value)
+
+            case ED9OperandType.Value:
+                return value.to_bytes()
+
+            case _:
+                return super().write_value(value)
 
     def format_operand(self, operand: Operand, context: 'FormatterContext') -> str:
         """Format ED9-specific operands"""
@@ -64,7 +80,6 @@ ED9_FORMAT_TABLE.update({
     'F' : _ed9_oprdesc(ED9OperandType.Func),
     'V' : _ed9_oprdesc(ED9OperandType.Value),
     'S' : _ed9_oprdesc(OperandType.String),
-    'L' : _ed9_oprdesc(OperandType.String),
 })
 
 if TYPE_CHECKING:
@@ -143,7 +158,7 @@ ED9_OPCODE_TABLE = [
     InstructionEntry(0x25, 'PUSH_CALLER_FRAME',       'O',   InstructionFlags.START_BLOCK),
     InstructionEntry(0x26, 'DEBUG_SET_LINENO',        'H'),
     InstructionEntry(0x27, 'POPN',                    'C'),
-    InstructionEntry(0x28, 'DEBUG_LOG',               'L'),
+    InstructionEntry(0x28, 'DEBUG_LOG',               'i'),
 
     # Pseudo-instructions (optimized from other instructions)
     InstructionEntry(0x1000, 'PUSH_CURRENT_FUNC_ID',  ''),
@@ -311,6 +326,17 @@ class ED9InstructionTable(InstructionTable):
         """Read opcode byte"""
         return fs.ReadByte()
 
+    def write_opcode(self, opcode: int) -> bytes:
+        """Write opcode byte"""
+        return struct.pack(OPCODE_FORMAT, opcode)
+
+    def encode_instruction(self, inst: Instruction) -> bytes:
+        """Encode an instruction; PUSH and its typed pseudo-instructions are written as the original PUSH"""
+        if inst.push_value is not None:
+            return self.write_opcode(ED9Opcode.PUSH) + struct.pack(PUSH_SIZE_FORMAT, inst.push_size) + inst.push_value.to_bytes()
+
+        return super().encode_instruction(inst)
+
     def get_descriptor(self, opcode: int) -> ED9InstructionDescriptor:
         """Get instruction descriptor"""
         if opcode not in self.descriptors:
@@ -359,6 +385,10 @@ class ED9InstructionTable(InstructionTable):
         if not isinstance(value, ScpValue):
             raise ValueError(f'Expected ScpValue, got {type(value)}')
 
+        # The typed forms below drop the size byte and the encoded word; keep both for encoding
+        inst.push_size = operand_size.value
+        inst.push_value = value
+
         # Helper to update instruction with new opcode and operand
         def update_push_inst(opcode: int, operand_value: Any):
             inst.opcode = opcode
@@ -382,28 +412,13 @@ class ED9InstructionTable(InstructionTable):
                 update_push_inst(ED9Opcode.PUSH_STR, value.value)
 
 
-def ed9_create_fallthrough_jump(offset: int, target: int, inst_table: 'InstructionTable') -> Instruction:
-    """Create a synthetic JMP instruction for split blocks"""
+def instruction_values(inst: Instruction) -> list[ScpValue]:
+    '''Tagged values encoded in an instruction, including the word of a decoded PUSH'''
+    values = [op.value for op in inst.operands if isinstance(op.value, ScpValue)]
+    if inst.push_value is not None:
+        values.append(inst.push_value)
 
-    # Get JMP descriptor from instruction table
-    jmp_descriptor = inst_table.get_descriptor(ED9Opcode.JMP)
-
-    # Create offset operand from instruction descriptor
-    op_desc = OperandDescriptor.from_format_string(jmp_descriptor.operand_fmt, ED9_FORMAT_TABLE)[0]
-    operand = Operand(descriptor = op_desc, value = target)
-
-    # Create synthetic instruction
-    # Use offset - 1 to avoid collision with tail block's first instruction
-    # Use size = 0 to indicate this is synthetic (not in original bytecode)
-    synthetic_inst = Instruction(
-        offset     = offset - 1,
-        opcode     = jmp_descriptor.opcode,
-        descriptor = jmp_descriptor,
-        operands   = [operand],
-        size       = 0  # Synthetic instruction, no actual bytes
-    )
-
-    return synthetic_inst
+    return values
 
 
 # Global instruction table instance

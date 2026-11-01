@@ -23,6 +23,9 @@ class Instruction:
     descriptor    : 'InstructionDescriptor'                         # Instruction descriptor from table
     operands      : list[Operand] = field(default_factory = list)
     size          : int = 0                                         # Instruction size in bytes
+    # Encoding of a PUSH that decoding turned into a typed pseudo-instruction (PUSH_INT, PUSH_RET_ADDR, ...)
+    push_size     : int = 0
+    push_value    : Any = None
 
     @property
     def mnemonic(self) -> str:

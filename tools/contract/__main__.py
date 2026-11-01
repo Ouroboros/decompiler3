@@ -13,6 +13,7 @@ from typing import Dict, List
 
 from ml import fileio
 from common.config import default_encoding
+from falcom.ed9.disasm import ED9_INSTRUCTION_TABLE
 from falcom.ed9.parser.scp import ScpParser
 from falcom.ed9.parser.writer import write_scp
 
@@ -28,13 +29,15 @@ from .model import Difference, FunctionEntry, ModuleTables
 LAYER_PARSER    = 'parser'
 # Parsing and writing back with the original layout must give the original bytes
 LAYER_WRITER    = 'writer'
+# Each function's linearly decoded instructions must re-encode to its original bytes
+LAYER_CODE      = 'code'
 LAYER_LLIL      = 'llil'
 LAYER_MLIL      = 'mlil'
 LAYER_HLIL      = 'hlil'
 LAYER_TS        = 'ts'
 LAYER_PIPELINE  = 'pipeline'
 IR_LAYERS       = (LAYER_LLIL, LAYER_MLIL, LAYER_HLIL, LAYER_TS)
-ALL_LAYERS      = (LAYER_WRITER, LAYER_PARSER) + IR_LAYERS
+ALL_LAYERS      = (LAYER_WRITER, LAYER_CODE, LAYER_PARSER) + IR_LAYERS
 # The TypeScript backend's file-level format is deferred (docs/REDESIGN.md section 2): code items only
 TABLE_LAYERS    = (LAYER_PARSER, LAYER_LLIL, LAYER_MLIL, LAYER_HLIL)
 PROGRESS_EVERY  = 100
@@ -64,6 +67,11 @@ def audit_file(path: Path, layers, names) -> List[Difference]:
     differences: List[Difference] = []
     if LAYER_WRITER in layers:
         differences += compare_bytes(LAYER_WRITER, script, data, write_scp(parser))
+
+    if LAYER_CODE in layers:
+        for func in selected:
+            encoded = b''.join(ED9_INSTRUCTION_TABLE.encode_instruction(inst) for inst in func.instructions)
+            differences += compare_bytes(LAYER_CODE, script, data[func.offset:func.code_end], encoded, func.name, func.offset)
 
     if LAYER_PARSER in layers:
         differences += compare_tables(LAYER_PARSER, script, reference, tables_from_parser(parser), checked)

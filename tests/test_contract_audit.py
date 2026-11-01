@@ -5,6 +5,7 @@ from pathlib import Path
 import contextlib
 import copy
 import io
+import struct
 import sys
 import unittest
 
@@ -15,6 +16,7 @@ from common.config import default_encoding
 from ir.hlil import HLILComment
 from ir.llil import LowLevelILDebug
 from ml import fileio
+from falcom.ed9.disasm import ED9_INSTRUCTION_TABLE, ED9Opcode
 from falcom.ed9.parser.scp import ScpParser
 from falcom.ed9.parser.writer import write_scp
 from tools.contract.audit import compare_code, compare_tables
@@ -34,6 +36,8 @@ LINE_FUNCTION       = 'FC_All_FlagSet_Final_Chapter'
 RAW_RETURN_FUNCTION = 'set_flag'
 FOREIGN_VALUE       = 12345
 SINGLE              = 1
+# DEBUG_LOG with a negative i32 operand (no DEBUG_LOG occurs in the corpus)
+DEBUG_LOG_BYTES     = struct.pack('<Bi', ED9Opcode.DEBUG_LOG, -FOREIGN_VALUE)
 
 
 def load():
@@ -108,6 +112,24 @@ class TestWriter(unittest.TestCase):
                 data, parser, _ = load()
                 mutate(parser)
                 self.assertNotEqual(write_scp(parser), data)
+
+    def test_code_is_written_from_the_instructions(self):
+        data, parser, _ = load()
+        func = parser.get_func_by_name(LINE_FUNCTION)
+        line = next(inst for inst in func.instructions if inst.opcode == ED9Opcode.DEBUG_SET_LINENO)
+        line.operands[0].value += SINGLE
+        self.assertNotEqual(write_scp(parser), data)
+
+
+class TestInstructionEncoding(unittest.TestCase):
+    def test_debug_log_round_trip(self):
+        with fileio.FileStream(DEBUG_LOG_BYTES, encoding = default_encoding()) as fs:
+            inst = ED9_INSTRUCTION_TABLE.decode_instruction(fs, 0)
+
+        self.assertEqual(inst.opcode, ED9Opcode.DEBUG_LOG)
+        self.assertEqual(inst.operands[0].value, -FOREIGN_VALUE)
+        self.assertEqual(inst.size, len(DEBUG_LOG_BYTES))
+        self.assertEqual(ED9_INSTRUCTION_TABLE.encode_instruction(inst), DEBUG_LOG_BYTES)
 
 
 class TestCodeAudit(unittest.TestCase):
