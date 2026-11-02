@@ -40,6 +40,10 @@ from ..hlil_formatter import HLILFormatter
 INLINE_COMPARISONS = {BinaryOp.EQ, BinaryOp.NE, BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE}
 
 
+class _Unsafe(Exception):
+    '''Substituting a temporary would reorder or skip an evaluation'''
+
+
 # Fewest distinct labels an if-chain needs before it becomes a switch
 MIN_SWITCH_CASES = 3
 
@@ -52,6 +56,7 @@ class ControlFlowOptimizationPass(Pass):
         self.values = func.target.values
         self.reads: Counter = Counter()
         self.writes: Counter = Counter()
+        self.address_taken = set()
         self._count_var_uses(func.body)
         self.inlined_vars = set()
         self._optimize_block(func.body)
@@ -76,6 +81,9 @@ class ControlFlowOptimizationPass(Pass):
             self.reads[node.var] += 1
             return
 
+        if isinstance(node, HLILAddressOf) and isinstance(node.operand, HLILVar):
+            self.address_taken.add(node.operand.var)
+
         if isinstance(node, (HLILInstruction, HLILSwitchCase)):
             for value in vars(node).values():
                 if isinstance(value, (HLILInstruction, HLILSwitchCase, list)):
@@ -95,6 +103,14 @@ class ControlFlowOptimizationPass(Pass):
             if isinstance(stmt, HLILAssign) and isinstance(stmt.dest, HLILVar):
                 if i + 1 < len(block.statements):
                     next_stmt = block.statements[i + 1]
+                    # [tmp = expr; return / expression / assignment using tmp]: the rewritten statement
+                    # is processed again, so a chain of single-use temporaries collapses
+                    rewritten = self._inline_into_statement(stmt, next_stmt)
+                    if rewritten is not None:
+                        block.statements[i + 1] = rewritten
+                        i += 1
+                        continue
+
                     inlined = self._inline_into_condition(stmt, next_stmt)
                     if inlined:
                         # Recursively optimize the inlined if's sub-blocks
@@ -199,7 +215,132 @@ class ControlFlowOptimizationPass(Pass):
             if inlined:
                 return inlined
 
-        return self._try_inline_single_use(assign_stmt, next_stmt)
+        inlined = self._try_inline_single_use(assign_stmt, next_stmt)
+        if inlined is not None or not isinstance(next_stmt, HLILIf) or not self._is_single_use_temp(assign_stmt.dest.var):
+            return inlined
+
+        condition = self._substitute_first(next_stmt.condition, assign_stmt.dest.var, assign_stmt.src)
+        if condition is None:
+            return None
+
+        inlined = HLILIf(condition, next_stmt.true_block, next_stmt.false_block)
+        inlined.address = next_stmt.address
+        self.inlined_vars.add(assign_stmt.dest.var)
+        return inlined
+
+    def _is_single_use_temp(self, var: HLILVariable) -> bool:
+        return var.kind == VariableKind.LOCAL and self.writes[var] == 1 and self.reads[var] == 1
+
+    def _inline_into_statement(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILStatement]:
+        '''tmp = expr; return / expression statement / var = ... using tmp once -> the statement with expr in its place'''
+        var = assign_stmt.dest.var
+        if not self._is_single_use_temp(var):
+            return None
+
+        if isinstance(next_stmt, HLILReturn) and next_stmt.value is not None:
+            value = self._substitute_first(next_stmt.value, var, assign_stmt.src)
+            rewritten = None if value is None else HLILReturn(value)
+
+        elif isinstance(next_stmt, HLILExprStmt):
+            expr = self._substitute_first(next_stmt.expr, var, assign_stmt.src)
+            rewritten = None if expr is None else HLILExprStmt(expr)
+
+        elif isinstance(next_stmt, HLILAssign) and isinstance(next_stmt.dest, HLILVar):
+            src = self._substitute_first(next_stmt.src, var, assign_stmt.src)
+            rewritten = None if src is None else HLILAssign(next_stmt.dest, src)
+
+        else:
+            rewritten = None
+
+        if rewritten is None:
+            return None
+
+        rewritten.address = next_stmt.address
+        rewritten.mlil_index = next_stmt.mlil_index
+        self.inlined_vars.add(var)
+        return rewritten
+
+    def _substitute_first(self, expr: HLILExpression, var: HLILVariable, value: HLILExpression) -> Optional[HLILExpression]:
+        '''expr with its one read of var replaced by value, or None when that could change behavior
+
+        HLIL evaluates operands left to right and calls' arguments in order; && and || skip their right
+        operand. The original code evaluates value first, so everything expr evaluates before var must
+        neither observe value's side effects nor have any: constants, locals and parameters whose address
+        is never taken, and operators that cannot fault or log an error. var must not sit in the right
+        operand of && or ||, which might not be evaluated at all.
+        '''
+        found = []
+
+        def walk(node):
+            if isinstance(node, HLILVar) and node.var == var:
+                found.append(node)
+                return value
+
+            if not self._contains_var(node, var):
+                if found or self._is_inert(node):
+                    return node
+
+                raise _Unsafe()
+
+            if isinstance(node, HLILBinaryOp):
+                lhs = walk(node.lhs)
+                if node.op in (BinaryOp.AND, BinaryOp.OR) and not found:
+                    raise _Unsafe()
+
+                rebuilt = HLILBinaryOp(node.op, lhs, walk(node.rhs))
+
+            elif isinstance(node, HLILUnaryOp) and type(node) is HLILUnaryOp:
+                rebuilt = HLILUnaryOp(node.op, walk(node.operand))
+
+            elif isinstance(node, HLILCall):
+                rebuilt = HLILCall(node.func_name, [walk(arg) for arg in node.args])
+
+            elif isinstance(node, HLILExternalCall):
+                rebuilt = HLILExternalCall(node.target, [walk(arg) for arg in node.args])
+
+            else:
+                raise _Unsafe()
+
+            rebuilt.address = node.address
+            rebuilt.mlil_index = node.mlil_index
+            return rebuilt
+
+        try:
+            result = walk(expr)
+
+        except _Unsafe:
+            return None
+
+        return result if len(found) == 1 else None
+
+    INERT_BINARY_OPS = {
+        BinaryOp.EQ, BinaryOp.NE, BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE,
+        BinaryOp.ADD, BinaryOp.SUB, BinaryOp.MUL, BinaryOp.AND, BinaryOp.OR,
+    }
+
+    def _is_inert(self, node: HLILExpression) -> bool:
+        '''Evaluating node has no side effect, cannot fault and reads nothing a call can change'''
+        if isinstance(node, HLILConst):
+            return True
+
+        if isinstance(node, HLILVar):
+            return node.var.kind in (VariableKind.LOCAL, VariableKind.PARAM) and node.var not in self.address_taken
+
+        if isinstance(node, HLILBinaryOp):
+            return node.op in self.INERT_BINARY_OPS and self._is_inert(node.lhs) and self._is_inert(node.rhs)
+
+        return False
+
+    def _contains_var(self, node, var: HLILVariable) -> bool:
+        if isinstance(node, HLILVar):
+            return node.var == var
+
+        if isinstance(node, (HLILInstruction, HLILSwitchCase)):
+            return any(self._contains_var(item, var) for value in vars(node).values()
+                       for item in (value if isinstance(value, list) else [value])
+                       if isinstance(item, (HLILInstruction, HLILSwitchCase)))
+
+        return False
 
     def _try_inline_single_use(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
         '''
