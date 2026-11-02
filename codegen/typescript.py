@@ -459,45 +459,45 @@ class TypeScriptGenerator:
         return f'!({cls._format_expr(cond)})'
 
     @classmethod
+    def _orient_if(cls, stmt: HLILIf) -> tuple:
+        '''Condition text and branches to print, the deeper or only branch moved to else to reduce nesting'''
+        condition = stmt.condition
+        true_block = stmt.true_block
+        false_block = stmt.false_block
+
+        # Swap if true has deeper if nesting than false, but only if it won't create an empty true block
+        true_depth = cls._get_if_depth(true_block)
+        false_depth = cls._get_if_depth(false_block)
+        false_has_content = false_block and false_block.statements
+        if false_has_content and true_depth > false_depth:
+            return cls._negate_condition_str(condition), false_block, true_block
+
+        # Swap if true block is empty but false has content
+        true_empty = not true_block or not true_block.statements
+        if true_empty and false_has_content:
+            return cls._negate_condition_str(condition), false_block, None
+
+        return cls._format_expr(condition), true_block, false_block
+
+    @classmethod
     def _generate_statement(cls, stmt: HLILStatement, indent: int = 0) -> List[str]:
         indent_str = default_indent() * indent
         lines = []
 
         if isinstance(stmt, HLILIf):
-            condition = stmt.condition
-            true_block = stmt.true_block
-            false_block = stmt.false_block
-
-            # Swap if true has deeper if nesting than false (reduce nesting)
-            # But only if it won't create an empty true block
-            true_depth = cls._get_if_depth(true_block)
-            false_depth = cls._get_if_depth(false_block)
-            false_has_content = false_block and false_block.statements
-            if false_has_content and true_depth > false_depth:
-                cond_str = cls._negate_condition_str(condition)
-                true_block, false_block = false_block, true_block
-
-            else:
-                # Swap if true block is empty but false has content
-                true_empty = not true_block or not true_block.statements
-                if true_empty and false_has_content:
-                    cond_str = cls._negate_condition_str(condition)
-                    true_block, false_block = false_block, None
-
-                else:
-                    cond_str = cls._format_expr(condition)
-
+            cond_str, true_block, false_block = cls._orient_if(stmt)
             lines.append(f'{indent_str}if ({cond_str}) {{')
             lines.extend(cls._generate_block(true_block, indent + 1))
 
             while false_block and false_block.statements:
-                # else { single if } -> else if
-                if len(false_block.statements) == 1 and isinstance(false_block.statements[0], HLILIf):
-                    inner_if = false_block.statements[0]
-                    inner_cond = cls._format_expr(inner_if.condition)
-                    lines.append(f'{indent_str}}} else if ({inner_cond}) {{')
-                    lines.extend(cls._generate_block(inner_if.true_block, indent + 1))
-                    false_block = inner_if.false_block
+                # else { [debug marker] if } -> else if, the marker trailing the else-if line
+                statements = false_block.statements
+                marker = statements[0] if len(statements) == 2 and isinstance(statements[0], HLILDebug) else None
+                if len(statements) == (2 if marker else 1) and isinstance(statements[-1], HLILIf):
+                    inner_cond, inner_true, false_block = cls._orient_if(statements[-1])
+                    trailing = f' // {marker.text}' if marker else ''
+                    lines.append(f'{indent_str}}} else if ({inner_cond}) {{{trailing}')
+                    lines.extend(cls._generate_block(inner_true, indent + 1))
 
                 else:
                     lines.append(f'{indent_str}}} else {{')

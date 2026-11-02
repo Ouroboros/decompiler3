@@ -1,5 +1,6 @@
 '''Control Flow Optimization Pass'''
 
+from collections import Counter
 from typing import Optional
 from ir.pipeline import Pass
 from ..hlil import (
@@ -26,12 +27,17 @@ from ..hlil import (
     HLILBreak,
     HLILContinue,
     HLILComment,
+    HLILDebug,
     HLILVariable,
     VariableKind,
     BinaryOp,
     UnaryOp,
 )
 from ..hlil_formatter import HLILFormatter
+
+
+# Comparisons a single-use temporary may be inlined into as the left operand
+INLINE_COMPARISONS = {BinaryOp.EQ, BinaryOp.NE, BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE}
 
 
 # Fewest distinct labels an if-chain needs before it becomes a switch
@@ -44,9 +50,36 @@ class ControlFlowOptimizationPass(Pass):
     def run(self, func: HighLevelILFunction) -> HighLevelILFunction:
         # Switch labels must be distinct under the target's equality
         self.values = func.target.values
+        self.reads: Counter = Counter()
+        self.writes: Counter = Counter()
+        self._count_var_uses(func.body)
+        self.inlined_vars = set()
         self._optimize_block(func.body)
         self._merge_nested_switches(func.body)
+        func.variables = [var for var in func.variables if var not in self.inlined_vars]
         return func
+
+    def _count_var_uses(self, node):
+        '''Count reads and writes of every variable under node'''
+        if isinstance(node, list):
+            for item in node:
+                self._count_var_uses(item)
+
+            return
+
+        if isinstance(node, HLILAssign) and isinstance(node.dest, HLILVar):
+            self.writes[node.dest.var] += 1
+            self._count_var_uses(node.src)
+            return
+
+        if isinstance(node, HLILVar):
+            self.reads[node.var] += 1
+            return
+
+        if isinstance(node, (HLILInstruction, HLILSwitchCase)):
+            for value in vars(node).values():
+                if isinstance(value, (HLILInstruction, HLILSwitchCase, list)):
+                    self._count_var_uses(value)
 
     def _optimize_block(self, block: HLILBlock):
         if not block or not block.statements:
@@ -58,24 +91,23 @@ class ControlFlowOptimizationPass(Pass):
         while i < len(block.statements):
             stmt = block.statements[i]
 
-            # Try inline: [nop*, assign, if] -> [nop*, if(bool_expr)]
+            # Try inline: [nop*, assign, if] -> [nop*, if(expr)]
             if isinstance(stmt, HLILAssign) and isinstance(stmt.dest, HLILVar):
-                if self._is_boolean_expr(stmt.src):
-                    if i + 1 < len(block.statements):
-                        next_stmt = block.statements[i + 1]
-                        inlined = self._try_inline_condition(stmt, next_stmt)
-                        if inlined:
-                            # Recursively optimize the inlined if's sub-blocks
-                            self._optimize_block(inlined.true_block)
-                            self._optimize_block(inlined.false_block)
-                            # Remove redundant assignments
-                            self._remove_redundant_else_assign(inlined)
-                            # Flatten else-if pattern in both branches
-                            self._try_flatten_if_block(inlined, is_true_block=True)
-                            self._try_flatten_if_block(inlined, is_true_block=False)
-                            optimized.append(inlined)
-                            i += 2
-                            continue
+                if i + 1 < len(block.statements):
+                    next_stmt = block.statements[i + 1]
+                    inlined = self._inline_into_condition(stmt, next_stmt)
+                    if inlined:
+                        # Recursively optimize the inlined if's sub-blocks
+                        self._optimize_block(inlined.true_block)
+                        self._optimize_block(inlined.false_block)
+                        # Remove redundant assignments
+                        self._remove_redundant_else_assign(inlined)
+                        # Flatten else-if pattern in both branches
+                        self._try_flatten_if_block(inlined, is_true_block=True)
+                        self._try_flatten_if_block(inlined, is_true_block=False)
+                        optimized.append(inlined)
+                        i += 2
+                        continue
 
             # Skip nop to find [assign, if] pattern for inlining
             if self._is_nop_stmt(stmt):
@@ -88,22 +120,21 @@ class ControlFlowOptimizationPass(Pass):
                     assign_stmt = block.statements[j]
                     if_stmt = block.statements[j + 1]
                     if isinstance(assign_stmt, HLILAssign) and isinstance(assign_stmt.dest, HLILVar):
-                        if self._is_boolean_expr(assign_stmt.src):
-                            inlined = self._try_inline_condition(assign_stmt, if_stmt)
-                            if inlined:
-                                # Collect leading nops
-                                for k in range(i, j):
-                                    optimized.append(block.statements[k])
+                        inlined = self._inline_into_condition(assign_stmt, if_stmt)
+                        if inlined:
+                            # Collect leading nops
+                            for k in range(i, j):
+                                optimized.append(block.statements[k])
 
-                                self._optimize_block(inlined.true_block)
-                                self._optimize_block(inlined.false_block)
-                                # Remove redundant assignments
-                                self._remove_redundant_else_assign(inlined)
-                                self._try_flatten_if_block(inlined, is_true_block=True)
-                                self._try_flatten_if_block(inlined, is_true_block=False)
-                                optimized.append(inlined)
-                                i = j + 2
-                                continue
+                            self._optimize_block(inlined.true_block)
+                            self._optimize_block(inlined.false_block)
+                            # Remove redundant assignments
+                            self._remove_redundant_else_assign(inlined)
+                            self._try_flatten_if_block(inlined, is_true_block=True)
+                            self._try_flatten_if_block(inlined, is_true_block=False)
+                            optimized.append(inlined)
+                            i = j + 2
+                            continue
 
             if isinstance(stmt, HLILIf):
                 self._optimize_block(stmt.true_block)
@@ -160,6 +191,42 @@ class ControlFlowOptimizationPass(Pass):
             return expr.op == UnaryOp.NOT
 
         return False
+
+    def _inline_into_condition(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
+        '''[var = expr; if (...var...)] -> [if (...expr...)], for a boolean expr or a single-use temporary'''
+        if self._is_boolean_expr(assign_stmt.src):
+            inlined = self._try_inline_condition(assign_stmt, next_stmt)
+            if inlined:
+                return inlined
+
+        return self._try_inline_single_use(assign_stmt, next_stmt)
+
+    def _try_inline_single_use(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
+        '''
+        var = expr; if (var OP const) {...} -> if (expr OP const) {...}
+        when the local var is written only here and read only in that condition: expr is still
+        evaluated exactly once, at the same point, and nothing else observes var.
+        '''
+        if not isinstance(next_stmt, HLILIf):
+            return None
+
+        var = assign_stmt.dest.var
+        if var.kind != VariableKind.LOCAL or self.writes[var] != 1 or self.reads[var] != 1:
+            return None
+
+        cond = next_stmt.condition
+        if not (isinstance(cond, HLILBinaryOp) and cond.op in INLINE_COMPARISONS):
+            return None
+
+        if not (isinstance(cond.lhs, HLILVar) and cond.lhs.var == var and isinstance(cond.rhs, HLILConst)):
+            return None
+
+        condition = HLILBinaryOp(cond.op, assign_stmt.src, cond.rhs)
+        condition.address = cond.address
+        inlined = HLILIf(condition, next_stmt.true_block, next_stmt.false_block)
+        inlined.address = next_stmt.address
+        self.inlined_vars.add(var)
+        return inlined
 
     def _try_inline_condition(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
         '''
@@ -522,7 +589,8 @@ class ControlFlowOptimizationPass(Pass):
         remaining = len(stmts) - idx
 
         # Pattern 1: { nop*; if (bool_expr) {...} } -> flatten for else-if
-        if remaining == 1 and isinstance(stmts[idx], HLILIf):
+        # A debug marker stays before the if: it belongs to the code evaluating the condition
+        if remaining == 1 and isinstance(stmts[idx], HLILIf) and not any(isinstance(nop, HLILDebug) for nop in leading_nops):
             inner_if = stmts[idx]
             if leading_nops:
                 if not inner_if.true_block:

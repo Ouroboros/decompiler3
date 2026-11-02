@@ -8,6 +8,7 @@ Only the subset codegen/typescript.py emits is accepted; anything else raises TS
 - true / false are the integers 1 / 0, numeric literals with '.' or an exponent are floats
 - raw(n) is a word without a type tag (RawWord)
 - a `// line(N)` or `// log(N)` comment on its own is a debug statement; other comments are ignored
+- a debug comment trailing `} else if (...) {` belongs before that if, inside the else block
 '''
 
 import re
@@ -118,6 +119,7 @@ class TypeScriptParser:
     '''Recursive descent parser for one generated function'''
 
     def __init__(self, source: str, start_addr: int = 0):
+        self.source = source
         self.tokens = tokenize(source)
         self.index = 0
         self.start_addr = start_addr
@@ -195,8 +197,15 @@ class TypeScriptParser:
 
     # --------------------------------------------------------- statements --
 
-    def _parse_block(self) -> HLILBlock:
-        self._expect('{')
+    def _parse_block(self, trailing: Optional[List[HLILStatement]] = None) -> HLILBlock:
+        '''trailing: receives the debug comments on the line of the opening brace'''
+        brace = self._expect('{')
+        while trailing is not None and self._peek().kind == 'debug':
+            if '\n' in self.source[brace.position:self._peek().position]:
+                break
+
+            trailing.append(self._parse_statement())
+
         block = HLILBlock()
         while not self._accept('}'):
             statement = self._parse_statement()
@@ -281,13 +290,15 @@ class TypeScriptParser:
         self._expect(')')
         return expression
 
-    def _parse_if(self) -> HLILIf:
+    def _parse_if(self, trailing: Optional[List[HLILStatement]] = None) -> HLILIf:
         condition = self._parse_parenthesized()
-        true_block = self._parse_block()
+        true_block = self._parse_block(trailing)
         false_block = None
         if self._accept('else'):
             if self._accept('if'):
-                false_block = HLILBlock([self._parse_if()])
+                markers = []
+                inner_if = self._parse_if(markers)
+                false_block = HLILBlock(markers + [inner_if])
 
             else:
                 false_block = self._parse_block()
