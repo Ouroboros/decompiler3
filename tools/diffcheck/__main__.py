@@ -52,6 +52,9 @@ def _report_to_dict(report: FunctionReport) -> dict:
 
 def _print_report(report: FunctionReport):
     line = f'  {report.verdict.value:<5} {report.name} @ 0x{report.address:X}  runs={report.runs}  blocks={report.blocks_covered}/{report.blocks_total}'
+    if report.duplicate_of is not None:
+        line += f'  (same as {report.duplicate_of})'
+
     print(line)
     for mismatch in report.mismatches:
         print(f'        run {mismatch.run}, event #{mismatch.index}, stage: {mismatch.stage}')
@@ -63,7 +66,7 @@ def _print_report(report: FunctionReport):
 
 
 def check_file(path: Path, names, options: CheckOptions, verbose: bool,
-               dump_dir: Optional[Path] = None, baseline_dir: Optional[Path] = None):
+               dump_dir: Optional[Path] = None, baseline_dir: Optional[Path] = None, reports_by_key: Optional[dict] = None):
     started = time.time()
     with fileio.FileStream(str(path), encoding = default_encoding()) as fs:
         parser = ScpParser(fs, path.name)
@@ -114,7 +117,7 @@ def check_file(path: Path, names, options: CheckOptions, verbose: bool,
 
     skipped = f', {unchanged} unchanged since baseline skipped' if baseline_dir is not None else ''
     print(f'== {path} ({len(functions)} functions{skipped})', flush = True)
-    return check_functions(parser, functions, options, progress, decompiled, decompiler, on_start)
+    return check_functions(parser, functions, options, progress, decompiled, decompiler, on_start, reports_by_key)
 
 
 def main(argv = None) -> int:
@@ -150,8 +153,10 @@ def main(argv = None) -> int:
 
     started = time.time()
     results = {}
+    # Identical functions across the checked scripts are checked once (check.behavior_key)
+    reports_by_key = {}
     for path in args.scp_files:
-        results[str(path)] = check_file(path, set(args.function), options, args.verbose, args.dump, args.changed_since)
+        results[str(path)] = check_file(path, set(args.function), options, args.verbose, args.dump, args.changed_since, reports_by_key)
 
     print()
     for path, reports in results.items():

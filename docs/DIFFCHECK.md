@@ -141,8 +141,15 @@ pass-by-value `addr_of`) is not part of the check (`falcom/ed9/spec/vm_spec.md` 
   condition's own literals and their neighbors, `0, 1, -1, 2`) while every earlier branch of that run reading a changed input keeps its direction, and
   runs that input next. This reaches branches guarded by conjunctions of several call results, which
   single-input follow-ups cannot.
-- The search stops when every block is covered, when no follow-ups remain and branch coverage has not
-  grown for 64 runs, or when coverage has not grown for 1024 runs. Coverage is reported per function; uncovered blocks are not checked.
+- The search stops when every block is covered; when branch coverage has not grown for max(64, block
+  count) runs and no run aimed at an uncovered branch (or repeating a truncated run) is pending; or when
+  coverage has not grown for 1024 runs. Other pending follow-ups do not keep the search alive: they keep
+  arriving from every compared value and only replay covered paths once coverage has stopped growing.
+  Coverage is reported per function, with the run that last covered a new edge (`last_growth_run`);
+  uncovered blocks are not checked.
+- Functions identical in behavior (same code relative to the function start, same callee names and
+  parameter counts, same parameters, same presence of every accessed global) are checked once per invocation; later ones
+  repeat the first report with `duplicate_of` naming it.
 - Each run records at most 1024 events at first; both sides are compared on that prefix. When a truncated
   run still reached new blocks, the cap doubles (up to 16384) and the run is repeated, so long
   straight-line scripts are checked to the end while input-independent endless loops stay cheap.

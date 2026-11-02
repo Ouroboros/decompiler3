@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import dataclasses
 import io
 import time
 import traceback
@@ -10,7 +11,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from falcom.ed9.disasm import ED9Opcode, ED9OperandType, OperandType
 from falcom.ed9.module import ED9ModuleDecompiler
+from falcom.ed9.parser.types_scp import ScpValue
 from codegen import generate_typescript
 from falcom.ed9.vm_values import TYPE_ERROR
 from ir.hlil import HighLevelILFunction, HLILFormatter
@@ -30,8 +33,10 @@ from .ts_parse import parse_typescript
 
 MIN_RUNS                = 8
 MAX_RUNS                = 2048
+# Runs without a newly covered edge after which the search stops, once no run aimed at an uncovered branch is
+# pending; functions with more blocks than this wait as many runs as they have blocks
 PATIENCE                = 64
-# Pending follow-ups do not keep the search alive forever once coverage has stopped growing
+# Runs without a newly covered edge after which the search stops in any case
 STALE_LIMIT             = 1024
 POOL_LIMIT              = 96
 NEIGHBOR_DELTA          = 1
@@ -104,6 +109,10 @@ class FunctionReport:
     error: Optional[str] = None
     # Wall time of the check
     seconds: float = 0.0
+    # Run that last covered a new edge
+    last_growth_run: int = 0
+    # Name of an identical function checked earlier whose result this report repeats
+    duplicate_of: Optional[str] = None
 
     @property
     def coverage(self) -> float:
@@ -218,6 +227,10 @@ class FunctionChecker:
         self.param_count = len(func.params)
         self.hints: Dict[Origin, List[Any]] = {}
         self.event_cap = MAX_EVENTS
+        # Queued runs aimed at an uncovered branch or repeating a truncated run with a larger event cap
+        self.targeted_pending = 0
+        # Large functions reach new branches after longer stretches without new coverage
+        self.patience = max(PATIENCE, len(self.blocks))
 
     def _plan(self, run: int, forced: Dict[Origin, Any]) -> InputPlan:
         return InputPlan(f'{self.options.seed}/{run}', self.pool, self.hints, self.global_candidates,
@@ -296,6 +309,7 @@ class FunctionChecker:
                 follow_up = dict(drawn)
                 follow_up.update(assignment)
                 queue.appendleft(follow_up)
+                self.targeted_pending += 1
 
     def check(self, decompiled: Optional[DecompiledFunction] = None) -> FunctionReport:
         report = FunctionReport(self.func.name, self.func.offset, Verdict.PASS, blocks_total = len(self.blocks))
@@ -377,19 +391,32 @@ class FunctionChecker:
             if reference.trace.status == RunStatus.TRUNCATED and new_blocks and self.event_cap < MAX_EVENT_CAP:
                 self.event_cap = min(self.event_cap * EVENT_CAP_GROWTH, MAX_EVENT_CAP)
                 queue.appendleft(dict(plan.values))
+                self.targeted_pending += 1
 
-            stale = 0 if new_edges else stale + 1
+            if new_edges:
+                stale = 0
+                report.last_growth_run = run
+
+            else:
+                stale += 1
+
             if run + 1 >= MIN_RUNS:
                 if len(covered_blocks) == len(self.blocks):
                     break
 
-                if not queue and stale >= PATIENCE:
+                # Follow-ups from compared values keep arriving and, once edge coverage has stopped growing,
+                # only replay covered paths; runs aimed at an uncovered branch (bounded per branch) still run
+                if stale >= self.patience and not self.targeted_pending:
                     break
 
                 if stale >= STALE_LIMIT:
                     break
 
-            forced = queue.popleft() if queue else {}
+            forced = {}
+            if queue:
+                forced = queue.popleft()
+                # Targeted runs are queued at the front, so the front ones are the targeted ones
+                self.targeted_pending = max(self.targeted_pending - 1, 0)
 
         report.blocks_covered = len(covered_blocks)
         report.uncovered_blocks = [f'0x{offset:X}' for offset in sorted(set(self.blocks) - covered_blocks)]
@@ -420,15 +447,61 @@ class FunctionChecker:
         return found[0] if found else f'{layer} (not reproduced pass by pass)'
 
 
+GLOBAL_OPCODES = (ED9Opcode.LOAD_GLOBAL, ED9Opcode.SET_GLOBAL)
+
+
+def _operand_key(parser, func, operand) -> Any:
+    value = operand.value
+    if operand.descriptor.type == OperandType.Offset:
+        return ('offset', int(value) - func.offset)
+
+    if operand.descriptor.type == ED9OperandType.Func:
+        return ('func', parser.get_func_name(int(value)), parser.get_func_argc(int(value)))
+
+    if isinstance(value, ScpValue):
+        return ('value', int(value.type), value.value)
+
+    return value
+
+
+def behavior_key(parser, func) -> Tuple:
+    '''Everything the check of a function depends on: functions with equal keys check identically
+
+    Code is compared relative to the function start, callees by name and parameter count; for every global
+    the code accesses, whether the script's global table has it (the VM reads 0 and ignores writes beyond
+    the table). The decompiler output is a function of the same items.
+    '''
+    code = tuple(
+        (inst.offset - func.offset, int(inst.opcode), tuple(_operand_key(parser, func, op) for op in inst.operands))
+        for inst in func.instructions
+    )
+    accessed = sorted({int(inst.operands[0].value) for inst in func.instructions if inst.opcode in GLOBAL_OPCODES})
+    globals_present = tuple(index < len(parser.global_vars) for index in accessed)
+    params = tuple((param.type.flags, repr(param.default_value)) for param in func.params)
+    return (globals_present, bool(func.is_common_func), params, code)
+
+
 def check_functions(parser, functions, options: CheckOptions, progress = None,
                     decompiled: Optional[Dict[str, DecompiledFunction]] = None,
-                    decompiler: Optional[ED9ModuleDecompiler] = None, on_start = None) -> List[FunctionReport]:
-    '''decompiled: outputs already produced for these functions, keyed by name; on_start(index, func) runs before each check'''
+                    decompiler: Optional[ED9ModuleDecompiler] = None, on_start = None,
+                    checked: Optional[Dict[Tuple, Tuple[str, FunctionReport]]] = None) -> List[FunctionReport]:
+    '''decompiled: outputs already produced for these functions, keyed by name; on_start(index, func) runs before each check;
+    checked: reports by behavior_key, shared across scripts, so an identical function is checked once'''
     decompiler = decompiler or ED9ModuleDecompiler(parser)
     reports = []
     for index, func in enumerate(functions, start = 1):
         if on_start is not None:
             on_start(index, func)
+
+        key = behavior_key(parser, func) if checked is not None else None
+        if key is not None and key in checked:
+            origin, earlier = checked[key]
+            report = dataclasses.replace(earlier, name = func.name, address = func.offset, seconds = 0.0, duplicate_of = origin)
+            reports.append(report)
+            if progress is not None:
+                progress(report)
+
+            continue
 
         started = time.time()
         try:
@@ -438,6 +511,9 @@ def check_functions(parser, functions, options: CheckOptions, progress = None,
             report = FunctionReport(func.name, func.offset, Verdict.ERROR, error = f'checker: {type(e).__name__}: {e}\n{traceback.format_exc(limit = 3)}')
 
         report.seconds = time.time() - started
+        if key is not None:
+            checked[key] = (f'{parser.name}:{func.name}', report)
+
         reports.append(report)
         if progress is not None:
             progress(report)
