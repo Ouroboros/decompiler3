@@ -10,7 +10,6 @@ If any user request conflicts with this file, you must follow **this file** and,
 
 - **Language**: communicate with the user in Chinese. Everything else in English: code, commit messages, tool descriptions, and comments/documentation (Coding Style Guide rule 5).
 - **Git commits**: commit each verified step on your own and push it right away (message format: Coding Style Guide rule 7). Do not create branches; never commit `.pi/` or `tmp/`.
-- **Code modification**: never modify code during discussion; modify code only after the user explicitly confirms the approach.
 
 ## Environment
 
