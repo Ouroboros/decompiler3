@@ -10,6 +10,7 @@ If any user request conflicts with this file, you must follow **this file** and,
 
 - **Language**: communicate with the user in Chinese. Everything else in English: code, commit messages, tool descriptions, and comments/documentation (Coding Style Guide rule 5).
 - **Git commits**: commit each verified step on your own and push it right away (message format: Coding Style Guide rule 7). Do not create branches; never commit `.pi/` or `tmp/`.
+- **Sampling, never full runs**: every run over scripts (diffcheck, contract, export, survey) uses a random sample unless the user explicitly asks for all scripts: split each directory by file size into small / medium / large thirds and draw a few scripts at random from each, a different draw every time (only targeted tests reuse the same files). Full runs take hours; never start one on your own.
 
 ## Environment
 
