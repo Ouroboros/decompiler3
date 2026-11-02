@@ -976,6 +976,10 @@ class MLILToHLILConverter:
 
         elif isinstance(last_instr, MLILGoto) and last_instr.target is not None and last_instr.target.index in loop_info.body:
             loop_body_start = last_instr.target.index
+            # while (1) with the exit test inside the body: a single exit block is still the loop's exit, so jumps
+            # to it become break and the code after the loop is built outside it, up to the enclosing stop_at
+            if len(loop_info.exits) == 1:
+                exit_block_idx = next(iter(loop_info.exits))
 
         else:
             print(f'[loop] cannot decide loop body at header {header_label} in {self.mlil_func.name} (treated as non-loop)', file = sys.stderr)
@@ -1003,7 +1007,7 @@ class MLILToHLILConverter:
                 header_stmt_target.add_statement(stmt)
 
         condition = HLILConst(1)
-        if exit_block_idx is not None:
+        if exit_block_idx is not None and isinstance(last_instr, MLILIf):
             self.current_instr_idx = len(mlil_block.instructions) - 1
             loop_condition = self._convert_expr(last_instr.condition)
             if negate_condition:
