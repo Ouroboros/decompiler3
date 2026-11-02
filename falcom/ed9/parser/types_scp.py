@@ -237,7 +237,7 @@ class ScpFunctionEntry(StrictBase):
     offset                      : int
     param_count                 : int
     is_common_func              : int
-    byte06                      : int
+    byte06                      : int     # never read by the VM; kept as stored
     default_params_count        : int
     default_params_offset       : int
     param_flags_offset          : int
@@ -264,9 +264,6 @@ class ScpFunctionEntry(StrictBase):
         self.debug_info_offset      = fs.ReadULong()
         self.name_hash              = fs.ReadULong()
         self.name_offset            = fs.ReadULong()
-
-        if self.byte06 != 0:
-            raise NotImplementedError(f'byte06 != 0: {self.byte06}')
 
     def __str__(self) -> str:
         return '\n'.join([
@@ -305,9 +302,11 @@ class ScpFunctionCallDebugInfo(StrictBase):
     SIZE = 0x0C
 
     class CallType(IntEnum2):
-        Local   = 0
-        Script  = 1
-        Syscall = 3
+        '''Kind of call a record describes; the VM never reads the records, the values follow the call opcodes'''
+        Local           = 0     # CALL
+        Script          = 1     # CALL_SCRIPT
+        ScriptNoReturn  = 2     # CALL_SCRIPT_NO_RETURN
+        Syscall         = 3     # SYSCALL
 
     func_id     : int
     call_type   : CallType

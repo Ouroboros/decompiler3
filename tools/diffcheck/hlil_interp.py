@@ -23,7 +23,7 @@ from ir.hlil import (
 from ir.mlil.mlil import mlil_arg_var_name
 
 from .environment import (
-    MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd, call_event_key,
+    MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, ThreadEnded, Trace, WorldState, _RunEnd, call_event_key,
 )
 
 
@@ -94,6 +94,9 @@ class HLILInterpreter:
 
             value = signal.value if signal is not None else self.world.regs.get(0, UNDEF)
             self.world.finish(value, self._deref, self.address)
+
+        except ThreadEnded:
+            pass
 
         except _RunEnd as end:
             self.trace.status = end.status

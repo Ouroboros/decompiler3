@@ -34,6 +34,12 @@ class FalcomLLILToMLILTranslator(LLILToMLILTranslator):
         elif isinstance(llil_inst, LowLevelILCallScript):
             self._translate_call_script(llil_inst)
 
+        elif isinstance(llil_inst, LowLevelILCallScriptNoReturn):
+            # The call ends the thread; the return after it is never reached
+            args = [self._translate_expr(arg) for arg in llil_inst.args]
+            self.builder.call(ED9ScriptCall(llil_inst.module, llil_inst.func, returns = False), args)
+            self.builder.ret()
+
         elif isinstance(llil_inst, LowLevelILSyscall):
             self._translate_syscall(llil_inst)
 

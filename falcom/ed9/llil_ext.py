@@ -13,6 +13,7 @@ class LowLevelILFalcomOperation(IntEnum):
     LLIL_PUSH_CALLER_FRAME  = LowLevelILOperation.LLIL_USER_DEFINED + 2  # Push caller frame (4 values)
     LLIL_CALL_SCRIPT        = LowLevelILOperation.LLIL_USER_DEFINED + 3  # Call script function
     LLIL_SYSCALL            = LowLevelILOperation.LLIL_USER_DEFINED + 4  # System call
+    LLIL_CALL_SCRIPT_NO_RETURN = LowLevelILOperation.LLIL_USER_DEFINED + 5  # Call script function, thread ends
 
 
 class LowLevelILPushCallerFrame(LowLevelILStatement):
@@ -106,3 +107,21 @@ class LowLevelILSyscall(LowLevelILStatement):
             return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {args_str})'
         else:
             return f'SYSCALL({self.subsystem}, 0x{self.cmd:02x}, {self.argc})'
+
+
+class LowLevelILCallScriptNoReturn(LowLevelILStatement, Terminal):
+    '''CALL_SCRIPT_NO_RETURN - call a script function in place of the whole thread (terminal)
+
+    The VM discards every frame before the call and ends the thread when the callee returns, so control
+    never comes back to this function (falcom/ed9/spec/vm_spec.md section 5.4).
+    '''
+
+    def __init__(self, module: str, func: str, args: List['LowLevelILExpr']):
+        super().__init__(LowLevelILFalcomOperation.LLIL_CALL_SCRIPT_NO_RETURN)
+        self.module = module
+        self.func   = func
+        self.args   = args      # Parameter order: args[0] is parameter 1 (the last pushed value)
+
+    def __str__(self) -> str:
+        args_str = ', '.join(str(arg) for arg in self.args)
+        return f'call_script_no_return(`{self.module}.{self.func}`, [{args_str}])'

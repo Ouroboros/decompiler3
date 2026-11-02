@@ -24,7 +24,7 @@ from ir.mlil import (
 from ir.mlil.mlil import mlil_arg_var_name
 from ir.mlil.mlil_ssa import MLILPhi, MLILSetVarSSA, MLILVarSSA
 
-from .environment import MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd, call_event_key
+from .environment import MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, ThreadEnded, Trace, WorldState, _RunEnd, call_event_key
 
 
 LOCAL_SPACE     = 'local'
@@ -91,7 +91,7 @@ class MLILInterpreter:
 
             raise VMFault('fell_off_function')
 
-        except _Returned:
+        except (_Returned, ThreadEnded):
             pass
 
         except _RunEnd as end:

@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from falcom.ed9.backend import EXTERN_INTRINSIC, SYSCALL_INTRINSIC
+from falcom.ed9.backend import EXTERN_INTRINSIC, EXTERN_NORETURN_INTRINSIC, SYSCALL_INTRINSIC
 from falcom.ed9.calls import ED9ScriptCall, ED9Syscall
 from falcom.ed9.target import ED9Target
 from ir.core import RawWord
@@ -417,13 +417,13 @@ class TypeScriptParser:
             subsystem, cmd = (self._literal(arg) for arg in args[:2])
             return HLILExternalCall(ED9Syscall(subsystem, cmd), args[2:])
 
-        if name == EXTERN_INTRINSIC:
+        if name in (EXTERN_INTRINSIC, EXTERN_NORETURN_INTRINSIC):
             target = self._literal(args[0])
             if not isinstance(target, str) or EXTERN_SEPARATOR not in target:
-                raise TSParseError(f'bad extern_call target {target!r}')
+                raise TSParseError(f'bad {name} target {target!r}')
 
             module, _, func = target.partition(EXTERN_SEPARATOR)
-            return HLILExternalCall(ED9ScriptCall(module, func), args[1:])
+            return HLILExternalCall(ED9ScriptCall(module, func, returns = name == EXTERN_INTRINSIC), args[1:])
 
         return HLILCall(name, args)
 

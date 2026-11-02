@@ -11,7 +11,8 @@
 from typing import Any, Dict, Optional
 
 from falcom.ed9.llil_ext import (
-    LowLevelILCallScript, LowLevelILGlobalLoad, LowLevelILGlobalStore, LowLevelILPushCallerFrame, LowLevelILSyscall,
+    LowLevelILCallScript, LowLevelILCallScriptNoReturn, LowLevelILGlobalLoad, LowLevelILGlobalStore, LowLevelILPushCallerFrame,
+    LowLevelILSyscall,
 )
 from falcom.ed9.vm_values import Op, Pointer, Raw, UNDEF, VMFault, binary_op, is_zero, normalize, unary_op
 from ir.llil import (
@@ -24,7 +25,10 @@ from ir.llil import (
     LowLevelILTestZero,
 )
 
-from .environment import EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, Trace, WorldState, _RunEnd
+from .environment import (
+    EVENT_CALL, EVENT_EXTERN, EVENT_EXTERN_NORETURN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS, InputPlan, RunStatus, ThreadEnded, Trace,
+    WorldState, _RunEnd,
+)
 
 
 STACK_SPACE = 'stack'
@@ -88,7 +92,7 @@ class LLILInterpreter:
 
             raise VMFault('fell_off_function')
 
-        except _Returned:
+        except (_Returned, ThreadEnded):
             pass
 
         except _RunEnd as end:
@@ -187,6 +191,10 @@ class LLILInterpreter:
         elif isinstance(inst, LowLevelILCallScript):
             self._call((EVENT_EXTERN, str(inst.module), str(inst.func)), inst.args)
             return inst.return_target
+
+        elif isinstance(inst, LowLevelILCallScriptNoReturn):
+            # Records the call and ends the run (ThreadEnded)
+            self._call((EVENT_EXTERN_NORETURN, str(inst.module), str(inst.func)), inst.args)
 
         elif isinstance(inst, LowLevelILCall):
             self._call((EVENT_CALL, str(inst.target)), inst.args)

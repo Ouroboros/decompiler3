@@ -78,6 +78,8 @@ Executes disassembled instructions directly; the lifter is not involved.
   `CALL_SCRIPT` frames hold five slots (func id, return address, two-slot script pointer, script name
   marker `0xF0000000`). `SYSCALL` reads its arguments in place. Every external call leaves its result in
   `REGS[0]`.
+- `CALL_SCRIPT_NO_RETURN` hands the thread to the callee and never comes back (`vm_spec.md` 5.4): every
+  interpreter records an `extern_noreturn` call event and the run ends there, without a return event.
 - Binary operators compute `below OP top`.
 - `LOAD_STACK_DEREF` / `POP_TO_DEREF` on a slot holding a parameter treat that parameter as a pointer into
   caller memory: reads come from the input plan, writes are reported in the `return` event.

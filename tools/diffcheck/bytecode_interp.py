@@ -21,9 +21,9 @@ from falcom.ed9.vm_values import COMPARISON_OPS, EQUALITY_OPS, Op, Pointer, Raw,
 from falcom.ed9.vm_values import WORD_SIZE
 
 from .environment import (
-    EVENT_CALL, EVENT_EXTERN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS,
+    EVENT_CALL, EVENT_EXTERN, EVENT_EXTERN_NORETURN, EVENT_SYSCALL, MAX_EVENTS, MAX_STEPS,
     ORIGIN_CELL, ORIGIN_OUT, ORIGIN_PARAM, ORIGIN_REG, ORIGIN_REG_MUTATION, ORIGIN_RETURN, InputPlan, Origin, RunStatus,
-    Trace, WorldState, _RunEnd,
+    ThreadEnded, Trace, WorldState, _RunEnd,
 )
 from .symbolic import Sym, SymInput, make_op
 
@@ -193,7 +193,7 @@ class BytecodeInterpreter:
                 self.run_result.covered_edges.add((block.offset, next_block.offset))
                 block = next_block
 
-        except _Returned:
+        except (_Returned, ThreadEnded):
             pass
 
         except _RunEnd as end:
@@ -405,6 +405,11 @@ class BytecodeInterpreter:
             case ED9Opcode.CALL_SCRIPT:
                 return self._call_script(inst)
 
+            case ED9Opcode.CALL_SCRIPT_NO_RETURN:
+                # No caller frame: the VM discards every frame and the thread ends when the callee returns
+                module, func_name, argc = self._script_operands(inst)
+                self.world.external_call((EVENT_EXTERN_NORETURN, module, func_name), self._take_args(argc), self._deref, inst.offset)
+
             case ED9Opcode.SYSCALL:
                 self._syscall(inst)
 
@@ -478,14 +483,18 @@ class BytecodeInterpreter:
         self._drop(argc + CALL_FRAME_SLOTS)
         return target
 
-    def _call_script(self, inst: Instruction) -> BasicBlock:
+    @classmethod
+    def _script_operands(cls, inst: Instruction) -> Tuple[str, str, int]:
         module, func_name, argc = (operand.value for operand in inst.operands)
         module = module.value if isinstance(module, ScpValue) else module
         func_name = func_name.value if isinstance(func_name, ScpValue) else func_name
-        argc = int(argc)
+        return str(module), str(func_name), int(argc)
+
+    def _call_script(self, inst: Instruction) -> BasicBlock:
+        module, func_name, argc = self._script_operands(inst)
         args = self._take_args(argc)
         target = self._return_target(argc, SCRIPT_FRAME_SLOTS)
-        outcome = self.world.external_call((EVENT_EXTERN, str(module), str(func_name)), args, self._deref, inst.offset)
+        outcome = self.world.external_call((EVENT_EXTERN, module, func_name), args, self._deref, inst.offset)
         self._apply_outcome(outcome, args)
         self._drop(argc + SCRIPT_FRAME_SLOTS)
         return target

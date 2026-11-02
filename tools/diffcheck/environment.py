@@ -29,6 +29,8 @@ ORIGIN_CELL             = 'cell'
 EVENT_CALL              = 'call'
 EVENT_SYSCALL           = 'syscall'
 EVENT_EXTERN            = 'extern'
+# CALL_SCRIPT_NO_RETURN: the callee replaces the thread, so the run ends right after this event
+EVENT_EXTERN_NORETURN   = 'extern_noreturn'
 EVENT_RETURN            = 'return'
 EVENT_FAULT             = 'fault'
 
@@ -51,7 +53,7 @@ def call_event_key(target) -> Tuple[Any, ...]:
         return (EVENT_SYSCALL, int(target.subsystem), int(target.cmd))
 
     if isinstance(target, ED9ScriptCall):
-        return (EVENT_EXTERN, str(target.module), str(target.func))
+        return (EVENT_EXTERN if target.returns else EVENT_EXTERN_NORETURN, str(target.module), str(target.func))
 
     return (EVENT_CALL, str(target))
 
@@ -161,6 +163,10 @@ class Event:
         return f'{self.key} @ 0x{self.address:X}'
 
 
+class ThreadEnded(Exception):
+    '''A call that never returns was recorded; the run is complete without a return event'''
+
+
 class _RunEnd(Exception):
     def __init__(self, status: RunStatus):
         super().__init__(status.value)
@@ -244,6 +250,9 @@ class WorldState:
         '''Record a call event and return the environment's response'''
         observed_args = tuple(self._observe(arg, deref) for arg in args)
         self.trace.emit(key_prefix + (observed_args, self.globals_snapshot(deref)), address)
+        if key_prefix[0] == EVENT_EXTERN_NORETURN:
+            raise ThreadEnded()
+
         pointer_positions = [pos for pos, arg in enumerate(args) if isinstance(arg, Pointer)]
         outcome = self.plan.call_outcome(self.call_index, pointer_positions)
         self.call_index += 1

@@ -6,6 +6,10 @@ from collections import deque, defaultdict
 from .mlil import *
 
 
+# SSA version of a variable's value at function entry (a parameter's argument, an unwritten local)
+ENTRY_VERSION = 0
+
+
 # ============================================================================
 # SSA Types
 # ============================================================================
@@ -405,11 +409,11 @@ class SSAConstructor:
             return
 
         # Initialize all function variables (especially parameters) to version 0
-        # Parameters and globals are "defined" at function entry
+        # Parameters are defined at function entry: a write in the body must get a new version, not the entry one
         for var in self.function.parameters:
             if var is not None:
-                self.var_versions[var] = 0
-                self.var_stack[var].append(0)
+                self.var_versions[var] = ENTRY_VERSION + 1
+                self.var_stack[var].append(ENTRY_VERSION)
 
         for var in self.function.locals.values():
             self.var_versions[var] = 0

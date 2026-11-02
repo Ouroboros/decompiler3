@@ -187,6 +187,18 @@ class FalcomVMBuilder(LowLevelILBuilder):
         if argc > 0:
             self._cleanup_stack(argc)
 
+    def call_script_no_return(self, module: str, func: str, arg_count: int):
+        '''CALL_SCRIPT_NO_RETURN operation - the callee replaces the thread; this function never continues'''
+        # Parameter 1 is the last pushed value
+        args = [self.vstack_peek(-1 - i) for i in range(arg_count)]
+        self._cleanup_stack(arg_count)
+
+        # The VM discards every frame (stackTop = 0) before running the callee
+        if self.sp_get() != 0:
+            self.emit_sp_add(-self.sp_get(), hidden_for_formatter = True)
+
+        self.add_instruction(LowLevelILCallScriptNoReturn(module, func, args))
+
     def call_script(self, module: str, func: str, arg_count: int):
         '''CALL_SCRIPT operation - call a script function'''
         # Verify call setup was done
@@ -275,6 +287,11 @@ class FalcomVMBuilder(LowLevelILBuilder):
         val = self.pop(hidden_for_formatter = True)
         # offset is relative to sp AFTER pop (new_sp + offset)
         slot_index = self.sp_get() + offset
+        # A parameter slot is frame-relative, like its reads (stack_slot_expr): the store updates the parameter
+        if 0 <= slot_index < self.function.num_params:
+            self.add_instruction(LowLevelILFrameStore(val, slot_index))
+            return
+
         self.add_instruction(LowLevelILStackStore(val, offset = offset, slot_index = slot_index))
 
     def pop_jmp_zero(self, true_target, false_target):

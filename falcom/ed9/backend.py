@@ -7,11 +7,15 @@ from ir.core import BackendHints
 from .calls import ED9ScriptCall, ED9Syscall
 
 
-SYSCALL_INTRINSIC   = 'syscall'
-EXTERN_INTRINSIC    = 'extern_call'
+SYSCALL_INTRINSIC           = 'syscall'
+EXTERN_INTRINSIC            = 'extern_call'
+EXTERN_NORETURN_INTRINSIC   = 'extern_call_noreturn'
 
 DECLARATIONS = f'''// Placeholder function: external script call
 function {EXTERN_INTRINSIC}(target: string, ...args: any[]): any {{ return undefined; }}
+
+// Placeholder function: external script call that ends the thread (never returns)
+function {EXTERN_NORETURN_INTRINSIC}(target: string, ...args: any[]): never {{ throw undefined; }}
 
 // Placeholder function: system call
 function {SYSCALL_INTRINSIC}(subsystem: number, cmd: number, ...args: any[]): any {{ return undefined; }}
@@ -36,7 +40,8 @@ class ED9Hints(BackendHints):
 
         if isinstance(target, ED9ScriptCall):
             operands = [f"'{target.qualified_name}'", *[generator.format_expr(arg) for arg in args]]
-            return f'{EXTERN_INTRINSIC}({", ".join(operands)})'
+            intrinsic = EXTERN_INTRINSIC if target.returns else EXTERN_NORETURN_INTRINSIC
+            return f'{intrinsic}({", ".join(operands)})'
 
         return super().typescript_external_call(target, args, generator)
 
