@@ -9,7 +9,7 @@ If any user request conflicts with this file, you must follow **this file** and,
 ## Workflow
 
 - **Language**: communicate with the user in Chinese. Everything else in English: code, commit messages, tool descriptions, and comments/documentation (Coding Style Guide rule 5).
-- **Git commits**: never auto-commit; create commits only when the user explicitly requests (message format: Coding Style Guide rule 7).
+- **Git commits**: commit each verified step on your own and push it right away (message format: Coding Style Guide rule 7). Do not create branches; never commit `.pi/` or `tmp/`.
 - **Code modification**: never modify code during discussion; modify code only after the user explicitly confirms the approach.
 
 ## Environment
@@ -18,6 +18,7 @@ If any user request conflicts with this file, you must follow **this file** and,
 - Shell: Git Bash (MINGW64) on Windows
 - Codebase: existing IR modules (`ir/llil`, `ir/mlil`, `ir/hlil`) and `falcom/ed9` parser; in-memory analysis with text/JSON report output
 - Equivalence check: `python -m tools.diffcheck tests/debug.dat` (contract in `docs/DIFFCHECK.md`)
+- Target isolation: `ir/` and `codegen/` reach ED9 only through `ir/core/target.py`; they must not import target packages or name ED9 concepts (`tests/test_target_isolation.py`)
 - VM semantics: `falcom/ed9/spec/vm_spec.md` (from the game executable's interpreter; read it before touching value semantics)
 
 ---
@@ -48,17 +49,17 @@ size = value * 4
 
 #### ✅ CORRECT:
 ```python
-from ir.llil import WORD_SIZE
+from falcom.ed9.vm_values import WORD_SIZE
 
 word_offset = offset // WORD_SIZE
 size = value * WORD_SIZE
 ```
 
 **Common Constants:**
-- `WORD_SIZE = 4` (defined in `ir/llil/llil.py`)
-  - Use for all byte/word conversions
-  - Use for all stack offset calculations
+- `WORD_SIZE = 4` (defined in `falcom/ed9/vm_values.py`): bytes per ED9 stack slot
+  - Use for all byte/slot conversions of ED9 operands (the IR itself counts stack slots)
   - Use for all size multiplications
+  - Never in `ir/` or `codegen/`: the target supplies it as `Target.word_size`
 
 **Why?**
 1. **Maintainability**: Change once, update everywhere
@@ -71,21 +72,19 @@ size = value * WORD_SIZE
 
 #### ✅ CORRECT:
 ```python
-from ir.llil import WORD_SIZE, LowLevelILStackStore
+from falcom.ed9.vm_values import WORD_SIZE
 
-class MyBuilder:
-    def pop_to(self, offset: int):
-        val = self.pop()
-        self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
+class MyLifter:
+    def slots(self, byte_offset: int) -> int:
+        return byte_offset // WORD_SIZE
 ```
 
 #### ❌ WRONG:
 ```python
-class MyBuilder:
-    def pop_to(self, offset: int):
-        from ir.llil import LowLevelILStackStore, WORD_SIZE  # Don't do this!
-        val = self.pop()
-        self.add_instruction(LowLevelILStackStore(val, offset, WORD_SIZE))
+class MyLifter:
+    def slots(self, byte_offset: int) -> int:
+        from falcom.ed9.vm_values import WORD_SIZE  # Don't do this!
+        return byte_offset // WORD_SIZE
 ```
 
 **Exception**: Only import inside functions when there is a proven circular dependency issue. Document the reason with a comment.
