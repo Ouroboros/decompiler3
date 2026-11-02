@@ -50,14 +50,11 @@ _MLIL_TYPE_MAP = {
     MLILTypeKind.VOID     : HLILTypeKind.VOID,
 }
 
-# Negation map for comparison operators
+# Negation map for comparison operators; ordered comparisons are false for a NaN operand,
+# so !(a < b) is not a >= b and they are negated with NOT instead
 _NEGATE_CMP_OP = {
     BinaryOp.EQ : BinaryOp.NE,
     BinaryOp.NE : BinaryOp.EQ,
-    BinaryOp.LT : BinaryOp.GE,
-    BinaryOp.LE : BinaryOp.GT,
-    BinaryOp.GT : BinaryOp.LE,
-    BinaryOp.GE : BinaryOp.LT,
 }
 
 

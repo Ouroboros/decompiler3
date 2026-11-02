@@ -203,7 +203,7 @@ class ControlFlowOptimizationPass(Pass):
 
     def _try_inline_single_use(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
         '''
-        var = expr; if (var OP const) {...} -> if (expr OP const) {...}
+        var = expr; if (var OP const) {...} -> if (expr OP const) {...}, also under !(...) and (... ==/!= 0)
         when the local var is written only here and read only in that condition: expr is still
         evaluated exactly once, at the same point, and nothing else observes var.
         '''
@@ -214,19 +214,40 @@ class ControlFlowOptimizationPass(Pass):
         if var.kind != VariableKind.LOCAL or self.writes[var] != 1 or self.reads[var] != 1:
             return None
 
-        cond = next_stmt.condition
-        if not (isinstance(cond, HLILBinaryOp) and cond.op in INLINE_COMPARISONS):
+        condition = self._substitute_compared(next_stmt.condition, var, assign_stmt.src)
+        if condition is None:
             return None
 
-        if not (isinstance(cond.lhs, HLILVar) and cond.lhs.var == var and isinstance(cond.rhs, HLILConst)):
-            return None
-
-        condition = HLILBinaryOp(cond.op, assign_stmt.src, cond.rhs)
-        condition.address = cond.address
         inlined = HLILIf(condition, next_stmt.true_block, next_stmt.false_block)
         inlined.address = next_stmt.address
         self.inlined_vars.add(var)
         return inlined
+
+    def _substitute_compared(self, cond: HLILExpression, var: HLILVariable, value: HLILExpression) -> Optional[HLILExpression]:
+        '''cond with var replaced by value, when cond is (var OP const) wrapped only in NOT and (... ==/!= 0);
+        these wrappers evaluate nothing else, so value is still the first and only thing evaluated'''
+        if isinstance(cond, HLILUnaryOp) and cond.op == UnaryOp.NOT:
+            operand = self._substitute_compared(cond.operand, var, value)
+            replaced = None if operand is None else HLILUnaryOp(UnaryOp.NOT, operand)
+
+        elif isinstance(cond, HLILBinaryOp) and cond.op in INLINE_COMPARISONS and isinstance(cond.rhs, HLILConst):
+            if isinstance(cond.lhs, HLILVar) and cond.lhs.var == var:
+                replaced = HLILBinaryOp(cond.op, value, cond.rhs)
+
+            elif cond.op in (BinaryOp.EQ, BinaryOp.NE) and cond.rhs.value == 0:
+                lhs = self._substitute_compared(cond.lhs, var, value)
+                replaced = None if lhs is None else HLILBinaryOp(cond.op, lhs, cond.rhs)
+
+            else:
+                replaced = None
+
+        else:
+            replaced = None
+
+        if replaced is not None:
+            replaced.address = cond.address
+
+        return replaced
 
     def _try_inline_condition(self, assign_stmt: HLILAssign, next_stmt: HLILStatement) -> Optional[HLILIf]:
         '''
@@ -992,19 +1013,21 @@ class ControlFlowOptimizationPass(Pass):
             elif isinstance(stmt, HLILWhile):
                 self._merge_nested_switches(stmt.body)
 
+    # Ordered comparisons are false for a NaN operand, so !(a < b) is not a >= b
     NEGATION_MAP = {
         BinaryOp.EQ: BinaryOp.NE,
         BinaryOp.NE: BinaryOp.EQ,
-        BinaryOp.LT: BinaryOp.GE,
-        BinaryOp.GE: BinaryOp.LT,
-        BinaryOp.GT: BinaryOp.LE,
-        BinaryOp.LE: BinaryOp.GT,
     }
+
+    ORDERED_COMPARISONS = {BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE}
 
     def _negate_condition(self, condition: HLILExpression) -> HLILExpression:
         if isinstance(condition, HLILBinaryOp):
             if condition.op in self.NEGATION_MAP:
                 return HLILBinaryOp(self.NEGATION_MAP[condition.op], condition.lhs, condition.rhs)
+
+            elif condition.op in self.ORDERED_COMPARISONS:
+                return HLILUnaryOp(UnaryOp.NOT, condition)
 
             elif condition.op in (BinaryOp.AND, BinaryOp.OR):
                 return HLILBinaryOp(BinaryOp.EQ, condition, HLILConst(0))

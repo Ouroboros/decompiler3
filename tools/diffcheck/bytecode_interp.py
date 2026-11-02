@@ -12,6 +12,7 @@ calling convention, checked against VMContext::execute / VMContext::Return:
 - Every external call leaves its result in REGS[0].
 '''
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -276,6 +277,9 @@ class BytecodeInterpreter:
 
             else:
                 self._hint(sym, {other - NEIGHBOR_DELTA, other, other + NEIGHBOR_DELTA})
+                # An ordered comparison is false for NaN on either side, so negating it is not flipping it
+                if isinstance(other, float):
+                    self._hint(sym, {math.nan})
 
     def _record_branch(self, block: BasicBlock, taken: BasicBlock, other: BasicBlock, value: Any, sym: Optional[Sym]):
         key = (block.offset, taken.offset)

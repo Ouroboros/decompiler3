@@ -63,7 +63,9 @@ arguments, and random `GLOBALS` / `REGS` mutations after calls are derived from 
 sides see the same world. Mutating them after calls exposes passes that reuse a global or register value
 across a call; only registers the function reads are mutated.
 Inputs are integers by default; an input becomes a float only when the function compares it with a float
-literal. When a run reaches a logged VM type error (`EZ` / `NOT` / `NEG` / `MOD` / `BITWISE_AND` /
+literal. An ordered comparison (`<`, `<=`, `>`, `>=`) with a float literal also makes NaN a candidate, run
+before the search may stop: the comparison is false for NaN on either side, so a decompiler that negates
+`a < b` into `a >= b` diverges only there. When a run reaches a logged VM type error (`EZ` / `NOT` / `NEG` / `MOD` / `BITWISE_AND` /
 `BITWISE_OR` on unsupported operands), the bytecode side records a `type_error` fault and only the events
 before it are compared: the rest is outside the contract (`falcom/ed9/spec/vm_spec.md` section 10).
 

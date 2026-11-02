@@ -4,6 +4,7 @@ import contextlib
 import copy
 import dataclasses
 import io
+import math
 import time
 import traceback
 from collections import Counter, deque
@@ -277,17 +278,22 @@ class FunctionChecker:
         drawn = plan.values
         for origin, values in reference.hints.items():
             merged = set(self.hints.get(origin, [])) | values
-            self.hints[origin] = sorted(merged, key = lambda value: (type(value).__name__, value))
+            self.hints[origin] = sorted(merged, key = _value_order)
             context = self._context(origin, reference.trace)
-            for value in sorted(values, key = lambda value: (type(value).__name__, value)):
+            for value in sorted(values, key = _value_order):
                 key = (origin, value, context)
-                if drawn.get(origin) == value or attempts[key] >= MAX_ATTEMPTS_PER_HINT or len(queue) >= MAX_QUEUE:
+                if _same_value(drawn.get(origin), value) or attempts[key] >= MAX_ATTEMPTS_PER_HINT or len(queue) >= MAX_QUEUE:
                     continue
 
                 attempts[key] += 1
                 follow_up = dict(drawn)
                 follow_up[origin] = value
-                queue.append(follow_up)
+                # NaN changes no branch coverage by itself, so it runs before coverage can end the search
+                if _is_nan(value):
+                    queue.appendleft(follow_up)
+
+                else:
+                    queue.append(follow_up)
 
     def _candidates(self, origin: Origin) -> List[Any]:
         return list(dict.fromkeys(list(self.hints.get(origin, [])) + list(DEFAULT_POOL)))
@@ -401,7 +407,8 @@ class FunctionChecker:
                 stale += 1
 
             if run + 1 >= MIN_RUNS:
-                if len(covered_blocks) == len(self.blocks):
+                nan_pending = queue and any(_is_nan(value) for value in queue[0].values())
+                if len(covered_blocks) == len(self.blocks) and not nan_pending:
                     break
 
                 # Follow-ups from compared values keep arriving and, once edge coverage has stopped growing,
@@ -448,6 +455,20 @@ class FunctionChecker:
 
 
 GLOBAL_OPCODES = (ED9Opcode.LOAD_GLOBAL, ED9Opcode.SET_GLOBAL)
+
+
+def _is_nan(value: Any) -> bool:
+    return isinstance(value, float) and math.isnan(value)
+
+
+def _same_value(value: Any, other: Any) -> bool:
+    return value == other or (_is_nan(value) and _is_nan(other))
+
+
+def _value_order(value: Any) -> Tuple:
+    '''Sort key of input candidates; NaN gets a fixed place, since it compares unordered and its hash
+    (so set order) changes from run to run'''
+    return (type(value).__name__, _is_nan(value), 0 if _is_nan(value) else value)
 
 
 def _operand_key(parser, func, operand) -> Any:

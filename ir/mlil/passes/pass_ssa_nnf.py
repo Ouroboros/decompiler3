@@ -27,6 +27,10 @@ from ..mlil import (
 from ..mlil_ssa import MLILSetVarSSA, MLILIf
 
 
+# Negating these needs NOT: they are false for a NaN operand, so !(a < b) is not a >= b
+ORDERED_COMPARISONS = (MLILLt, MLILLe, MLILGt, MLILGe)
+
+
 class NNFPass(Pass):
     '''Negation Normal Form transformation pass'''
 
@@ -66,6 +70,10 @@ class NNFPass(Pass):
     def _push_negation(self, expr: MediumLevelILInstruction, negated: bool) -> MediumLevelILInstruction:
         '''Recursively push negation down to leaves'''
         if isinstance(expr, MLILLogicalNot):
+            # !(ordered comparison) is already a leaf
+            if not negated and isinstance(expr.operand, ORDERED_COMPARISONS):
+                return expr
+
             # !x with negated → !!x → x (cancel out)
             # !x without negated → pass negation down
             return self._push_negation(expr.operand, not negated)
@@ -107,7 +115,7 @@ class NNFPass(Pass):
 
         elif isinstance(expr, (MLILEq, MLILNe, MLILLt, MLILLe, MLILGt, MLILGe)):
             if negated:
-                return self._invert_comparison(expr)
+                return self._invert_comparison(expr) or MLILLogicalNot(expr)
             return expr
 
         else:
@@ -117,20 +125,8 @@ class NNFPass(Pass):
             return expr
 
     def _invert_comparison(self, expr: MediumLevelILInstruction) -> Optional[MediumLevelILInstruction]:
-        '''Invert comparison: >= → <, > → <=, == → !=, etc.'''
-        if isinstance(expr, MLILGe):
-            return MLILLt(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILGt):
-            return MLILLe(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILLt):
-            return MLILGe(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILLe):
-            return MLILGt(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILEq):
+        '''Invert == / !=; None for ordered comparisons, which are false for a NaN operand (!(a < b) is not a >= b)'''
+        if isinstance(expr, MLILEq):
             return MLILNe(expr.lhs, expr.rhs)
 
         elif isinstance(expr, MLILNe):

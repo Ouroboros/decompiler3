@@ -3,7 +3,8 @@
 Simplify conditionals:
 - (expr == 0) → !expr
 - (expr != 0) → expr
-- !comparison → inverted comparison
+- !(a == b) → a != b, !(a != b) → a == b; ordered comparisons are false for a NaN operand,
+  so !(a < b) is not a >= b and stays negated
 '''
 
 from typing import Optional
@@ -61,20 +62,8 @@ class ConditionSimplificationPass(Pass):
         return func
 
     def _invert_comparison(self, expr: MediumLevelILInstruction) -> Optional[MediumLevelILInstruction]:
-        '''Invert comparison: >= → <, > → <=, == → !=, etc.'''
-        if isinstance(expr, MLILGe):
-            return MLILLt(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILGt):
-            return MLILLe(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILLt):
-            return MLILGe(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILLe):
-            return MLILGt(expr.lhs, expr.rhs)
-
-        elif isinstance(expr, MLILEq):
+        '''Invert == / !=; None for anything else, ordered comparisons included (NaN)'''
+        if isinstance(expr, MLILEq):
             return MLILNe(expr.lhs, expr.rhs)
 
         elif isinstance(expr, MLILNe):

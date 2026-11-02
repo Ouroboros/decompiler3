@@ -438,18 +438,22 @@ class TypeScriptGenerator:
 
         return max_depth
 
+    COMPARISON_OPS = {BinaryOp.EQ, BinaryOp.NE, BinaryOp.LT, BinaryOp.LE, BinaryOp.GT, BinaryOp.GE}
+
+    # Ordered comparisons are false for a NaN operand, so !(a < b) is not a >= b and falls back to !()
     NEGATION_MAP = {
         BinaryOp.EQ: BinaryOp.NE,
         BinaryOp.NE: BinaryOp.EQ,
-        BinaryOp.LT: BinaryOp.GE,
-        BinaryOp.GE: BinaryOp.LT,
-        BinaryOp.GT: BinaryOp.LE,
-        BinaryOp.LE: BinaryOp.GT,
     }
 
     @classmethod
     def _negate_condition_str(cls, cond: HLILExpression) -> str:
         '''Format negated condition as string'''
+        # !(!(comparison)) -> comparison: a comparison yields 0 or 1, so the double NOT is exact
+        if isinstance(cond, HLILUnaryOp) and cond.op == UnaryOp.NOT and isinstance(cond.operand, HLILBinaryOp):
+            if cond.operand.op in cls.COMPARISON_OPS:
+                return cls._format_expr(cond.operand)
+
         if isinstance(cond, HLILBinaryOp):
             if cond.op in cls.NEGATION_MAP:
                 # Formatted as a node so operands get the same parentheses as any other comparison
