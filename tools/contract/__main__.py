@@ -156,7 +156,13 @@ def main(argv = None) -> int:
     differences: List[Difference] = []
     for path in args.scp_files:
         _log(f'{path.name}: auditing')
-        differences += audit_file(path, layers, set(args.function))
+        try:
+            differences += audit_file(path, layers, set(args.function))
+
+        except Exception as e:
+            # A script the parser cannot read is one difference; the other scripts are still audited
+            differences.append(Difference(LAYER_PARSER, path.name, 'error', detail = f'{type(e).__name__}: {e}'))
+
         _log(f'{path.name}: done, {len(differences)} differences so far')
 
     summarize(differences, args.examples)

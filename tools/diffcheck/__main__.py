@@ -25,6 +25,8 @@ from .check import (
 RECURSION_LIMIT = 20000
 PERCENT         = 100
 PROGRESS_EVERY  = 100
+# Functions whose check takes at least this long are logged with their time
+SLOW_SECONDS    = 10
 DUMP_SUFFIX     = '.json'
 
 
@@ -95,18 +97,24 @@ def check_file(path: Path, names, options: CheckOptions, verbose: bool,
 
     checked = 0
 
+    def on_start(index: int, func):
+        _log(f'{path.name}: checking {index}/{len(functions)} {func.name}')
+
     def progress(report: FunctionReport):
         nonlocal checked
         checked += 1
         if verbose or report.verdict != Verdict.PASS:
             _print_report(report)
 
+        if report.seconds >= SLOW_SECONDS:
+            _log(f'{path.name}: {report.name} took {report.seconds:.0f}s ({report.runs} runs, {report.verdict.value})')
+
         if checked % PROGRESS_EVERY == 0:
             _log(f'{path.name}: checked {checked}/{len(functions)} ({report.name}), {time.time() - started:.0f}s')
 
     skipped = f', {unchanged} unchanged since baseline skipped' if baseline_dir is not None else ''
     print(f'== {path} ({len(functions)} functions{skipped})', flush = True)
-    return check_functions(parser, functions, options, progress, decompiled, decompiler)
+    return check_functions(parser, functions, options, progress, decompiled, decompiler, on_start)
 
 
 def main(argv = None) -> int:

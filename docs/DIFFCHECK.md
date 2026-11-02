@@ -26,8 +26,9 @@ Exit code is 0 only when every function passes.
   (`docs/CONTRACT.md`); `--lenient-raw` observes them by payload like integers.
 - `--per-pass` runs the IR after every pass (each MLIL pass iteration, each HLIL pass) on every run instead
   of only the final LLIL, MLIL and HLIL; it is much slower and meant for debugging a pass.
-- Progress goes to stderr with timestamps: disassembly, every 100 decompiled functions and every 100
-  checked functions.
+- Progress goes to stderr with timestamps: disassembly, every 100 decompiled functions, the start of every
+  checked function (`checking i/N name`), every check taking 10 s or more (`name took Ns`) and every 100
+  checked functions. The JSON report records each function's check time in `seconds`.
 
 ## Equivalence Contract
 

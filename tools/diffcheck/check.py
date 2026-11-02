@@ -3,6 +3,7 @@
 import contextlib
 import copy
 import io
+import time
 import traceback
 from collections import Counter, deque
 from dataclasses import dataclass, field
@@ -101,6 +102,8 @@ class FunctionReport:
     uncovered_blocks: List[str] = field(default_factory = list)
     mismatches: List[Mismatch] = field(default_factory = list)
     error: Optional[str] = None
+    # Wall time of the check
+    seconds: float = 0.0
 
     @property
     def coverage(self) -> float:
@@ -419,17 +422,22 @@ class FunctionChecker:
 
 def check_functions(parser, functions, options: CheckOptions, progress = None,
                     decompiled: Optional[Dict[str, DecompiledFunction]] = None,
-                    decompiler: Optional[ED9ModuleDecompiler] = None) -> List[FunctionReport]:
-    '''decompiled: outputs already produced for these functions, keyed by name'''
+                    decompiler: Optional[ED9ModuleDecompiler] = None, on_start = None) -> List[FunctionReport]:
+    '''decompiled: outputs already produced for these functions, keyed by name; on_start(index, func) runs before each check'''
     decompiler = decompiler or ED9ModuleDecompiler(parser)
     reports = []
-    for func in functions:
+    for index, func in enumerate(functions, start = 1):
+        if on_start is not None:
+            on_start(index, func)
+
+        started = time.time()
         try:
             report = FunctionChecker(parser, func, options, decompiler).check((decompiled or {}).get(func.name))
 
         except Exception as e:
             report = FunctionReport(func.name, func.offset, Verdict.ERROR, error = f'checker: {type(e).__name__}: {e}\n{traceback.format_exc(limit = 3)}')
 
+        report.seconds = time.time() - started
         reports.append(report)
         if progress is not None:
             progress(report)
